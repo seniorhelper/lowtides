@@ -171,7 +171,7 @@ class Store:
 
     # ---- agents ------------------------------------------------------------
     def add_agent(self, name, daily_budget, task_budget, client_id=None, use_wallet=False):
-        key = "cc-" + secrets.token_urlsafe(24)
+        key = "lt-" + secrets.token_urlsafe(24)
         aid = self.run(
             "INSERT INTO agents(name,key,daily_budget,task_budget,status,client_id,use_wallet,created) VALUES(?,?,?,?,?,?,?,?)",
             (name.strip(), key, float(daily_budget), float(task_budget), "on", client_id, 1 if use_wallet else 0, time.time()))

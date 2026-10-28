@@ -1,22 +1,24 @@
-/* CostCop: road-sign vernacular. Navy patrol ink, highway-sign green,
-   caution amber, stop red. Barlow is drawn from US highway signage lettering. */
+/* Lowtides, palette A (Sea Glass). Tokens follow brand/BRAND.md: ink #0D2A2E,
+   tide #1FB89A (spend), limit #E39A2D, kill #D9483B. Small accent text on light
+   uses the darker #0F7F6A / #9A5B00 so it passes 4.5:1. */
 :root {
-  --ink: #13294B;
-  --ink-2: #3C4F6E;
-  --muted: #5F6E86;
-  --line: #D9DFE8;
-  --bg: #F3F5F8;
+  --ink: #0D2A2E;
+  --ink-2: #2E4A4E;
+  --muted: #4E6468;
+  --line: #D3E2DF;
+  --bg: #F4F8F7;
   --card: #FFFFFF;
-  --sign: #0B6B3A;
-  --sign-2: #08562F;
-  --go: #1E9E5A;
-  --amber: #F2B705;
-  --amber-ink: #6B5000;
-  --stop: #D7263D;
-  --focus: #2F6FED;
+  --sign: #0F7F6A;
+  --sign-2: #0B6656;
+  --go: #1FB89A;
+  --amber: #E39A2D;
+  --amber-ink: #9A5B00;
+  --stop: #D9483B;
+  --focus: #0F7F6A;
   --radius: 8px;
-  --font: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-num: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+  --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --font-head: "Sora", "Instrument Sans", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -28,7 +30,7 @@ body {
   color: var(--ink);
   font: 400 16px/1.5 var(--font);
 }
-h1, h2, h3 { line-height: 1.2; margin: 0 0 .5rem; font-weight: 700; }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 .5rem; font-family: var(--font-head); font-weight: 600; letter-spacing: -.02em; }
 h2 { font-size: 1.3rem; }
 h3 { font-size: 1.05rem; margin-top: 1.25rem; }
 p { margin: 0 0 .75rem; max-width: 72ch; }
@@ -43,7 +45,7 @@ a { color: var(--ink); }
 /* ---- header ---- */
 .top { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
 .top-in { max-width: 1120px; margin: 0 auto; padding: .7rem 16px; display: flex; align-items: center; gap: 1rem; }
-.brand { display: flex; align-items: center; gap: .5rem; text-decoration: none; font-weight: 700; font-size: 1.25rem; }
+.brand { display: flex; align-items: center; gap: .5rem; text-decoration: none; font: 600 1.35rem var(--font-head); letter-spacing: -.04em; }
 .mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-left: auto; }
 .mode-btn { border: 0; background: transparent; padding: .45rem .8rem; font: 600 .9rem var(--font); color: var(--ink-2); cursor: pointer; }
 .mode-btn.on { background: var(--ink); color: #fff; }
@@ -84,7 +86,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 1.25rem 16px 3rem; }
   text-decoration: none; min-height: 40px;
 }
 .btn:hover { background: #EEF2F8; }
-.btn.go { background: var(--go); border-color: var(--go); color: #fff; }
+.btn.go { background: var(--sign); border-color: var(--sign); color: #fff; }
 .btn.go:hover { background: #17834A; }
 .btn.stop { background: var(--stop); border-color: var(--stop); color: #fff; }
 .btn.warn { background: var(--amber); border-color: var(--amber); color: #2B2100; }

@@ -119,7 +119,7 @@ class PayPal:
             "payment_source": {"paypal": {"experience_context": {
                 "return_url": return_url, "cancel_url": cancel_url,
                 "user_action": "PAY_NOW", "shipping_preference": "NO_SHIPPING",
-                "brand_name": "CostCop",
+                "brand_name": "Lowtides",
             }}},
         }
         return self._call("POST", "/v2/checkout/orders", body, request_id=request_id)

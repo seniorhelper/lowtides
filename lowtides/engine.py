@@ -5,12 +5,12 @@
   3. Trim the snowball      (old tool output)
   4. Cache the stable part  (Anthropic prompt caching, added automatically)
   5. Pick the cheapest fit  (grade the step, never above the model asked for)
-  6. Check the cop          (STOP button, loops, budgets, wallet)
+  6. Check the governor          (STOP button, loops, budgets, wallet)
   7. Call, check, climb     (verify the answer, escalate only if weak)
   8. Write it down          (actual cost vs. what it would have cost)
 
 "Baseline" everywhere means: the same tokens on the model your agent asked for,
-with no trimming, no CostCop-added caching and no answer memory. Savings are
+with no trimming, no Lowtides-added caching and no answer memory. Savings are
 baseline minus what you actually paid, never less than zero, and failed cheap
 attempts are counted in what you actually paid.
 """
@@ -63,8 +63,8 @@ def add_prompt_cache(body, min_tokens):
 
 def blocked_body(api, reason, code):
     if api == "anthropic":
-        return {"type": "error", "error": {"type": "costcop_blocked", "code": code, "message": reason}}
-    return {"error": {"message": reason, "type": "costcop_blocked", "code": code}}
+        return {"type": "error", "error": {"type": "lowtides_blocked", "code": code, "message": reason}}
+    return {"error": {"message": reason, "type": "lowtides_blocked", "code": code}}
 
 
 def error_body(api, message, status=502):
@@ -84,21 +84,21 @@ class Engine:
 
     # ------------------------------------------------------------------
     def _task_for(self, agent, headers):
-        tid = (headers.get("x-costcop-task") or "").strip()[:64]
+        tid = (headers.get("x-lowtides-task") or "").strip()[:64]
         if not tid:
             return None
         t = self.store.task(tid)
         if t and t["agent_id"] != agent["id"]:
             raise Blocked("That task belongs to a different agent.", "task_forbidden", 403)
         if not t:
-            label = (headers.get("x-costcop-task-label") or "").strip()[:80]
+            label = (headers.get("x-lowtides-task-label") or "").strip()[:80]
             self.store.add_task(agent["id"], label, agent["task_budget"], tid=tid)
             t = self.store.task(tid)
         return t
 
     def _baseline(self, requested_spec, usage, trimmed, added_cache):
         if added_cache:
-            # Without CostCop's caching, cached tokens would have been billed as normal input.
+            # Without Lowtides's caching, cached tokens would have been billed as normal input.
             inp = usage["input"] + usage["cache_read"] + usage["cache_write"] + trimmed
             return pricing.cost(requested_spec, input_tokens=inp, output_tokens=usage["output"])
         if usage["cache_read"] > 0:
@@ -117,11 +117,11 @@ class Engine:
         policy = self.config.policy
         agent = self.store.agent_by_key(agent_key)
         if not agent:
-            return 401, blocked_body(api, "Unknown or missing CostCop agent key.", "bad_key"), {}
+            return 401, blocked_body(api, "Unknown or missing Lowtides agent key.", "bad_key"), {}
         requested = body.get("model") or ""
         req_spec = self.config.model(requested)
         if not req_spec:
-            msg = "Model '%s' is not in your CostCop price list. Add it on the Models screen so its cost can be tracked." % requested
+            msg = "Model '%s' is not in your Lowtides price list. Add it on the Models screen so its cost can be tracked." % requested
             return 400, blocked_body(api, msg, "unknown_model"), {}
 
         try:
@@ -138,7 +138,7 @@ class Engine:
             return b.http, blocked_body(api, b.reason, b.code), {}
 
         # 2) answer memory
-        no_memory = headers.get("x-costcop-memory", "").lower() == "off"
+        no_memory = headers.get("x-lowtides-memory", "").lower() == "off"
         hit = None if no_memory else self.memory.lookup(agent["id"], api, requested, body)
         if hit:
             row = hit["row"]
@@ -170,7 +170,7 @@ class Engine:
                 notes.append("output capped at %d tokens" % cap)
 
         # 5) plan
-        forced = headers.get("x-costcop-tier")
+        forced = headers.get("x-lowtides-tier")
         order, info = self.router.plan(requested, work, forced_tier=forced if forced in ("1", "2", "3") else None)
 
         # 6) guard. Estimate with the priciest model the cascade could reach, so a climb
@@ -250,14 +250,14 @@ class Engine:
     def _headers(self, agent, task, used, cost, baseline):
         left = max(0.0, float(agent["daily_budget"]) - self.store.spend_since(agent["id"], start_of_today()))
         h = {
-            "X-CostCop-Model-Used": used,
-            "X-CostCop-Cost": "%.6f" % cost,
-            "X-CostCop-Saved": "%.6f" % max(0.0, baseline - cost),
-            "X-CostCop-Budget-Left-Today": "%.4f" % left,
+            "X-Lowtides-Model-Used": used,
+            "X-Lowtides-Cost": "%.6f" % cost,
+            "X-Lowtides-Saved": "%.6f" % max(0.0, baseline - cost),
+            "X-Lowtides-Budget-Left-Today": "%.4f" % left,
         }
         if task:
-            h["X-CostCop-Task"] = task["id"]
-            h["X-CostCop-Task-Left"] = "%.4f" % max(0.0, float(task["budget"]) - self.store.task_spend(task["id"]))
+            h["X-Lowtides-Task"] = task["id"]
+            h["X-Lowtides-Task-Left"] = "%.4f" % max(0.0, float(task["budget"]) - self.store.task_spend(task["id"]))
         return h
 
     def _maybe_shadow(self, agent, api, work, requested, used, result, passthru=None):

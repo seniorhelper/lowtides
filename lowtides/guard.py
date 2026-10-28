@@ -1,4 +1,4 @@
-"""The cop: budgets, the STOP button, rate limits and the loop detector.
+"""The governor: budgets, the STOP button, rate limits and the loop detector.
 
 Checks run before any money is spent. A blocked call costs nothing.
 """
@@ -64,7 +64,7 @@ class Guard:
         if agent["status"] == "stopped":
             raise Blocked("This agent is stopped. Press Start on the dashboard to let it run again.", "agent_stopped", 403)
         if agent["status"] == "paused":
-            raise Blocked("The loop cop paused this agent because it kept repeating itself. Review it, then press Resume.",
+            raise Blocked("The loop guard paused this agent because it kept repeating itself. Review it, then press Resume.",
                           "agent_paused", 403)
 
     def check(self, agent, task, body, estimated_cost):
@@ -73,14 +73,14 @@ class Guard:
         if agent["status"] == "stopped":
             raise Blocked("This agent is stopped. Press Start on the dashboard to let it run again.", "agent_stopped", 403)
         if agent["status"] == "paused":
-            raise Blocked("The loop cop paused this agent because it kept repeating itself. Review it, then press Resume.",
+            raise Blocked("The loop guard paused this agent because it kept repeating itself. Review it, then press Resume.",
                           "agent_paused", 403)
 
         same, per_min = self._note(aid, fingerprint(body))
         max_rep = int(self.policy.get("loop_max_repeats", 4))
         if max_rep > 0 and same >= max_rep:
             self.store.update_agent(aid, status="paused")
-            self.store.event(aid, "loop", "Loop cop: %s sent the same request %d times in %ds. Paused it before it burned more money."
+            self.store.event(aid, "loop", "Loop guard: %s sent the same request %d times in %ds. Paused it before it burned more money."
                              % (agent["name"], same, int(self.policy.get("loop_window_seconds", 120))))
             raise Blocked("Loop detected: the same request repeated %d times. The agent is paused." % same, "loop_detected", 429)
         cap = int(self.policy.get("max_calls_per_minute", 60))

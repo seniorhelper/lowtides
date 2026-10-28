@@ -1,7 +1,7 @@
 """Price tag before the work starts, like a contractor's estimate.
 
 Agents can't predict their own token bills (Stanford Digital Economy Lab, 2026).
-CostCop can, from history: it looks at what similar finished tasks for this agent
+Lowtides can, from history: it looks at what similar finished tasks for this agent
 actually cost. With no history yet, it gives a clearly labeled rough estimate.
 """
 from . import pricing

@@ -1,4 +1,4 @@
-/* CostCop dashboard. Vanilla JS, no build step. */
+/* Lowtides dashboard. Vanilla JS, no build step. */
 (function () {
   "use strict";
 
@@ -47,7 +47,7 @@
   }
   function api(method, path, body) {
     var opts = { method: method, headers: { "Content-Type": "application/json" }, credentials: "same-origin" };
-    var tok = sessionStorage.getItem("cc_admin");
+    var tok = sessionStorage.getItem("lt_admin");
     if (tok) opts.headers["X-Admin-Token"] = tok;
     if (body !== undefined) opts.body = JSON.stringify(body);
     return fetch(path, opts).then(function (r) {
@@ -68,7 +68,7 @@
     fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: pw }) })
       .then(function (r) {
         if (!r.ok) { $("login-err").textContent = "That password didn't work."; return; }
-        sessionStorage.setItem("cc_admin", pw);
+        sessionStorage.setItem("lt_admin", pw);
         $("login").hidden = true;
         refresh();
       });
@@ -114,7 +114,7 @@
   function render() {
     if (!S) return;
     document.title = S.app;
-    $("app-name").textContent = S.app;
+    $("app-name").textContent = S.app === "Lowtides" ? "lowtides" : S.app;  // brand wordmark is lowercase
     document.body.classList.toggle("biz", S.mode === "business");
     document.querySelectorAll(".mode-btn").forEach(function (b) {
       var on = b.dataset.mode === S.mode;
@@ -131,7 +131,7 @@
     $("week-line").textContent = w.calls ? ("Last 7 days: " + w.calls + " calls, saved " + money(w.saved) + " (" + S.week.percent_saved + "%).") : "";
     var sim = S.agents.some(function (a) { return a.simulated; });
     $("foot-line").textContent = S.app + " " + S.version + "." + (sim ? " Rows from the demo agent use a simulated model and are labeled demo." : "") +
-      (S.admin_protected ? "" : " This dashboard has no password yet. Set COSTCOP_ADMIN_TOKEN before putting it online.");
+      (S.admin_protected ? "" : " This dashboard has no password yet. Set LOWTIDES_ADMIN_TOKEN before putting it online.");
     $("heart-line").hidden = !S.config.show_signature_heart;
 
     $("setup").hidden = S.agents.length > 0;
@@ -150,7 +150,7 @@
     box.innerHTML = S.agents.map(function (a) {
       var pct = a.daily_budget ? Math.min(100, a.spent_today / a.daily_budget * 100) : 100;
       var cls = pct >= 100 ? "full" : (pct >= 80 ? "hot" : "");
-      var status = a.status === "on" ? "On patrol" : (a.status === "paused" ? "Paused by the loop cop" : "Stopped");
+      var status = a.status === "on" ? "Running" : (a.status === "paused" ? "Paused by the loop guard" : "Stopped");
       var btn = a.status === "on"
         ? '<button class="btn stop sm" data-act="stop" data-id="' + a.id + '">STOP</button>'
         : (a.status === "paused"
@@ -234,7 +234,7 @@
   function createAgent(name, daily) {
     if (!name || !name.trim()) { flash("Give your agent a name first.", true); return; }
     api("POST", "/api/agents", { name: name.trim(), daily_budget: daily, task_budget: Math.max(0.5, daily / 5) })
-      .then(function (r) { lastAgent = r.agent; flash(name + " is on patrol."); return refresh().then(showConnect); })
+      .then(function (r) { lastAgent = r.agent; flash(name + " is on and governed."); return refresh().then(showConnect); })
       .catch(fail);
   }
   function showConnect() {
@@ -254,10 +254,10 @@
     });
   });
   function renderCode() {
-    var key = lastAgent ? lastAgent.key : "YOUR_COSTCOP_KEY";
+    var key = lastAgent ? lastAgent.key : "YOUR_LOWTIDES_KEY";
     var o = location.origin;
     var c = {
-      "py-openai": 'from openai import OpenAI\n\nclient = OpenAI(base_url="' + o + '/v1", api_key="' + key + '")\nreply = client.chat.completions.create(\n    model="sim-large",  # or any model on your Models list\n    messages=[{"role": "user", "content": "Hello!"}],\n    extra_headers={"X-CostCop-Task": "my-job-1"},  # optional: group calls into a job\n)\nprint(reply.choices[0].message.content)',
+      "py-openai": 'from openai import OpenAI\n\nclient = OpenAI(base_url="' + o + '/v1", api_key="' + key + '")\nreply = client.chat.completions.create(\n    model="sim-large",  # or any model on your Models list\n    messages=[{"role": "user", "content": "Hello!"}],\n    extra_headers={"X-Lowtides-Task": "my-job-1"},  # optional: group calls into a job\n)\nprint(reply.choices[0].message.content)',
       "py-anthropic": 'import anthropic\n\nclient = anthropic.Anthropic(base_url="' + o + '", api_key="' + key + '")\nreply = client.messages.create(\n    model="claude-opus-5-5",\n    max_tokens=1024,\n    messages=[{"role": "user", "content": "Hello!"}],\n)\nprint(reply.content[0].text)',
       "curl": 'curl ' + o + '/v1/chat/completions \\\n  -H "Authorization: Bearer ' + key + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"sim-large","messages":[{"role":"user","content":"Hello!"}]}\''
     };
@@ -276,14 +276,14 @@
   $("run-demo").addEventListener("click", function () {
     var b = this; b.disabled = true; b.textContent = "Running…";
     api("POST", "/api/demo", {}).then(function (r) {
-      flash("Demo done: " + r.results.length + " calls ran through the real CostCop pipeline on a simulated model.");
+      flash("Demo done: " + r.results.length + " calls ran through the real Lowtides pipeline on a simulated model.");
       return refresh();
     }).catch(fail).then(function () { b.disabled = false; b.textContent = "Watch it work (demo)"; });
   });
   $("run-loop").addEventListener("click", function () {
     api("POST", "/api/demo", { loop: true }).then(function (r) {
-      flash(r.agent_status === "paused" ? "The loop cop paused the demo agent after it repeated itself. Press Resume to let it run again."
-                                        : "The demo agent didn't trip the loop cop this time.");
+      flash(r.agent_status === "paused" ? "The loop guard paused the demo agent after it repeated itself. Press Resume to let it run again."
+                                        : "The demo agent didn't trip the loop guard this time.");
       return refresh();
     }).catch(fail);
   });
@@ -298,8 +298,8 @@
       var h = r.headers || {}, out = $("try-out");
       out.hidden = false;
       if (r.status === 200) {
-        out.innerHTML = '<div class="meta">Answered by ' + esc(h["X-CostCop-Model-Used"]) + ". Cost " + esc(money4(Number(h["X-CostCop-Cost"]))) +
-          ". Saved " + esc(money4(Number(h["X-CostCop-Saved"]))) + ".</div><div>" + esc(r.text) + "</div>";
+        out.innerHTML = '<div class="meta">Answered by ' + esc(h["X-Lowtides-Model-Used"]) + ". Cost " + esc(money4(Number(h["X-Lowtides-Cost"]))) +
+          ". Saved " + esc(money4(Number(h["X-Lowtides-Saved"]))) + ".</div><div>" + esc(r.text) + "</div>";
       } else {
         out.innerHTML = '<div class="meta">Stopped by your rules.</div><div>' + esc(r.text) + "</div>";
       }
@@ -374,7 +374,7 @@
           [5, 10, 25].map(function (n) { return '<button class="btn ghost sm" data-topup="' + a.id + '" data-amt="' + n + '">$' + n + "</button>"; }).join(" ") +
           "</td></tr>";
       }).join("") + "</tbody></table></div>" +
-      (S.paypal_ready ? "" : '<p class="muted small">PayPal isn\'t connected yet. Add your sandbox keys (PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET) and restart CostCop.</p>');
+      (S.paypal_ready ? "" : '<p class="muted small">PayPal isn\'t connected yet. Add your sandbox keys (PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET) and restart Lowtides.</p>');
   }
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-topup]");
@@ -476,8 +476,8 @@
     ["verify_and_escalate", "bool", "Check answers and move up when weak", "If a cheap answer is empty, unsure or broken JSON, try the next model up."],
     ["default_daily_budget", "num", "Default daily allowance ($)", "Used for new agents."],
     ["default_task_budget", "num", "Default job cap ($)", "Most one job can spend if no quote cap is set."],
-    ["loop_max_repeats", "num", "Loop cop: repeats before pausing", "Same request this many times in the window pauses the agent. 0 turns it off."],
-    ["loop_window_seconds", "num", "Loop cop window (seconds)", "How far back the loop cop looks."],
+    ["loop_max_repeats", "num", "Loop guard: repeats before pausing", "Same request this many times in the window pauses the agent. 0 turns it off."],
+    ["loop_window_seconds", "num", "Loop guard window (seconds)", "How far back the loop guard looks."],
     ["max_calls_per_minute", "num", "Speed limit (calls per minute)", "Calls over the limit are refused with a retry message, so a burst can't pile up costs."],
     ["trim_keep_recent_turns", "num", "Recent turns kept whole", "These messages are never trimmed."],
     ["max_output_tokens_cap", "num", "Longest answer allowed (tokens)", "Stops one runaway answer from eating the budget."],
@@ -537,7 +537,7 @@
   });
   $("p-save").addEventListener("click", function () {
     api("POST", "/api/providers", { name: $("p-name").value.trim(), type: "openai", base_url: $("p-url").value.trim(), api_key_env: $("p-env").value.trim() })
-      .then(function () { flash("Connection saved. Add its models below so CostCop can price them."); return refresh(); }).catch(fail);
+      .then(function () { flash("Connection saved. Add its models below so Lowtides can price them."); return refresh(); }).catch(fail);
   });
   $("mem-clear").addEventListener("click", function () {
     api("POST", "/api/memory/clear", {}).then(function () { flash("All remembered answers are forgotten."); }).catch(fail);

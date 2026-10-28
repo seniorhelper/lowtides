@@ -1,7 +1,7 @@
 """Routing: start each step on the cheapest model that can likely handle it,
 check the answer, and climb the ladder only when needed.
 
-One promise: CostCop never moves you UP to a pricier model than the one your
+One promise: Lowtides never moves you UP to a pricier model than the one your
 agent asked for. The requested model is the ceiling, never the floor.
 """
 import json
