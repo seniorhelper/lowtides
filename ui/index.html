@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CostCop</title>
+<meta name="description" content="CostCop keeps your AI agents on budget: cheaper models for easy steps, free repeats, hard limits, a STOP button and a savings receipt in dollars.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l11 4v9c0 7-5 12-11 15C10 27 5 22 5 15V6z' fill='%2313294B'/%3E%3Ccircle cx='16' cy='15' r='5' fill='%23F2B705'/%3E%3C/svg%3E">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#home" aria-label="CostCop home">
+      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><path d="M16 2l11 4v9c0 7-5 12-11 15C10 27 5 22 5 15V6z" fill="#13294B"/><circle cx="16" cy="15" r="5" fill="#F2B705"/></svg>
+      <span id="app-name">CostCop</span>
+    </a>
+    <div class="mode" role="group" aria-label="Who is this for">
+      <button type="button" data-mode="home" class="mode-btn">Home</button>
+      <button type="button" data-mode="business" class="mode-btn">Business</button>
+    </div>
+    <button type="button" id="stop-all" class="stop-all" title="Stop every agent right now">STOP ALL</button>
+  </div>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#home" data-tab="home">Home</a>
+    <a href="#tasks" data-tab="tasks">Quotes &amp; holds</a>
+    <a href="#wallet" data-tab="wallet">Wallet</a>
+    <a href="#clients" data-tab="clients" class="biz-only">Clients</a>
+    <a href="#ledger" data-tab="ledger">Every call</a>
+    <a href="#settings" data-tab="settings">Settings</a>
+  </nav>
+</header>
+
+<main id="main" tabindex="-1">
+  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+
+  <!-- HOME -->
+  <section id="tab-home" class="tab">
+    <div class="hero">
+      <div class="sign" aria-label="Money saved today">
+        <div class="sign-top">Saved today</div>
+        <div class="sign-num" id="saved-today">$0.00</div>
+        <div class="sign-sub" id="saved-sub">Would have cost $0.00. You paid $0.00.</div>
+      </div>
+      <div class="receipt">
+        <h2>Today in plain English</h2>
+        <ul id="receipt-lines" class="lines"></ul>
+        <p class="muted small" id="week-line"></p>
+      </div>
+    </div>
+
+    <div id="setup" class="panel setup" hidden>
+      <h2>Put your first agent on patrol</h2>
+      <p class="muted">Three steps. Takes about a minute.</p>
+      <ol class="steps">
+        <li>
+          <label for="setup-name">Name your agent</label>
+          <input id="setup-name" placeholder="Like: Support bot" autocomplete="off">
+        </li>
+        <li>
+          <label for="setup-budget">Daily allowance: <strong id="setup-budget-val">$5</strong></label>
+          <input id="setup-budget" type="range" min="1" max="50" step="1" value="5">
+          <span class="muted small">It can never spend more than this in a day.</span>
+        </li>
+        <li>
+          <button type="button" id="setup-go" class="btn go big">Turn it on</button>
+        </li>
+      </ol>
+    </div>
+
+    <div id="connect" class="panel" hidden>
+      <h2>Paste these two lines into your agent</h2>
+      <p class="muted">Your agent keeps working exactly the same. It just talks to CostCop first.</p>
+      <div class="kv"><span>Base URL</span><code id="c-base"></code><button class="btn ghost sm" data-copy="c-base">Copy</button></div>
+      <div class="kv"><span>API key</span><code id="c-key"></code><button class="btn ghost sm" data-copy="c-key">Copy</button></div>
+      <details class="code-help">
+        <summary>Show me code for my agent</summary>
+        <div class="code-tabs" role="tablist">
+          <button type="button" data-code="py-openai" class="on">Python (OpenAI SDK)</button>
+          <button type="button" data-code="py-anthropic">Python (Anthropic SDK)</button>
+          <button type="button" data-code="curl">curl</button>
+        </div>
+        <pre id="code-box"></pre>
+      </details>
+      <button type="button" class="btn ghost" id="connect-done">Done</button>
+    </div>
+
+    <div class="row-head">
+      <h2>Your agents</h2>
+      <div class="row-actions">
+        <button type="button" class="btn ghost" id="add-agent">Add an agent</button>
+        <button type="button" class="btn ghost" id="run-demo" title="Runs real CostCop logic against a built-in simulated model">Watch it work (demo)</button>
+        <button type="button" class="btn ghost" id="run-loop" title="Sends the same request over and over through the demo agent">Show the loop cop (demo)</button>
+      </div>
+    </div>
+    <div id="agents" class="agents"></div>
+
+    <div class="panel">
+      <h2>Try it</h2>
+      <p class="muted">Ask anything through one of your agents and see which model answered, what it cost and what it saved.</p>
+      <div class="try">
+        <select id="try-agent" aria-label="Agent"></select>
+        <select id="try-model" aria-label="Model your agent asks for"></select>
+        <input id="try-prompt" placeholder="Like: Summarize this email in one line…" aria-label="Your question">
+        <button type="button" class="btn go" id="try-go">Send</button>
+      </div>
+      <div id="try-out" class="try-out" hidden></div>
+    </div>
+
+    <div class="panel">
+      <h2>What the cop noticed</h2>
+      <ul id="events" class="events"></ul>
+    </div>
+  </section>
+
+  <!-- TASKS -->
+  <section id="tab-tasks" class="tab" hidden>
+    <div class="panel">
+      <h2>Get a price before the work starts</h2>
+      <p class="muted">Like a contractor's estimate. CostCop quotes the job from what similar jobs really cost. Hold the quote on PayPal, and when the job is done you pay only the real cost. The rest is released.</p>
+      <div class="form-grid">
+        <label>Agent<select id="t-agent"></select></label>
+        <label>Job name<input id="t-label" placeholder="Like: Weekly SEO report"></label>
+        <label class="wide">What's the job?<input id="t-desc" placeholder="Short description helps the first estimate"></label>
+        <label>Budget cap (optional)<input id="t-budget" type="number" min="0.01" step="0.01" placeholder="Uses the quote"></label>
+      </div>
+      <button type="button" class="btn go" id="t-quote">Get my quote</button>
+      <div id="t-result" class="quote" hidden></div>
+    </div>
+    <div class="panel">
+      <h2>Jobs</h2>
+      <div id="task-list"></div>
+      <p class="muted small">Agents add calls to a job by sending the header <code>X-CostCop-Task: job-id</code>. Charges round to the nearest cent, and anything under half a cent is free.</p>
+    </div>
+  </section>
+
+  <!-- WALLET -->
+  <section id="tab-wallet" class="tab" hidden>
+    <div class="panel">
+      <h2>Prepaid allowance</h2>
+      <p class="muted">Turn on "Pay from wallet" for an agent and it spends only what you've loaded. When the wallet is empty, it stops. No surprise bills.</p>
+      <div id="wallets"></div>
+    </div>
+  </section>
+
+  <!-- CLIENTS -->
+  <section id="tab-clients" class="tab" hidden>
+    <div class="panel">
+      <h2>Bill clients for the AI you run for them</h2>
+      <p class="muted">Give each client their own agents. CostCop totals what their agents cost, adds your markup, and sends a PayPal invoice with the savings receipt on it.</p>
+      <div class="form-grid">
+        <label>Client name<input id="cl-name" placeholder="Business name"></label>
+        <label>Billing email<input id="cl-email" type="email" placeholder="billing@client.com"></label>
+        <label>Markup %<input id="cl-markup" type="number" min="0" step="1" value="20"></label>
+      </div>
+      <button type="button" class="btn go" id="cl-add">Add client</button>
+    </div>
+    <div id="client-list"></div>
+    <div class="panel">
+      <h2>Invoices</h2>
+      <div id="invoice-list"></div>
+    </div>
+  </section>
+
+  <!-- LEDGER -->
+  <section id="tab-ledger" class="tab" hidden>
+    <div class="row-head">
+      <h2>Every call, every cent</h2>
+      <div class="row-actions">
+        <a class="btn ghost" href="/api/ledger.csv" id="csv-link">Download CSV</a>
+      </div>
+    </div>
+    <p class="muted">"Would have cost" is the same tokens on the model your agent asked for, with no trimming, no added caching and no answer memory. Cheap attempts that had to be redone are included in what you paid.</p>
+    <div id="grid" class="grid ag-theme-quartz"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab" hidden>
+    <div class="panel">
+      <h2>Rules of the road</h2>
+      <div id="policy" class="policy"></div>
+      <button type="button" class="btn go" id="policy-save">Save rules</button>
+    </div>
+    <div class="panel">
+      <h2>Models and prices</h2>
+      <p class="muted">Prices are per 1 million tokens. Check them against your provider's pricing page: CostCop's dollar math is only as right as these numbers.</p>
+      <div id="models"></div>
+      <h3>Add or update a model</h3>
+      <div class="form-grid">
+        <label>Model name<input id="m-name" placeholder="Exact model ID"></label>
+        <label>Provider<select id="m-provider"></select></label>
+        <label>Ladder group<input id="m-family" placeholder="Models that can swap for each other"></label>
+        <label>Tier<select id="m-tier"><option value="1">1 (cheapest)</option><option value="2">2 (middle)</option><option value="3">3 (strongest)</option></select></label>
+        <label>Input $<input id="m-in" type="number" min="0" step="0.01"></label>
+        <label>Output $<input id="m-out" type="number" min="0" step="0.01"></label>
+      </div>
+      <button type="button" class="btn ghost" id="m-save">Save model</button>
+    </div>
+    <div class="panel">
+      <h2>Connections</h2>
+      <div id="providers"></div>
+      <h3>Add an OpenAI-compatible server</h3>
+      <p class="muted small">Works with OpenAI, OpenRouter, Groq, Together, or a local server like Ollama or LM Studio. Keys live in environment variables, never in this page.</p>
+      <div class="form-grid">
+        <label>Name<input id="p-name" placeholder="Like: ollama"></label>
+        <label class="wide">Base URL<input id="p-url" placeholder="http://localhost:11434/v1"></label>
+        <label>Key variable name<input id="p-env" placeholder="Leave blank if none"></label>
+      </div>
+      <button type="button" class="btn ghost" id="p-save">Save connection</button>
+    </div>
+    <div class="panel">
+      <h2>Answer memory</h2>
+      <p class="muted">Repeat questions are answered free from memory for 24 hours. Answers that call tools are never reused.</p>
+      <button type="button" class="btn ghost" id="mem-clear">Forget all remembered answers</button>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p class="muted small" id="foot-line"></p>
+  <div class="heart-line" id="heart-line">
+    <span class="heart" aria-hidden="true">&#10084;</span>
+    <a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a>
+  </div>
+</footer>
+
+<div id="login" class="login" hidden>
+  <form class="login-box" id="login-form">
+    <h2>Dashboard password</h2>
+    <input id="login-pw" type="password" autocomplete="current-password" aria-label="Password">
+    <button class="btn go" type="submit">Open dashboard</button>
+    <p class="muted small" id="login-err"></p>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js" defer></script>
+<script src="/app.js" defer></script>
+</body>
+</html>

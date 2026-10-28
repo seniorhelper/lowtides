@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/
+config.json
+tests/_tmp_*
+.env
