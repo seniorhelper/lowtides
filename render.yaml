@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: costcop
+    runtime: python
+    plan: starter
+    buildCommand: "echo no build step needed"
+    startCommand: "python -m costcop.server"
+    healthCheckPath: /health
+    disk:
+      name: costcop-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: COSTCOP_DB
+        value: /var/data/costcop.db
+      - key: COSTCOP_CONFIG
+        value: /var/data/config.json
+      - key: COSTCOP_ADMIN_TOKEN
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
