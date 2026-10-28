@@ -2,11 +2,11 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("COSTCOP_QUIET", "1")
+os.environ.setdefault("LOWTIDES_QUIET", "1")
 
-from costcop.config import Config  # noqa: E402
-from costcop.engine import Engine  # noqa: E402
-from costcop.store import Store  # noqa: E402
+from lowtides.config import Config  # noqa: E402
+from lowtides.engine import Engine  # noqa: E402
+from lowtides.store import Store  # noqa: E402
 
 
 def config(llm_url=None, **policy):

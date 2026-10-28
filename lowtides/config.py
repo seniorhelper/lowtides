@@ -7,7 +7,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 DEFAULT_PATHS = [
-    os.environ.get("COSTCOP_CONFIG", ""),
+    os.environ.get("LOWTIDES_CONFIG", ""),
     os.path.join(ROOT, "config.json"),
     os.path.join(ROOT, "config.example.json"),
 ]

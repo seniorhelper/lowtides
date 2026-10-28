@@ -3,21 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CostCop</title>
-<meta name="description" content="CostCop keeps your AI agents on budget: cheaper models for easy steps, free repeats, hard limits, a STOP button and a savings receipt in dollars.">
+<title>Lowtides: the AI spend governor</title>
+<meta name="description" content="Lowtides keeps your AI agents on budget: cheaper models for easy steps, free repeats, hard limits, a STOP button and a savings receipt in dollars.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l11 4v9c0 7-5 12-11 15C10 27 5 22 5 15V6z' fill='%2313294B'/%3E%3Ccircle cx='16' cy='15' r='5' fill='%23F2B705'/%3E%3C/svg%3E">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="top-in">
-    <a class="brand" href="#home" aria-label="CostCop home">
-      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><path d="M16 2l11 4v9c0 7-5 12-11 15C10 27 5 22 5 15V6z" fill="#13294B"/><circle cx="16" cy="15" r="5" fill="#F2B705"/></svg>
-      <span id="app-name">CostCop</span>
+    <a class="brand" href="#home" aria-label="Lowtides home">
+      <img src="/brand/lowtides-mark-animated.svg" width="34" height="34" alt="">
+      <span id="app-name">lowtides</span>
     </a>
     <div class="mode" role="group" aria-label="Who is this for">
       <button type="button" data-mode="home" class="mode-btn">Home</button>
@@ -54,7 +56,7 @@
     </div>
 
     <div id="setup" class="panel setup" hidden>
-      <h2>Put your first agent on patrol</h2>
+      <h2>Set up your first agent</h2>
       <p class="muted">Three steps. Takes about a minute.</p>
       <ol class="steps">
         <li>
@@ -74,7 +76,7 @@
 
     <div id="connect" class="panel" hidden>
       <h2>Paste these two lines into your agent</h2>
-      <p class="muted">Your agent keeps working exactly the same. It just talks to CostCop first.</p>
+      <p class="muted">Your agent keeps working exactly the same. It just talks to Lowtides first.</p>
       <div class="kv"><span>Base URL</span><code id="c-base"></code><button class="btn ghost sm" data-copy="c-base">Copy</button></div>
       <div class="kv"><span>API key</span><code id="c-key"></code><button class="btn ghost sm" data-copy="c-key">Copy</button></div>
       <details class="code-help">
@@ -93,8 +95,8 @@
       <h2>Your agents</h2>
       <div class="row-actions">
         <button type="button" class="btn ghost" id="add-agent">Add an agent</button>
-        <button type="button" class="btn ghost" id="run-demo" title="Runs real CostCop logic against a built-in simulated model">Watch it work (demo)</button>
-        <button type="button" class="btn ghost" id="run-loop" title="Sends the same request over and over through the demo agent">Show the loop cop (demo)</button>
+        <button type="button" class="btn ghost" id="run-demo" title="Runs real Lowtides logic against a built-in simulated model">Watch it work (demo)</button>
+        <button type="button" class="btn ghost" id="run-loop" title="Sends the same request over and over through the demo agent">Show the loop guard (demo)</button>
       </div>
     </div>
     <div id="agents" class="agents"></div>
@@ -112,7 +114,7 @@
     </div>
 
     <div class="panel">
-      <h2>What the cop noticed</h2>
+      <h2>What the governor noticed</h2>
       <ul id="events" class="events"></ul>
     </div>
   </section>
@@ -121,7 +123,7 @@
   <section id="tab-tasks" class="tab" hidden>
     <div class="panel">
       <h2>Get a price before the work starts</h2>
-      <p class="muted">Like a contractor's estimate. CostCop quotes the job from what similar jobs really cost. Hold the quote on PayPal, and when the job is done you pay only the real cost. The rest is released.</p>
+      <p class="muted">Like a contractor's estimate. Lowtides quotes the job from what similar jobs really cost. Hold the quote on PayPal, and when the job is done you pay only the real cost. The rest is released.</p>
       <div class="form-grid">
         <label>Agent<select id="t-agent"></select></label>
         <label>Job name<input id="t-label" placeholder="Like: Weekly SEO report"></label>
@@ -134,7 +136,7 @@
     <div class="panel">
       <h2>Jobs</h2>
       <div id="task-list"></div>
-      <p class="muted small">Agents add calls to a job by sending the header <code>X-CostCop-Task: job-id</code>. Charges round to the nearest cent, and anything under half a cent is free.</p>
+      <p class="muted small">Agents add calls to a job by sending the header <code>X-Lowtides-Task: job-id</code>. Charges round to the nearest cent, and anything under half a cent is free.</p>
     </div>
   </section>
 
@@ -151,7 +153,7 @@
   <section id="tab-clients" class="tab" hidden>
     <div class="panel">
       <h2>Bill clients for the AI you run for them</h2>
-      <p class="muted">Give each client their own agents. CostCop totals what their agents cost, adds your markup, and sends a PayPal invoice with the savings receipt on it.</p>
+      <p class="muted">Give each client their own agents. Lowtides totals what their agents cost, adds your markup, and sends a PayPal invoice with the savings receipt on it.</p>
       <div class="form-grid">
         <label>Client name<input id="cl-name" placeholder="Business name"></label>
         <label>Billing email<input id="cl-email" type="email" placeholder="billing@client.com"></label>
@@ -187,7 +189,7 @@
     </div>
     <div class="panel">
       <h2>Models and prices</h2>
-      <p class="muted">Prices are per 1 million tokens. Check them against your provider's pricing page: CostCop's dollar math is only as right as these numbers.</p>
+      <p class="muted">Prices are per 1 million tokens. Check them against your provider's pricing page: Lowtides's dollar math is only as right as these numbers.</p>
       <div id="models"></div>
       <h3>Add or update a model</h3>
       <div class="form-grid">

@@ -24,12 +24,12 @@ def receipt(store, agent_id=None, since=None, until=None, client_id=None, title=
     if t["rerouted"]:
         lines.append("%s on a cheaper model that handled %s." % (_n(t["rerouted"], "step ran", "steps ran"), "it" if t["rerouted"] == 1 else "them"))
     if t["escalations"]:
-        lines.append("%d times a cheap answer looked weak, so CostCop moved up a model. Those attempts are included in what you paid."
+        lines.append("%d times a cheap answer looked weak, so Lowtides moved up a model. Those attempts are included in what you paid."
                      % t["escalations"])
     if t["trimmed_tokens"]:
         lines.append("About %s tokens of old, repeated context were trimmed." % "{:,}".format(t["trimmed_tokens"]))
     if t["blocked"]:
-        lines.append("%s stopped by your rules (budgets, the STOP button or the loop cop) and cost nothing." % _n(t["blocked"], "call was", "calls were"))
+        lines.append("%s stopped by your rules (budgets, the STOP button or the loop guard) and cost nothing." % _n(t["blocked"], "call was", "calls were"))
     if t["estimated_rows"]:
         lines.append("Note: %d calls came from a server that didn't report token counts, so their costs are estimates."
                      % t["estimated_rows"])

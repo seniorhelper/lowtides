@@ -4,7 +4,7 @@ Agent endpoints (drop-in):
   POST /v1/chat/completions   OpenAI-compatible
   POST /v1/messages           Anthropic-compatible
   GET  /v1/models
-Point your agent's base URL at this server and use its CostCop key as the API key.
+Point your agent's base URL at this server and use its Lowtides key as the API key.
 """
 import datetime
 import hmac
@@ -42,7 +42,7 @@ def safe_equal(a, b):
 
 
 def key_env_ok(name):
-    """A connection may only read API-key variables, never PayPal or CostCop secrets."""
+    """A connection may only read API-key variables, never PayPal or Lowtides secrets."""
     import re
     return name == "" or bool(re.fullmatch(r"[A-Z][A-Z0-9_]*_API_KEY", name))
 
@@ -56,8 +56,8 @@ class App:
         self.paypal = paypal or PayPal(config.secret(pp_cfg.get("client_id_env")), config.secret(pp_cfg.get("client_secret_env")),
                                        env=pp_cfg.get("env", "sandbox"), currency=pp_cfg.get("currency", "USD"))
         self.money = Money(config, store, self.paypal)
-        self.admin_token = os.environ.get("COSTCOP_ADMIN_TOKEN", "")
-        self.config_path = config_path or os.environ.get("COSTCOP_CONFIG") or os.path.join(ROOT, "config.json")
+        self.admin_token = os.environ.get("LOWTIDES_ADMIN_TOKEN", "")
+        self.config_path = config_path or os.environ.get("LOWTIDES_CONFIG") or os.path.join(ROOT, "config.json")
         self.save_lock = threading.Lock()
         self.loopback = True  # set by serve(); a loopback server only answers to localhost names
 
@@ -100,11 +100,11 @@ class App:
 
 def make_handler(app):
     class Handler(BaseHTTPRequestHandler):
-        server_version = "CostCop/" + __version__
+        server_version = "Lowtides/" + __version__
         protocol_version = "HTTP/1.1"
 
         def log_message(self, fmt, *args):
-            if os.environ.get("COSTCOP_QUIET"):
+            if os.environ.get("LOWTIDES_QUIET"):
                 return
             sys.stderr.write("%s %s\n" % (datetime.datetime.now().strftime("%H:%M:%S"), fmt % args))
 
@@ -160,7 +160,7 @@ def make_handler(app):
                 cookie = self.headers.get("Cookie", "")
                 for part in cookie.split(";"):
                     k, _, v = part.strip().partition("=")
-                    if k == "cc_admin":
+                    if k == "lt_admin":
                         given = urllib.parse.unquote(v)
             return safe_equal(given, app.admin_token)
 
@@ -253,7 +253,7 @@ def make_handler(app):
 
         # ---- routing ----------------------------------------------------------------
         def do_OPTIONS(self):
-            # Browser-based agents may call the agent API (it needs a CostCop key anyway).
+            # Browser-based agents may call the agent API (it needs a Lowtides key anyway).
             # The dashboard API never allows cross-site calls.
             path, _ = self._path()
             self.send_response(204)
@@ -347,7 +347,7 @@ def make_handler(app):
             if path == "/api/ledger.csv":
                 aid = int(qs["agent"]) if qs.get("agent") else None
                 data = ledger_csv(app.store.ledger(aid, limit=100000)).encode("utf-8")
-                return self._send(200, data, {"Content-Disposition": "attachment; filename=costcop-ledger.csv"}, ctype="text/csv")
+                return self._send(200, data, {"Content-Disposition": "attachment; filename=lowtides-ledger.csv"}, ctype="text/csv")
             if path == "/api/receipt":
                 days = float(qs.get("days", 30))
                 aid = int(qs["agent"]) if qs.get("agent") else None
@@ -396,7 +396,7 @@ def make_handler(app):
                 data = self._json_in()
                 if app.admin_token and not safe_equal(str(data.get("token", "")), app.admin_token):
                     return self._send(401, {"error": "Wrong password."})
-                cookie = "cc_admin=%s; Path=/; HttpOnly; SameSite=Strict" % urllib.parse.quote(str(data.get("token", "")))
+                cookie = "lt_admin=%s; Path=/; HttpOnly; SameSite=Strict" % urllib.parse.quote(str(data.get("token", "")))
                 return self._send(200, {"ok": True}, {"Set-Cookie": cookie})
             if not path.startswith("/api/"):
                 return self._send(404, {"error": "Unknown endpoint"})
@@ -554,7 +554,7 @@ def make_handler(app):
 
 def build_app(config_path=None, db_path=None, providers=None, paypal=None):
     cfg = Config.load(config_path)
-    db = db_path or os.environ.get("COSTCOP_DB") or os.path.join(ROOT, "data", "costcop.db")
+    db = db_path or os.environ.get("LOWTIDES_DB") or os.path.join(ROOT, "data", "lowtides.db")
     store = Store(db)
     save_to = config_path if (config_path and os.path.basename(config_path) != "config.example.json") else None
     return App(cfg, store, paypal=paypal, providers=providers, config_path=save_to)
@@ -565,15 +565,15 @@ def serve(host=None, port=None):
     host = host or os.environ.get("HOST", "127.0.0.1")
     port = int(port or os.environ.get("PORT", 8787))
     app.loopback = host in LOCAL_NAMES
-    if not app.loopback and not app.admin_token and not os.environ.get("COSTCOP_ALLOW_NO_PASSWORD"):
+    if not app.loopback and not app.admin_token and not os.environ.get("LOWTIDES_ALLOW_NO_PASSWORD"):
         print("Refusing to start: HOST=%s makes the dashboard reachable from other machines, and "
-              "COSTCOP_ADMIN_TOKEN is not set. Set a password with COSTCOP_ADMIN_TOKEN, or use HOST=127.0.0.1." % host)
+              "LOWTIDES_ADMIN_TOKEN is not set. Set a password with LOWTIDES_ADMIN_TOKEN, or use HOST=127.0.0.1." % host)
         sys.exit(2)
     httpd = ThreadingHTTPServer((host, port), make_handler(app))
     httpd.daemon_threads = True
     print("%s %s running at http://%s:%d  (dashboard + agent API)" % (APP_NAME, __version__, host, port))
     if not app.admin_token:
-        print("Tip: set COSTCOP_ADMIN_TOKEN to password-protect the dashboard before putting it online.")
+        print("Tip: set LOWTIDES_ADMIN_TOKEN to password-protect the dashboard before putting it online.")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

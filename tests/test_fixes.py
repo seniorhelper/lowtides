@@ -8,7 +8,7 @@ import fakes
 from helpers import agent, chat, config, engine
 from test_http import ServerCase, http
 
-from costcop.providers import ProviderError
+from lowtides.providers import ProviderError
 
 
 class StubProviders:
@@ -30,8 +30,8 @@ class StubProviders:
 
 
 def stub_engine(behave, **policy):
-    from costcop.engine import Engine
-    from costcop.store import Store
+    from lowtides.engine import Engine
+    from lowtides.store import Store
     store = Store(":memory:")
     stub = StubProviders(behave)
     return Engine(config(**policy), store, stub), store, stub
@@ -53,24 +53,24 @@ class TestAnswerMemorySafety(unittest.TestCase):
         a = agent(store)
         self._ask(eng, a, "Cancel my order please")
         _, _, h = self._ask(eng, a, "What is your refund policy for laptops?")
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
 
     def test_symbols_and_numbers_matter(self):
         eng, store = engine()
         a = agent(store)
         self._ask(eng, a, "Is 5 > 3 true or false?")
         _, _, h = self._ask(eng, a, "Is 5 < 3 true or false?")
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
         self._ask(eng, a, "What is the status of order 1234 right now")
         _, _, h = self._ask(eng, a, "What is the status of order 1235 right now")
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
 
     def test_trivial_rephrase_still_matches(self):
         eng, store = engine()
         a = agent(store)
         self._ask(eng, a, "What are your store hours today?")
         _, _, h = self._ask(eng, a, "what are your store hours today")
-        self.assertEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertEqual(h["X-Lowtides-Model-Used"], "answer memory")
         self.assertIn("near match", store.ledger()[0]["note"])
 
     def test_different_requested_model_or_system_never_matches(self):
@@ -78,9 +78,9 @@ class TestAnswerMemorySafety(unittest.TestCase):
         a = agent(store)
         self._ask(eng, a, "What are your store hours today?", model="sim-large")
         _, _, h = self._ask(eng, a, "what are your store hours today", model="sim-medium")
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
         _, _, h = self._ask(eng, a, "what are your store hours today", system="You work for a different shop.")
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
 
     def test_long_question_never_near_matches(self):
         eng, store = engine()
@@ -88,7 +88,7 @@ class TestAnswerMemorySafety(unittest.TestCase):
         doc = "Clause %d applies. " * 40
         self._ask(eng, a, "Summarize: " + (doc % tuple(range(40))) + " The buyer may cancel.")
         _, _, h = self._ask(eng, a, "Summarize: " + (doc % tuple(range(40))) + " The buyer may not cancel.")
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
 
     def test_stopped_agent_gets_no_free_answers(self):
         eng, store = engine()
@@ -110,7 +110,7 @@ class TestEngineFixes(unittest.TestCase):
         a = agent(store)
         status, _, h = eng.handle("openai", chat("Translate: hello"), a["key"])
         self.assertEqual(status, 200)
-        self.assertEqual(h["X-CostCop-Model-Used"], "sim-large")
+        self.assertEqual(h["X-Lowtides-Model-Used"], "sim-large")
         self.assertIn("failed", store.ledger()[0]["note"])
 
     def test_400_from_requested_model_is_returned(self):
@@ -230,7 +230,7 @@ class TestServerFixes(ServerCase):
         self.assertEqual(h.get("Access-Control-Allow-Origin"), "*")
 
     def test_connections_cannot_read_paypal_or_admin_secrets(self):
-        for bad in ("PAYPAL_CLIENT_SECRET", "COSTCOP_ADMIN_TOKEN", "HOME"):
+        for bad in ("PAYPAL_CLIENT_SECRET", "LOWTIDES_ADMIN_TOKEN", "HOME"):
             s, r, _ = self.api("POST", "/api/providers", {"name": "x", "type": "openai", "base_url": "http://x", "api_key_env": bad})
             self.assertEqual(s, 400, bad)
         s, r, _ = self.api("POST", "/api/providers", {"name": "groq", "type": "openai", "base_url": "https://api.groq.com/openai/v1",

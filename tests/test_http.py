@@ -1,4 +1,4 @@
-"""End-to-end tests over real HTTP: CostCop's server, its provider clients and its
+"""End-to-end tests over real HTTP: Lowtides's server, its provider clients and its
 PayPal client, talking to local fakes that speak the real wire formats."""
 import json
 import os
@@ -12,10 +12,10 @@ from http.server import ThreadingHTTPServer
 import fakes
 from helpers import agent, config, engine
 
-from costcop.money import Money
-from costcop.paypal import PayPal
-from costcop.server import App, make_handler
-from costcop.store import Store
+from lowtides.money import Money
+from lowtides.paypal import PayPal
+from lowtides.server import App, make_handler
+from lowtides.store import Store
 
 
 def http(method, url, body=None, headers=None):
@@ -77,7 +77,7 @@ class TestRealProviders(unittest.TestCase):
         body = {"model": "claude-sonnet-5-5", "max_tokens": 50, "messages": [{"role": "user", "content": "look it up"}]}
         eng.handle("anthropic", body, a["key"])
         _, _, h = eng.handle("anthropic", body, a["key"])
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
 
     def test_openai_fallback_on_outage(self):
         eng, store = engine(config(self.llm_url))
@@ -85,7 +85,7 @@ class TestRealProviders(unittest.TestCase):
         self.llm.state["fail_models"] = {"gpt-small"}
         status, resp, h = eng.handle("openai", {"model": "gpt-big", "messages": [{"role": "user", "content": "Translate: hi"}]}, a["key"])
         self.assertEqual(status, 200)
-        self.assertEqual(h["X-CostCop-Model-Used"], "gpt-big")
+        self.assertEqual(h["X-Lowtides-Model-Used"], "gpt-big")
         self.assertIn("failed", store.ledger()[0]["note"])
 
     def test_weak_cheap_answer_escalates_over_http(self):
@@ -93,7 +93,7 @@ class TestRealProviders(unittest.TestCase):
         a = agent(store)
         self.llm.state["weak_models"] = {"gpt-small"}
         status, resp, h = eng.handle("openai", {"model": "gpt-big", "messages": [{"role": "user", "content": "Translate: hi"}]}, a["key"])
-        self.assertEqual(h["X-CostCop-Model-Used"], "gpt-big")
+        self.assertEqual(h["X-Lowtides-Model-Used"], "gpt-big")
         row = store.ledger()[0]
         self.assertEqual(row["escalations"], 1)
         models_called = [r[2]["model"] for r in self.llm.state["requests"]]
@@ -113,7 +113,7 @@ class ServerCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.pp, cls.pp_url = fakes.start(fakes.FakePayPalHandler, fakes.paypal_state())
-        os.environ["COSTCOP_ADMIN_TOKEN"] = cls.admin
+        os.environ["LOWTIDES_ADMIN_TOKEN"] = cls.admin
         cfg = config()
         cls.tmp_cfg = os.path.join(os.path.dirname(__file__), "_tmp_config_%s.json" % cls.__name__)
         store = Store(":memory:")
@@ -123,7 +123,7 @@ class ServerCase(unittest.TestCase):
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.url = "http://127.0.0.1:%d" % cls.srv.server_address[1]
         cfg.data["paypal"]["public_base_url"] = cls.url
-        os.environ["COSTCOP_ADMIN_TOKEN"] = ""
+        os.environ["LOWTIDES_ADMIN_TOKEN"] = ""
 
     @classmethod
     def tearDownClass(cls):
@@ -143,7 +143,7 @@ class TestServer(ServerCase):
         body = {"model": "sim-large", "messages": [{"role": "user", "content": "Translate: hello"}]}
         s, r, h = http("POST", self.url + "/v1/chat/completions", body, {"Authorization": "Bearer " + key})
         self.assertEqual(s, 200)
-        self.assertEqual(h.get("X-CostCop-Model-Used"), "sim-small")
+        self.assertEqual(h.get("X-Lowtides-Model-Used"), "sim-small")
         body["stream"] = True
         body["messages"][0]["content"] = "Translate: goodbye"
         s, raw, h = http("POST", self.url + "/v1/chat/completions", body, {"Authorization": "Bearer " + key})
@@ -221,7 +221,7 @@ class TestServer(ServerCase):
     def test_static_and_traversal(self):
         s, raw, h = http("GET", self.url + "/")
         self.assertEqual(s, 200)
-        s, raw, h = http("GET", self.url + "/../costcop/server.py")
+        s, raw, h = http("GET", self.url + "/../lowtides/server.py")
         self.assertEqual(s, 404)
 
 
@@ -236,7 +236,7 @@ class TestAdminLock(ServerCase):
         s, r, h = http("POST", self.url + "/api/login", {"token": "wrong"})
         self.assertEqual(s, 401)
         s, r, h = http("POST", self.url + "/api/login", {"token": "pw-123"})
-        self.assertIn("cc_admin=", h.get("Set-Cookie", ""))
+        self.assertIn("lt_admin=", h.get("Set-Cookie", ""))
 
 
 class TestMoney(ServerCase):
@@ -279,7 +279,7 @@ class TestMoney(ServerCase):
         for i in range(3):
             http("POST", self.url + "/v1/chat/completions",
                  {"model": "sim-large", "messages": [{"role": "user", "content": "Write a full report section %d " % i * 30}]},
-                 {"Authorization": "Bearer " + key, "X-CostCop-Task": tid})
+                 {"Authorization": "Bearer " + key, "X-Lowtides-Task": tid})
         spent = self.app.store.task_spend(tid)
         self.app.store.record(agent_id=aid, task_id=tid, requested_model="sim-large", used_model="sim-large",
                               cost=0.37, baseline_cost=0.37, source="model", note="test spend")
@@ -316,8 +316,10 @@ class TestMoney(ServerCase):
         cid = r["client"]["id"]
         s, r, _ = self.api("POST", "/api/agents", {"name": "Roof bot", "client_id": cid})
         aid = r["agent"]["id"]
+        # Stamp the call a second in the past: Windows' clock ticks every ~15 ms, so a call
+        # recorded "now" can share the invoice's end time and fall outside [start, end).
         self.app.store.record(agent_id=aid, requested_model="sim-large", used_model="sim-small", cost=10.0,
-                              baseline_cost=25.0, source="model", note="test")
+                              baseline_cost=25.0, source="model", note="test", ts=time.time() - 1)
         s, p, _ = self.api("POST", "/api/clients/%d/invoice" % cid, {"preview": True, "days": 30})
         self.assertAlmostEqual(p["amount"], 12.0)
         self.assertIn("Saved: $15.00", p["receipt"])

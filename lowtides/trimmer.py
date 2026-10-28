@@ -11,7 +11,7 @@ import hashlib
 
 from . import pricing
 
-DUP_NOTE = "[CostCop: identical to a later tool result, removed to save tokens]"
+DUP_NOTE = "[Lowtides: identical to a later tool result, removed to save tokens]"
 
 
 def _cut(text, max_chars):
@@ -20,7 +20,7 @@ def _cut(text, max_chars):
     head = int(max_chars * 0.6)
     tail = max_chars - head
     removed = len(text) - head - tail
-    return text[:head] + "\n[... CostCop trimmed %d characters of old tool output ...]\n" % removed + text[-tail:], removed
+    return text[:head] + "\n[... Lowtides trimmed %d characters of old tool output ...]\n" % removed + text[-tail:], removed
 
 
 def _tool_slots(body, api):

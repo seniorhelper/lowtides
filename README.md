@@ -1,10 +1,12 @@
-# CostCop
+<p align="center"><img src="brand/png/lockup-ai-light@2x.png" alt="lowtides.ai" width="320"></p>
 
-**A cost governor for AI agents.** CostCop sits between your agents and the AI models they call. It trims wasted context, answers repeat questions for free, sends easy steps to cheaper models, checks the answers, enforces hard budgets, stops runaway loops and shows every cent it saved. PayPal handles prepaid wallets, quote-and-hold jobs and client invoices.
+# Lowtides
 
-Your agents don't change. You point them at CostCop instead of the model provider, and CostCop does the rest.
+**The AI spend governor.** Keep AI spend at low tide. Lowtides sits between your agents and the AI models they call. It trims wasted context, answers repeat questions for free, sends easy steps to cheaper models, checks the answers, enforces hard budgets, stops runaway loops and shows every cent it saved. PayPal handles prepaid wallets, quote-and-hold jobs and client invoices.
 
-> **Working name.** "CostCop" is a placeholder brand. Search the name before launching publicly.
+Your agents don't change. You point them at Lowtides instead of the model provider, and Lowtides does the rest.
+
+> **Renamed.** Lowtides v1.0 shipped under an earlier working name. Everything since Oct 1, 2026 is listed in the changelog.
 
 ---
 
@@ -18,7 +20,7 @@ Your agents don't change. You point them at CostCop instead of the model provide
 
 ## Quick start (about 2 minutes)
 
-You need **Python 3.9 or newer**. There is nothing to install. CostCop uses only Python's standard library.
+You need **Python 3.9 or newer**. There is nothing to install. Lowtides uses only Python's standard library.
 
 **Windows:** double-click `run.bat`
 **Mac or Linux:** `./run.sh`
@@ -55,7 +57,7 @@ Keys are read from the environment only. They are never written to the config fi
 **OpenAI SDK (Python)**
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="http://localhost:8787/v1", api_key="YOUR_COSTCOP_KEY")
+client = OpenAI(base_url="http://localhost:8787/v1", api_key="YOUR_LOWTIDES_KEY")
 client.chat.completions.create(model="sim-large", messages=[{"role": "user", "content": "Hi"}])
 ```
 `sim-large` is the built-in simulator, so this works with no keys. For real OpenAI-format calls, name a model on an OpenAI-compatible connection (OpenAI, OpenRouter or a local server). For Claude models, use the Anthropic SDK below.
@@ -63,11 +65,11 @@ client.chat.completions.create(model="sim-large", messages=[{"role": "user", "co
 **Anthropic SDK (Python)**
 ```python
 import anthropic
-client = anthropic.Anthropic(base_url="http://localhost:8787", api_key="YOUR_COSTCOP_KEY")
+client = anthropic.Anthropic(base_url="http://localhost:8787", api_key="YOUR_LOWTIDES_KEY")
 client.messages.create(model="claude-opus-5-5", max_tokens=1024, messages=[{"role": "user", "content": "Hi"}])
 ```
 
-Streaming (`stream: true`) works on both. Note: CostCop gets the full answer first, checks it, then streams it to your agent. That's required to verify answers before your agent acts on them, so the first word arrives a little later than a direct stream would.
+Streaming (`stream: true`) works on both. Note: Lowtides gets the full answer first, checks it, then streams it to your agent. That's required to verify answers before your agent acts on them, so the first word arrives a little later than a direct stream would.
 
 ---
 
@@ -75,27 +77,27 @@ Streaming (`stream: true`) works on both. Note: CostCop gets the full answer fir
 
 | Step | What happens | Honest notes |
 |---|---|---|
-| **Answer memory** | An exact repeat of a request is answered free from memory. | Scoped to one agent. Answers that call tools are never reused, because replaying a tool call could repeat a real action. Near-duplicate matching applies only to short single questions (300 characters or less) with the exact same model, system prompt and settings. It ignores capital letters and end-of-sentence punctuation, but never matches a question with different numbers or symbols. A stopped or paused agent gets no answers from memory. Everything expires after 24 hours (configurable). Send `X-CostCop-Memory: off` to skip it. |
+| **Answer memory** | An exact repeat of a request is answered free from memory. | Scoped to one agent. Answers that call tools are never reused, because replaying a tool call could repeat a real action. Near-duplicate matching applies only to short single questions (300 characters or less) with the exact same model, system prompt and settings. It ignores capital letters and end-of-sentence punctuation, but never matches a question with different numbers or symbols. A stopped or paused agent gets no answers from memory. Everything expires after 24 hours (configurable). Send `X-Lowtides-Memory: off` to skip it. |
 | **Trim the snowball** | Old, long tool results are shortened (head and tail kept) and old exact duplicates are marked. | The system prompt and the most recent turns are never touched. No message is ever removed, so tool calls and results stay paired. Every cut is marked so the model knows. Skipped when your agent manages its own prompt cache, because trimming would break it. |
 | **Prompt caching** | For Claude, long unchanging instructions and tool lists are marked cacheable. | Skipped if your request already uses caching. Only kicks in above a size threshold, since small prompts don't qualify. |
-| **Pick the cheapest fit** | A free, instant grader scores each step easy, medium or hard and starts at the matching tier. | **CostCop never moves you up to a pricier model than the one your agent asked for.** The requested model is the ceiling. If a cheaper model rejects part of the request (an image, extended thinking, a long context), CostCop moves up instead of failing. |
-| **Check and climb** | If an answer is empty, says it's unsure, is broken JSON when JSON was asked for, or is far too short, CostCop tries the next model up. | Failed cheap attempts are counted in what you paid. If they cost more than going direct, the ledger says so. |
-| **The cop** | STOP button, STOP ALL, daily allowance, per-job budget, prepaid wallet, speed limit, and a loop cop that pauses an agent that keeps sending the same request. | Blocked calls cost nothing. A paused agent stays paused until you press Resume. Budgets are checked against the priciest model a call could climb to. Retries after a provider outage don't count toward the loop cop. |
+| **Pick the cheapest fit** | A free, instant grader scores each step easy, medium or hard and starts at the matching tier. | **Lowtides never moves you up to a pricier model than the one your agent asked for.** The requested model is the ceiling. If a cheaper model rejects part of the request (an image, extended thinking, a long context), Lowtides moves up instead of failing. |
+| **Check and climb** | If an answer is empty, says it's unsure, is broken JSON when JSON was asked for, or is far too short, Lowtides tries the next model up. | Failed cheap attempts are counted in what you paid. If they cost more than going direct, the ledger says so. |
+| **The governor** | STOP button, STOP ALL, daily allowance, per-job budget, prepaid wallet, speed limit, and a loop guard that pauses an agent that keeps sending the same request. | Blocked calls cost nothing. A paused agent stays paused until you press Resume. Budgets are checked against the priciest model a call could climb to. Retries after a provider outage don't count toward the loop guard. |
 | **Fallback** | If a provider is down or rate-limiting, the next model in the ladder takes the call. | |
 | **Receipt** | Every call is logged: model asked for, model used, tokens, cost, what it would have cost, and why. | See "How savings are calculated" below. |
 | **Quality spot-checks** (optional) | A share of cheaper answers is also run on the model asked for, and the two are compared. | Off by default. It costs extra and is logged as extra spend, with no savings claimed. It is never billed to a client. |
 
 ### Quote before work (PayPal)
 
-Like a contractor's estimate. CostCop quotes a job from what similar finished jobs for that agent actually cost. With no history yet, it gives a clearly labeled rough estimate. You can hold the quote on PayPal. When the job is done, CostCop captures only the real cost and releases the rest.
+Like a contractor's estimate. Lowtides quotes a job from what similar finished jobs for that agent actually cost. With no history yet, it gives a clearly labeled rough estimate. You can hold the quote on PayPal. When the job is done, Lowtides captures only the real cost and releases the rest.
 
 - **Rounding:** charges round to the nearest cent. Anything under half a cent is free, and the hold is simply voided.
 - **Minimum hold:** $1.00, configurable. Tiny AI jobs aren't worth a card transaction, so use the wallet for small, frequent work and holds for bigger jobs.
-- **Partial capture:** some PayPal accounts don't have it turned on. When PayPal refuses a partial capture, CostCop captures the full hold and immediately refunds the difference, and the job record shows "capture then refund." It never tries this on a hold that has expired, been voided or already been used. The full capture is written down before the refund, so if a refund ever fails, the job shows it and the alert names the capture to refund in PayPal.
+- **Partial capture:** some PayPal accounts don't have it turned on. When PayPal refuses a partial capture, Lowtides captures the full hold and immediately refunds the difference, and the job record shows "capture then refund." It never tries this on a hold that has expired, been voided or already been used. The full capture is written down before the refund, so if a refund ever fails, the job shows it and the alert names the capture to refund in PayPal.
 - **Marking a job done** without paying releases its hold.
 - **A canceled approval** can be held again.
 
-Agents group calls into a job with the header `X-CostCop-Task: <job id>`. An unknown job ID is created automatically with the agent's default job cap.
+Agents group calls into a job with the header `X-Lowtides-Task: <job id>`. An unknown job ID is created automatically with the agent's default job cap.
 
 ### Prepaid wallet (PayPal)
 
@@ -103,7 +105,7 @@ Turn on **Pay from wallet** for an agent and it can spend only what you've loade
 
 ### Client invoices (Business mode, PayPal)
 
-Assign agents to a client. CostCop totals their usage for the period, adds your markup, and creates a PayPal invoice with the savings receipt in the memo. You can preview it before sending. Each invoice starts where the last one ended, so nothing is billed twice. Usage stays with the client it was made for, even if you move the agent to another client later.
+Assign agents to a client. Lowtides totals their usage for the period, adds your markup, and creates a PayPal invoice with the savings receipt in the memo. You can preview it before sending. Each invoice starts where the last one ended, so nothing is billed twice. Usage stays with the client it was made for, even if you move the agent to another client later.
 
 ---
 
@@ -111,14 +113,14 @@ Assign agents to a client. CostCop totals their usage for the period, adds your 
 
 **"Would have cost"** (the baseline) is the same tokens priced on the model your agent asked for, with:
 - no trimming (trimmed tokens are added back),
-- no caching that CostCop added (cache reads and writes are priced as normal input), and
+- no caching that Lowtides added (cache reads and writes are priced as normal input), and
 - no answer memory.
 
-If your agent already used caching itself, its cache pricing stays in the baseline, so CostCop never takes credit for savings it didn't create. When the provider reports cached tokens on a call, trimmed tokens are priced at the cheap cache-read rate in the baseline, not full price.
+If your agent already used caching itself, its cache pricing stays in the baseline, so Lowtides never takes credit for savings it didn't create. When the provider reports cached tokens on a call, trimmed tokens are priced at the cheap cache-read rate in the baseline, not full price.
 
 **Saved** = baseline minus what you actually paid, including any failed cheap attempts. In the call list and CSV, a call that cost more than going direct shows a negative number. Totals never show a loss as a saving.
 
-**Token counts** come from the provider's usage report. If a server doesn't report usage (some local servers), CostCop estimates at about 4 characters per token and marks those rows **estimated**.
+**Token counts** come from the provider's usage report. If a server doesn't report usage (some local servers), Lowtides estimates at about 4 characters per token and marks those rows **estimated**.
 
 **Prices** are in `config.json` and on the Settings screen, per million tokens. The defaults reflect published rates as of October 2026. The Haiku 5.5 rate comes from third-party trackers. **Check every price against your provider's official pricing page.** The dollar math is only as right as these numbers.
 
@@ -133,9 +135,9 @@ If your agent already used caching itself, its cache pricing stays in the baseli
    export PAYPAL_CLIENT_ID=...
    export PAYPAL_CLIENT_SECRET=...
    ```
-   Set `paypal.public_base_url` in `config.json` to where CostCop is reachable, for example `https://your-app.onrender.com`. PayPal sends buyers back there after they approve.
-4. Optional: add a webhook in the PayPal app pointing to `https://your-address/webhooks/paypal` for `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.DENIED`, `PAYMENT.CAPTURE.REVERSED` and `PAYMENT.CAPTURE.REFUNDED`, and set `PAYPAL_WEBHOOK_ID`. CostCop verifies every webhook signature with PayPal and ignores duplicates. If an event can't be processed, CostCop answers with an error so PayPal sends it again later.
-5. If you plan to use holds, ask PayPal to enable partial capture on your account. CostCop works without it, using capture-then-refund.
+   Set `paypal.public_base_url` in `config.json` to where Lowtides is reachable, for example `https://your-app.onrender.com`. PayPal sends buyers back there after they approve.
+4. Optional: add a webhook in the PayPal app pointing to `https://your-address/webhooks/paypal` for `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.DENIED`, `PAYMENT.CAPTURE.REVERSED` and `PAYMENT.CAPTURE.REFUNDED`, and set `PAYPAL_WEBHOOK_ID`. Lowtides verifies every webhook signature with PayPal and ignores duplicates. If an event can't be processed, Lowtides answers with an error so PayPal sends it again later.
+5. If you plan to use holds, ask PayPal to enable partial capture on your account. Lowtides works without it, using capture-then-refund.
 
 Sandbox is the default. Switch `paypal.env` to `live` only after testing.
 
@@ -143,14 +145,14 @@ Sandbox is the default. Switch `paypal.env` to `live` only after testing.
 
 ## Deploy online
 
-**Render:** connect the repo. `render.yaml` sets everything up and generates a dashboard password (`COSTCOP_ADMIN_TOKEN`), which you can find in the Render dashboard. Add your model and PayPal keys there. Render's free disk is wiped on redeploy, so attach a persistent disk at `/var/data` if you want to keep your ledger.
+**Render:** connect the repo. `render.yaml` sets everything up and generates a dashboard password (`LOWTIDES_ADMIN_TOKEN`), which you can find in the Render dashboard. Add your model and PayPal keys there. Render's free disk is wiped on redeploy, so attach a persistent disk at `/var/data` if you want to keep your ledger.
 
-**Docker:** `docker build -t costcop . && docker run -p 8787:8787 -e COSTCOP_ADMIN_TOKEN=choose-a-password -v costcop-data:/data costcop`
+**Docker:** `docker build -t lowtides . && docker run -p 8787:8787 -e LOWTIDES_ADMIN_TOKEN=choose-a-password -v lowtides-data:/data lowtides`
 
-**Always set `COSTCOP_ADMIN_TOKEN` before putting the dashboard online.** CostCop refuses to start on a public address (`HOST=0.0.0.0`) without one. The agent API always requires a CostCop key.
+**Always set `LOWTIDES_ADMIN_TOKEN` before putting the dashboard online.** Lowtides refuses to start on a public address (`HOST=0.0.0.0`) without one. The agent API always requires a Lowtides key.
 
 **Built-in protections:**
-- The dashboard API refuses requests from other websites (Origin and Host checks, JSON-only writes). A page you visit can't press buttons in CostCop for you, even on localhost.
+- The dashboard API refuses requests from other websites (Origin and Host checks, JSON-only writes). A page you visit can't press buttons in Lowtides for you, even on localhost.
 - A connection can only read environment variables ending in `_API_KEY`, so no setting can point your PayPal secret or dashboard password at someone else's server.
 - Passwords are compared in constant time.
 
@@ -164,19 +166,19 @@ The **Settings** screen, or `config.json`, controls:
 - **Connections:** add any OpenAI-compatible server, such as OpenAI, OpenRouter, Groq, Together, Ollama or LM Studio. Add its models with a $0 price for free local models.
 
 Per-call headers your agent can send:
-- `X-CostCop-Task: <id>` and `X-CostCop-Task-Label: <name>` group calls into a job
-- `X-CostCop-Tier: 1|2|3` overrides the grader for that call (still capped at the requested model)
-- `X-CostCop-Memory: off` skips answer memory
+- `X-Lowtides-Task: <id>` and `X-Lowtides-Task-Label: <name>` group calls into a job
+- `X-Lowtides-Tier: 1|2|3` overrides the grader for that call (still capped at the requested model)
+- `X-Lowtides-Memory: off` skips answer memory
 
 Response headers your agent receives:
-- `X-CostCop-Model-Used`, `X-CostCop-Cost`, `X-CostCop-Saved`
-- `X-CostCop-Budget-Left-Today`, plus `X-CostCop-Task-Left` when a job is set
+- `X-Lowtides-Model-Used`, `X-Lowtides-Cost`, `X-Lowtides-Saved`
+- `X-Lowtides-Budget-Left-Today`, plus `X-Lowtides-Task-Left` when a job is set
 
 ---
 
 ## Known limits
 
-- **API only.** CostCop governs API-billed agents. It can't sit in front of subscription chat apps, which aren't billed per call.
+- **API only.** Lowtides governs API-billed agents. It can't sit in front of subscription chat apps, which aren't billed per call.
 - **One API family per ladder.** It routes within one family: Claude models via the Anthropic API, or models on OpenAI-compatible servers. It does not translate requests between the two formats.
 - **The grader is a heuristic.** It's free and instant, which is the point. The verify-and-climb step catches its misses, and you can turn routing off for any agent's workload that needs the top model every time.
 - **Single server.** It uses SQLite and in-memory loop tracking, so run one instance.
@@ -189,7 +191,7 @@ Response headers your agent receives:
 cd tests && python -m unittest test_core test_http
 ```
 
-The 72 tests run with no internet and no money. Local fake servers speak the real PayPal, Anthropic and OpenAI wire formats, so CostCop's real HTTP clients are exercised end to end. They cover routing, escalation, memory safety (wrong-answer cases included), trimming, budgets, the loop cop, wallets (including pending and reversed payments), holds (partial capture, the capture-then-refund fallback, failed refunds and void), invoices (no double billing), webhook verification and retries, streaming, cross-site protection, the admin lock and path safety.
+The 72 tests run with no internet and no money. Local fake servers speak the real PayPal, Anthropic and OpenAI wire formats, so Lowtides's real HTTP clients are exercised end to end. They cover routing, escalation, memory safety (wrong-answer cases included), trimming, budgets, the loop guard, wallets (including pending and reversed payments), holds (partial capture, the capture-then-refund fallback, failed refunds and void), invoices (no double billing), webhook verification and retries, streaming, cross-site protection, the admin lock and path safety.
 
 `test_fixes.py` holds a regression test for every issue found in an independent code review before release.
 
@@ -197,4 +199,8 @@ The 72 tests run with no internet and no money. Local fake servers speak the rea
 
 ## License
 
-MIT. See `LICENSE`.
+Copyright (c) 2026 Eye To Ad Media. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See `LICENSE`.
+
+If you run a modified version of Lowtides as a network service, the AGPL requires you to offer your users the source code of your version.
+
+Contributions are not accepted for now.

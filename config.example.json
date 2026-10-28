@@ -1,6 +1,6 @@
 {
   "_readme": "Copy this file to config.json and edit. Prices are USD per 1 million tokens. Check every price against your provider's official pricing page before trusting the dollar figures.",
-  "app_name": "CostCop",
+  "app_name": "Lowtides",
   "mode": "home",
   "show_signature_heart": true,
   "providers": {

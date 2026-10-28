@@ -2,8 +2,8 @@ import unittest
 
 from helpers import agent, chat, config, engine
 
-from costcop import pricing, router, trimmer
-from costcop.memory import similarity
+from lowtides import pricing, router, trimmer
+from lowtides.memory import similarity
 
 
 class TestPricing(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestTrimmer(unittest.TestCase):
         self.assertEqual(body["messages"][3]["content"], "x" * 5000)  # original untouched
         self.assertEqual(new["messages"][-2]["content"], "x" * 5000)  # recent untouched
         old = new["messages"][3]["content"]
-        self.assertTrue("CostCop" in old)
+        self.assertTrue("Lowtides" in old)
         self.assertLess(len(old), 5000)
         ids_before = [m.get("tool_call_id") for m in body["messages"]]
         ids_after = [m.get("tool_call_id") for m in new["messages"]]
@@ -107,7 +107,7 @@ class TestEngine(unittest.TestCase):
         a = agent(store)
         status, resp, h = eng.handle("openai", chat("Summarize in one line: the meeting moved to 3pm."), a["key"])
         self.assertEqual(status, 200)
-        self.assertEqual(h["X-CostCop-Model-Used"], "sim-small")
+        self.assertEqual(h["X-Lowtides-Model-Used"], "sim-small")
         row = store.ledger()[0]
         self.assertLess(row["cost"], row["baseline_cost"])
         self.assertIn("[simulated", resp["choices"][0]["message"]["content"])
@@ -118,14 +118,14 @@ class TestEngine(unittest.TestCase):
         status, resp, h = eng.handle("openai", chat("Analyze this proof please", model="sim-medium"), a["key"])
         self.assertEqual(status, 200)
         row = store.ledger()[0]
-        self.assertEqual(h["X-CostCop-Model-Used"], "sim-medium")
+        self.assertEqual(h["X-Lowtides-Model-Used"], "sim-medium")
         # graded hard -> starts at tier 2 directly (ceiling), no escalation needed
         self.assertEqual(row["escalations"], 0)
         status, resp, h = eng.handle("openai", chat("Derive the answer", model="sim-large"), a["key"],
-                                     {"X-CostCop-Tier": "1"})
+                                     {"X-Lowtides-Tier": "1"})
         row = store.ledger()[0]
         self.assertEqual(row["escalations"], 1)
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "sim-small")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "sim-small")
         self.assertIn("unsure", row["note"])
 
     def test_repeat_is_free(self):
@@ -133,7 +133,7 @@ class TestEngine(unittest.TestCase):
         a = agent(store)
         eng.handle("openai", chat("Translate to Spanish: thank you"), a["key"])
         status, resp, h = eng.handle("openai", chat("Translate to Spanish: thank you"), a["key"])
-        self.assertEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertEqual(h["X-Lowtides-Model-Used"], "answer memory")
         row = store.ledger()[0]
         self.assertEqual(row["cost"], 0)
         self.assertGreater(row["baseline_cost"], 0)
@@ -143,9 +143,9 @@ class TestEngine(unittest.TestCase):
         a, b = agent(store, "A"), agent(store, "B")
         eng.handle("openai", chat("Translate: hi"), a["key"])
         _, _, h = eng.handle("openai", chat("Translate: hi"), b["key"])
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
-        _, _, h = eng.handle("openai", chat("Translate: hi"), a["key"], {"X-CostCop-Memory": "off"})
-        self.assertNotEqual(h["X-CostCop-Model-Used"], "answer memory")
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
+        _, _, h = eng.handle("openai", chat("Translate: hi"), a["key"], {"X-Lowtides-Memory": "off"})
+        self.assertNotEqual(h["X-Lowtides-Model-Used"], "answer memory")
 
     def test_unknown_key_and_model(self):
         eng, store = engine()
@@ -174,16 +174,16 @@ class TestEngine(unittest.TestCase):
         eng, store = engine()
         a = agent(store)
         store.add_task(a["id"], "tiny", 0.00001, tid="t-tiny")
-        status, body, _ = eng.handle("openai", chat("Write a full report " * 40), a["key"], {"X-CostCop-Task": "t-tiny"})
+        status, body, _ = eng.handle("openai", chat("Write a full report " * 40), a["key"], {"X-Lowtides-Task": "t-tiny"})
         self.assertEqual(status, 402)
         self.assertEqual(body["error"]["code"], "task_budget")
 
     def test_task_auto_created_and_isolated(self):
         eng, store = engine()
         a, b = agent(store, "A"), agent(store, "B")
-        eng.handle("openai", chat("hello there"), a["key"], {"X-CostCop-Task": "job-1"})
+        eng.handle("openai", chat("hello there"), a["key"], {"X-Lowtides-Task": "job-1"})
         self.assertIsNotNone(store.task("job-1"))
-        status, body, _ = eng.handle("openai", chat("hi"), b["key"], {"X-CostCop-Task": "job-1"})
+        status, body, _ = eng.handle("openai", chat("hi"), b["key"], {"X-Lowtides-Task": "job-1"})
         self.assertEqual(status, 403)
 
     def test_loop_cop_pauses(self):

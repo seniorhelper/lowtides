@@ -1,7 +1,7 @@
 """Local fake servers that speak the real PayPal, Anthropic and OpenAI wire formats.
 
-They let the test suite exercise CostCop's real HTTP clients end to end with no
-internet and no real money. They implement only what CostCop uses.
+They let the test suite exercise Lowtides's real HTTP clients end to end with no
+internet and no real money. They implement only what Lowtides uses.
 """
 import json
 import threading

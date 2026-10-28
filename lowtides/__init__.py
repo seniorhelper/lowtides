@@ -1,4 +1,4 @@
-"""CostCop: a cost governor for AI agents.
+"""Lowtides: a cost governor for AI agents.
 
 It sits between your agents and the AI models they call. It trims wasted
 context, reuses answers it already paid for, sends easy steps to cheaper
@@ -7,4 +7,4 @@ it saved, with PayPal wallets, task holds and client invoices built in.
 """
 
 __version__ = "1.0.0"
-APP_NAME = "CostCop"
+APP_NAME = "Lowtides"
