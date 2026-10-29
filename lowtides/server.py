@@ -138,6 +138,18 @@ def make_handler(app):
         def _send(self, status, body, headers=None, ctype="application/json"):
             data = body if isinstance(body, (bytes, bytearray)) else (
                 json.dumps(body).encode("utf-8") if ctype == "application/json" else str(body).encode("utf-8"))
+            if not getattr(self, "_consumed", True) and not self.headers.get("Transfer-Encoding"):
+                # Read a small unread body before answering. Closing a socket with unread data makes
+                # Windows send a reset, and the client can lose this response (e.g. a 403) entirely.
+                try:
+                    n = int(self.headers.get("Content-Length") or 0)
+                except ValueError:
+                    n = -1
+                if 0 < n <= 1024 * 1024:
+                    self.rfile.read(n)
+                    self._consumed = True
+                elif n == 0:
+                    self._consumed = True
             self.send_response(status)
             if not getattr(self, "_consumed", True) and (self.headers.get("Content-Length") or self.headers.get("Transfer-Encoding")):
                 # We answered without reading the request body, so this connection can't be reused safely.

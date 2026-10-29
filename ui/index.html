@@ -29,6 +29,7 @@
   </div>
   <nav class="tabs" aria-label="Sections">
     <a href="#home" data-tab="home">Home</a>
+    <a href="#approvals" data-tab="approvals" id="approvals-link">Approvals<span class="badge" id="appr-badge" hidden></span></a>
     <a href="#tasks" data-tab="tasks">Quotes &amp; holds</a>
     <a href="#wallet" data-tab="wallet">Wallet</a>
     <a href="#clients" data-tab="clients" class="biz-only">Clients</a>
@@ -38,21 +39,38 @@
 </header>
 
 <main id="main" tabindex="-1">
-  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
-
   <!-- HOME -->
   <section id="tab-home" class="tab">
-    <div class="hero">
-      <div class="sign" aria-label="Money saved today">
-        <div class="sign-top">Saved today</div>
-        <div class="sign-num" id="saved-today">$0.00</div>
-        <div class="sign-sub" id="saved-sub">Would have cost $0.00. You paid $0.00.</div>
+    <div id="appr-banner" class="appr-banner" hidden>
+      <span class="appr-banner-icon" aria-hidden="true">!</span>
+      <p id="appr-banner-text"></p>
+      <a class="btn warn" href="#approvals">Review now</a>
+    </div>
+
+    <section class="tide" aria-labelledby="tide-h">
+      <div class="tide-head">
+        <div class="tide-intro">
+          <p class="tide-eyebrow">Tide chart</p>
+          <h1 id="tide-h">Keep AI spend at low tide.</h1>
+          <ul class="tide-legend" aria-label="How to read the chart">
+            <li><span class="lg-dot lg-tide" aria-hidden="true"></span>Spent today</li>
+            <li><span class="lg-dot lg-limit" aria-hidden="true"></span>Daily limit (top row)</li>
+            <li><span class="lg-dash" aria-hidden="true"></span>Where today's pace ends up</li>
+          </ul>
+        </div>
+        <div class="tide-saved">
+          <div class="tide-saved-k">Saved today</div>
+          <div class="tide-saved-v" id="saved-today">$0.00</div>
+          <div class="tide-saved-sub" id="saved-sub">Would have cost $0.00. You paid $0.00.</div>
+        </div>
       </div>
-      <div class="receipt">
-        <h2>Today in plain English</h2>
-        <ul id="receipt-lines" class="lines"></ul>
-        <p class="muted small" id="week-line"></p>
-      </div>
+      <div id="tide-grid" class="tide-grid"></div>
+    </section>
+
+    <div class="panel receipt">
+      <h2>Today in plain English</h2>
+      <ul id="receipt-lines" class="lines"></ul>
+      <p class="muted small" id="week-line"></p>
     </div>
 
     <div id="setup" class="panel setup" hidden>
@@ -119,6 +137,25 @@
     </div>
   </section>
 
+  <!-- APPROVALS -->
+  <section id="tab-approvals" class="tab" hidden>
+    <div class="row-head">
+      <h2>Waiting for you</h2>
+      <p class="muted small appr-poll">Checks for new requests every 3 seconds.</p>
+    </div>
+    <p class="muted">Your agents ask Lowtides before they buy anything. Purchases your rules can't settle on their own wait here until you approve or deny them.</p>
+    <div id="appr-list" class="appr-list"></div>
+
+    <div class="panel">
+      <div class="row-head log-head">
+        <h2>Decision log</h2>
+        <p id="audit-line" class="audit-line" hidden></p>
+      </div>
+      <p class="muted small">Every decision, with the reasons Lowtides gave. Each entry is written to a tamper-evident audit log.</p>
+      <ol id="decision-log" class="dlog"></ol>
+    </div>
+  </section>
+
   <!-- TASKS -->
   <section id="tab-tasks" class="tab" hidden>
     <div class="panel">
@@ -182,6 +219,18 @@
 
   <!-- SETTINGS -->
   <section id="tab-settings" class="tab" hidden>
+    <div class="panel" id="merchants-panel">
+      <h2>Merchants your agents may pay</h2>
+      <p class="muted">Paying a merchant that isn't on this list needs your approval, so a prompt-injected agent can't send money to a stranger's PayPal account.</p>
+      <div id="merchant-list"></div>
+      <h3>Add a merchant</h3>
+      <form id="merchant-form" class="form-grid" novalidate>
+        <label>Merchant name<input id="mc-name" required autocomplete="off" placeholder="Like: Acme Data"></label>
+        <label>PayPal email (who gets paid)<input id="mc-email" type="email" required autocomplete="off" placeholder="payments@acme.example"></label>
+        <label>Category<input id="mc-cat" autocomplete="off" placeholder="Like: data, software, travel"></label>
+        <div class="form-end"><button type="submit" class="btn go">Add merchant</button></div>
+      </form>
+    </div>
     <div class="panel">
       <h2>Rules of the road</h2>
       <div id="policy" class="policy"></div>
@@ -229,6 +278,45 @@
     <a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a>
   </div>
 </footer>
+
+<div id="flash" class="flash" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+<dialog id="kill-dlg" class="modal" aria-labelledby="kill-h">
+  <form method="dialog" class="modal-in">
+    <h2 id="kill-h">Kill this agent?</h2>
+    <p id="kill-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn stop big" id="kill-yes">Kill it now</button>
+      <button type="submit" class="btn ghost big" value="cancel">Keep it running</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="rules-dlg" class="modal wide" aria-labelledby="rules-h">
+  <div class="modal-in">
+    <div class="modal-top">
+      <h2 id="rules-h">Rules in plain English</h2>
+      <button type="button" class="btn ghost sm" id="rules-close">Close</button>
+    </div>
+    <h3>Rules now</h3>
+    <ul id="rules-now" class="rule-list"></ul>
+    <h3><label for="rules-text" class="inline-label">Write new rules</label></h3>
+    <p class="muted small" id="rules-hint">Write them the way you'd tell a person. Lowtides turns them into exact rules for you to check before anything is saved.</p>
+    <textarea id="rules-text" rows="3" aria-describedby="rules-hint" placeholder="Like: max $50 a day, ask me over $20, never buy gift cards"></textarea>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="rules-translate">Translate</button>
+    </div>
+    <div id="rules-preview" class="rules-preview" hidden>
+      <h3>Check these before saving</h3>
+      <p class="rules-source" id="rules-source"></p>
+      <ul id="rules-new" class="rule-list new"></ul>
+      <ul id="rules-notes" class="muted small notes"></ul>
+      <div class="modal-actions">
+        <button type="button" class="btn go big" id="rules-save">Save these rules</button>
+      </div>
+    </div>
+  </div>
+</dialog>
 
 <div id="login" class="login" hidden>
   <form class="login-box" id="login-form">
