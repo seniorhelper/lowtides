@@ -148,6 +148,34 @@
   });
 
   // ---------- render ----------
+  function demoBanner() {
+    var b = $("demo-banner");
+    if (!S.public_demo) { if (b) b.hidden = true; return; }
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "demo-banner";
+      b.className = "demo-banner";
+      b.setAttribute("role", "note");
+      b.innerHTML = '<span><strong>Public demo.</strong> PayPal <strong>sandbox</strong> (test money) and simulated AI models, so nothing here costs ' +
+        'real money. Anyone can press the buttons. A runaway agent is already loaded: check <a href="#approvals">Approvals</a>, open an ' +
+        "agent's <strong>Rules</strong>, or hit <strong>KILL</strong>.</span>" +
+        '<button type="button" class="btn ghost" id="demo-reset">Reset demo</button>';
+      var top = document.querySelector("header.top");
+      top.parentNode.insertBefore(b, top.nextSibling);
+      $("demo-reset").addEventListener("click", function () {
+        var btn = $("demo-reset");
+        btn.disabled = true;
+        btn.textContent = "Resetting...";
+        api("POST", "/api/demo/reset", {}).then(function () {
+          flash("Demo reset. The runaway-agent story is loaded again.");
+          return refresh();
+        }).catch(function (e) { flash(String(e.message || e), true); })
+          .then(function () { btn.disabled = false; btn.textContent = "Reset demo"; });
+      });
+    }
+    b.hidden = false;
+  }
+
   function render() {
     if (!S) return;
     document.title = S.app;
@@ -168,7 +196,8 @@
     $("week-line").textContent = w.calls ? ("Last 7 days: " + w.calls + " calls, saved " + money(w.saved) + " (" + S.week.percent_saved + "%).") : "";
     var sim = S.agents.some(function (a) { return a.simulated; });
     $("foot-line").textContent = S.app + " " + S.version + "." + (sim ? " Rows from the demo agent use a simulated model and are labeled demo." : "") +
-      (S.admin_protected ? "" : " This dashboard has no password yet. Set LOWTIDES_ADMIN_TOKEN before putting it online.");
+      (S.admin_protected || S.public_demo ? "" : " This dashboard has no password yet. Set LOWTIDES_ADMIN_TOKEN before putting it online.");
+    demoBanner();
     $("heart-line").hidden = !S.config.show_signature_heart;
 
     $("setup").hidden = S.agents.length > 0;

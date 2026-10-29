@@ -66,14 +66,25 @@ def show(r, pause):
         time.sleep(1.5)
 
 
-def run(base, admin="", pause=True):
+def seed(base, admin=""):
+    """Load the story into a fresh public demo, quietly, and stop before the KILL so
+    visitors find purchases waiting for them to approve, deny, or kill."""
+    import contextlib
+    import io
+    with contextlib.redirect_stdout(io.StringIO()):
+        run(base, admin, pause=False, kill=False)
+
+
+def run(base, admin="", pause=True, kill=True):
     c = Client(base, admin)
     s, health = c.call("GET", "/health")
     if s != 200:
         sys.exit("Lowtides isn't running at %s. Start it first (run.bat or python -m lowtides.server)." % base)
 
     say("\n== Lowtides: the runaway-agent replay ==\n", pause, 0.5)
-    payee = os.environ.get("LOWTIDES_DEMO_PAYEE", "")
+    # In the PayPal sandbox a payout to an address nobody has claimed stays UNCLAIMED,
+    # which is exactly what lets the KILL step cancel it. Override with a real sandbox account if you like.
+    payee = os.environ.get("LOWTIDES_DEMO_PAYEE", "merchant-demo@example.com")
     c.call("POST", "/api/merchants", {"name": "Acme Data", "paypal_email": payee, "category": "data"})
     c.call("POST", "/api/merchants", {"name": "CloudGPU Inc", "paypal_email": payee, "category": "compute"})
     s, r = c.call("POST", "/api/agents", {"name": "%s %s" % (AGENT_NAME, time.strftime("%H:%M:%S")), "daily_budget": 2.0})
@@ -133,6 +144,8 @@ def run(base, admin="", pause=True):
             break
         say("    call %d -> ok" % calls, False)
 
+    if not kill:
+        return agent
     say("\n8. The owner wakes up, sees the alert and hits KILL:", pause)
     s, k = c.call("POST", "/api/agents/%d/kill" % agent["id"])
     say("    Stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts cancelled."
