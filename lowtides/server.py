@@ -25,6 +25,7 @@ from .config import ROOT, Config
 from .demo import DEMO_NAME, run_demo, run_loop_demo
 from .engine import Engine
 from .money import Money, MoneyError
+from .outside import OutsideGuard
 from .paypal import PayPal, PayPalError
 from .pricing import money
 from .quote import quote as make_quote
@@ -70,6 +71,20 @@ class App:
         self.config_path = config_path or os.environ.get("LOWTIDES_CONFIG") or os.path.join(ROOT, "config.json")
         self.save_lock = threading.Lock()
         self.loopback = True  # set by serve(); a loopback server only answers to localhost names
+        # Watches the provider's real bill, including scripts that never touch Lowtides.
+        self.outside = OutsideGuard(config, store, stop_all=self.stop_all, demo=self.public_demo)
+
+    def stop_all(self, by="STOP ALL"):
+        totals = {"denied": 0, "holds_voided": 0, "payouts_cancelled": 0}
+        for a in self.store.agents():
+            r = self.spend.kill(a["id"], by=by)
+            for k in totals:
+                totals[k] += r[k]
+        who = "STOP ALL pressed" if by == "STOP ALL" else by + " pressed STOP ALL"
+        self.store.event(None, "control", "%s. Every agent is stopped, %d pending purchases denied, %d holds voided, "
+                                          "%d payouts cancelled." % (who, totals["denied"], totals["holds_voided"],
+                                                                     totals["payouts_cancelled"]))
+        return totals
 
     def reset_demo(self, seed_story=True):
         """Public demo only: wipe everything and replay the runaway-agent story, stopping
@@ -82,6 +97,10 @@ class App:
                           "wallets", "wallet_tx", "topups", "shadow", "agents"):
                 self.store.db.execute("DELETE FROM " + table)
             self.store.db.commit()
+        old, self.outside = self.outside, OutsideGuard(self.config, self.store, stop_all=self.stop_all, demo=True)
+        if old._thread:  # fresh simulated bill; keep watching
+            old.stop()
+            self.outside.start()
         if self.self_url and seed_story:
             from .scenario import seed
             try:
@@ -158,6 +177,7 @@ class App:
             "admin_protected": bool(self.admin_token) and not self.public_demo,
             "public_demo": self.public_demo,
             "paypal_ready": self.paypal.configured,
+            "outside": self.outside.status(),
         }
 
 
@@ -451,6 +471,8 @@ def make_handler(app):
                 return self._send(200, {"merchants": app.store.merchants()})
             if path == "/api/forecast":
                 return self._send(200, app.spend.forecast())
+            if path == "/api/outside":
+                return self._send(200, app.outside.status())
             if path == "/api/audit/verify":
                 return self._send(200, app.store.audit_verify())
             if path.startswith("/api/agents/") and path.endswith("/rules"):
@@ -634,15 +656,9 @@ def make_handler(app):
                     return self._send(404, {"error": "Unknown action"})
                 return self._send(200, {"agent": s.agent(aid)})
             if path == "/api/stop-all":
-                totals = {"denied": 0, "holds_voided": 0, "payouts_cancelled": 0}
-                for a in s.agents():
-                    r = app.spend.kill(a["id"], by="STOP ALL")
-                    for k in totals:
-                        totals[k] += r[k]
-                s.event(None, "control", "STOP ALL pressed. Every agent is stopped, %d pending purchases denied, "
-                                         "%d holds voided, %d payouts cancelled." % (totals["denied"], totals["holds_voided"],
-                                                                                     totals["payouts_cancelled"]))
-                return self._send(200, dict(totals, ok=True))
+                return self._send(200, dict(app.stop_all(), ok=True))
+            if path.startswith("/api/outside/"):
+                return self._outside_post(parts[2] if len(parts) == 3 else "", d)
             if path == "/api/policy":
                 app.config.update_policy(d)
                 if "mode" in d and d["mode"] in ("home", "business"):
@@ -730,6 +746,26 @@ def make_handler(app):
                 return self._send(200, {"status": status, "text": text, "headers": extra})
             return self._send(404, {"error": "Unknown endpoint"})
 
+        def _outside_post(self, action, d):
+            g = app.outside
+            if action == "check":
+                return self._send(200, g.check())
+            if action == "disable":
+                return self._send(200, {"tripped": g.disable_now(), "outside": g.status()})
+            if action == "clear":
+                g.clear_banner()
+                return self._send(200, g.status())
+            if action == "settings":
+                g.update_settings(d)
+                if not app.public_demo:
+                    app.save_config()
+                return self._send(200, g.status())
+            if action == "simulate":
+                if not app.public_demo:
+                    return self._send(403, {"error": "The runaway simulation only runs in the public demo."})
+                return self._send(200, g.simulate_runaway(min(500.0, max(1.0, float(d.get("amount") or 25)))))
+            return self._send(404, {"error": "Unknown endpoint"})
+
         def _delete(self):
             if app.public_demo and self._path()[0].startswith("/api/models/"):
                 return self._send(403, {"error": "Changing models is turned off in the public demo."})
@@ -775,6 +811,7 @@ def serve(host=None, port=None):
         sys.exit(2)
     httpd = ThreadingHTTPServer((host, port), make_handler(app))
     httpd.daemon_threads = True
+    app.outside.start()
     print("%s %s running at http://%s:%d  (dashboard + agent API)" % (APP_NAME, __version__, host, port))
     if app.public_demo:
         app.self_url = "http://127.0.0.1:%d" % port
