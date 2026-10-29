@@ -1,34 +1,58 @@
 # Devpost submission text (draft)
 
+**Tagline (under 200 characters):** One budget and a STOP button for AI agents: Lowtides caps what they cost to run and what they buy, and settles every approved purchase through PayPal.
+
+**Try it:** https://lowtides.ai (no login, PayPal sandbox, simulated AI models, "Reset demo" button)
+**Code:** https://github.com/seniorhelper/lowtides (AGPL-3.0)
+**Overview and FAQ:** https://lowtides.ai/why/
+
 ## Inspiration
-I run more than seven AI agents across my businesses and lease agents to clients. The bills were unpredictable, and I could never answer "what did that agent cost, and was it worth it?" Research backs this up: a 2026 Stanford Digital Economy Lab study found agent tasks use about 1,000x more tokens than chat, and that agents can't predict their own costs.
+I run more than seven AI agents across my businesses and lease agents to clients. Two things kept me up at night: AI bills I couldn't predict, and agents that can now pay for things. A shopping agent famously spent $31.43 on eggs it was only asked to find. Surveys say 31% of US consumers would allow no autonomous AI spending at all, and 6 in 10 UK adults would quit an AI shopping agent after one mistake. People won't hand agents a wallet until there's a budget and a STOP button they trust.
 
 ## What it does
-Lowtides is a cost governor for AI agents. Agents point at Lowtides instead of the model provider, with one line changed. Every call then goes through:
-- **Answer memory:** exact repeats are free. Tool calls are never replayed.
-- **Context trimming:** old tool output the agent keeps re-reading is shortened safely.
-- **Automatic prompt caching** for Claude.
-- **Cheapest fit:** a free grader starts each step on the cheapest suitable model, never above the model the agent asked for.
-- **Check and climb:** weak, unsure or broken answers move up one model, and those attempts are counted honestly.
-- **The governor:** daily allowances, per-job budgets, a prepaid wallet, a speed limit, a loop detector that pauses stuck agents, and STOP / STOP ALL.
-- **A receipt in plain dollars:** "Would have cost $X. You paid $Y."
+Lowtides puts **one budget, plain-English rules, one-tap approvals and a kill switch** between AI agents and your money, covering **both** ways an agent spends:
 
-**PayPal is the money layer:**
-- **Wallet top-ups** (Orders API, capture): agents spend only prepaid allowance.
-- **Quote and hold** (Orders API, authorize, then capture or void): Lowtides quotes a job from history, PayPal holds the quote, and when the job is done Lowtides captures only the real cost and releases the rest. It falls back to capture-then-refund on accounts without partial capture, and voids holds under half a cent.
-- **Client invoices** (Invoicing API v2): agencies bill clients for the AI they run, with markup and the savings receipt in the memo.
-- **Webhooks**, with signature verification and duplicate protection. Every write uses a PayPal-Request-Id, so a retry can never double-charge.
+- **What it costs to think (model calls):** Lowtides sits in the request path as a drop-in for the OpenAI and Anthropic APIs. It routes easy steps to cheaper models, answers exact repeats for free, trims wasted context, caps each call, limits prompt size, and the **loop guard pauses a runaway agent** before it burns more money.
+- **What it buys (purchases):** agents ask Lowtides before every purchase (`POST /v1/spend` or the MCP tool `request_spend`). Your rules approve it, deny it or send it to you. Approved purchases are paid through **PayPal Payouts**.
+- **One combined daily cap** covers AI usage plus purchases, per agent.
+- **Rules in plain English:** "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto." Claude turns them into strict, validated rules a person reviews. **The AI never decides a payment; code does.**
+- **Held for a person:** purchases over your line, new payees, text that reads like prompt injection, duplicate charges and unusual amounts.
+- **STOP ALL / KILL:** stops agents, denies pending buys, **voids open PayPal holds and cancels unclaimed PayPal payouts**.
+- **Burst-proof limits:** simultaneous requests are decided one at a time, so 20 purchases fired at once can't overspend a limit.
+- **Proof:** a hash-chained, tamper-evident audit log and a one-click dispute evidence pack per purchase.
+- **Home and Business modes:** a family can give a teen's or parent's agent a $25 "ask me" line; agencies get per-client budgets and PayPal invoices.
 
 ## How we built it
-Python standard library only, with no dependencies. SQLite for the ledger, and a vanilla JS dashboard with an AG Grid ledger view. It's a drop-in for the OpenAI and Anthropic APIs, including streaming. Built with Claude (Anthropic) as the coding partner, and Claude models (Haiku, Sonnet, Opus) are the default model ladder.
+Python standard library only (no dependencies), SQLite for the ledger, a vanilla JS dashboard with an **AG Grid** ledger, hosted on **Render** with a health check. Claude (Anthropic) was the coding partner, and Claude Haiku compiles plain-English rules. 250+ automated tests, including end-to-end runs against a fake PayPal server.
+
+### PayPal, used for real money movement (sandbox)
+| PayPal API | What Lowtides does with it |
+|---|---|
+| Orders v2 (capture) | Prepaid agent wallets: agents can only spend what you've topped up |
+| Orders v2 (authorize, capture, void) | Quote and hold: PayPal holds the quote, Lowtides captures only the real cost and releases the rest; STOP voids open holds |
+| Payouts | Pays merchants for approved agent purchases; the kill switch cancels unclaimed payouts |
+| Invoicing v2 | Agencies bill clients for their agents' AI usage, with the savings receipt in the memo |
+| Webhooks | Signature-verified, credited exactly once; a PayPal-Request-Id on every write so retries never double-charge |
+| Agent Toolkit | Lowtides guards the PayPal Agent Toolkit, checking each tool call against your rules first |
+
+## How it maps to the judging criteria
+- **Technological implementation:** six PayPal surfaces moving real sandbox money, enforcement in the request path, atomic spend decisions, a tamper-evident audit chain, MCP server and API proxy.
+- **Design:** a complete product, not a proof of concept: live dashboard, one-tap approvals, a one-minute guided replay, phone-friendly, accessible.
+- **Potential impact:** the trust gap is the blocker for agentic commerce. Lowtides gives families and small businesses a budget and a STOP button they understand.
+- **Innovation:** one budget across both sides of agent spending, the AI bill and the purchases, plus a kill switch that pulls back money that hasn't landed.
+- **Presentation:** the demo opens on a runaway agent and shows every control stopping it, live.
 
 ## Challenges
-- Being honest about savings. "Would have cost" is defined strictly: the same tokens on the requested model, with no trimming, no Lowtides-added caching and no memory. Failed cheap attempts count against us.
-- Not breaking agents. Trimming never removes a message, so tool call/result pairs stay intact.
-- Not replaying side effects. Answer memory refuses to cache tool-calling responses.
+- Making limits hold under a burst of simultaneous purchases (solved by deciding and recording atomically).
+- Keeping the AI out of the money decision while still letting people write rules in plain English.
+- Being honest about savings: "would have cost" is strictly the same tokens on the requested model, and failed cheap attempts count against us.
+- Not replaying side effects: answer memory never caches tool-calling responses.
+
+## What we built during the submission period
+All of it was built in October 2026, inside the submission period (which opened Oct 1). The project started as a cost-saving AI proxy (v1.0, the first commit). Everything that governs **purchases** was then added on top for this hackathon: the spend API, rules engine, plain-English rules, approvals, PayPal Payouts, kill switch with payout cancellation, audit chain and evidence packs, MCP server, guided replay, the combined budget, burst-proof limits, the product page and the rebrand. The full list is in `CHANGELOG.md`, and `git log` shows each change.
 
 ## What's next
-Hosted version for small businesses, per-client dashboards, and bundling a governor with every agent we lease.
+A hosted version for families and small businesses, phone push approvals, per-client dashboards for agencies, and a governor bundled with every agent we lease.
 
 ## Built with
-python, sqlite, javascript, paypal-orders-api, paypal-invoicing-api, paypal-webhooks, claude, anthropic-api, ag-grid
+python, sqlite, javascript, paypal-orders-api, paypal-payouts-api, paypal-invoicing-api, paypal-webhooks, paypal-agent-toolkit, mcp, claude, anthropic-api, ag-grid, render

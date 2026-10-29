@@ -462,6 +462,10 @@ def make_handler(app):
             if rel.startswith("..") or os.path.isabs(rel):
                 return self._send(404, {"error": "Not found"})
             full = os.path.join(UI_DIR, rel)
+            if os.path.isdir(full):
+                if not path.endswith("/"):
+                    return self._redirect(path + "/")
+                full = os.path.join(full, "index.html")
             if not os.path.isfile(full):
                 return self._send(404, {"error": "Not found"})
             ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"

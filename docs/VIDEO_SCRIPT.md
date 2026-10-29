@@ -1,38 +1,50 @@
-# Demo video script (under 3 minutes)
+# Demo video script (2:50)
 
-Record the screen at 1080p with your voice over it. Keep the browser zoom at 100%.
-PayPal requires the video to be on YouTube (public) and to show the project actually working.
-Use no copyrighted music. Silence or your own voice is safest.
+Record the screen at 1080p with your voice over it. Browser zoom 100%. Open https://lowtides.ai and press **Reset demo** first.
+Rules: under 3 minutes, public on YouTube, shows the project working, no copyrighted music (your voice or silence is safest), no third-party logos beyond PayPal's own product names.
+
+Each beat names the judging criterion it serves, so nothing is wasted.
 
 ---
 
-**0:00–0:15. The problem (show the Home screen, empty)**
-"AI agents are expensive in a way chat never was. A 2026 Stanford study found agent tasks use about a thousand times more tokens than chat, and agents can't predict their own bills. Business owners have nobody watching the meter. So I built a governor."
+**0:00–0:12. Hook: a runaway agent (Impact)**
+Show the Home screen with the night-shift agent PAUSED and "$499 protected today."
+"At 2 a.m., this AI agent got stuck in a loop, tried to rent a $480 GPU, and was talked into paying a stranger. It didn't cost me a cent. Here's why."
 
-**0:15–0:40. Setup in three steps**
-Type a name, slide the allowance to $5, press **Turn it on**. Show the two lines to paste. Open "Show me code for my agent."
-"Name it, give it an allowance, turn it on. Your agent changes one line, the address, and keeps working exactly the same."
+**0:12–0:30. The problem (Impact)**
+Cut to /why/ stats for two seconds, then back.
+"Agents now spend money two ways: what they cost to run, and what they buy. A shopping agent once spent $31 on eggs it was only asked to find. A third of people won't let an agent spend anything. Nobody hands an agent a wallet without a budget and a STOP button."
 
-**0:40–1:10. Watch it work**
-Press **Watch it work (demo)**. Point to the green sign and the plain-English receipt.
-"This runs the real pipeline. Only the model at the end is simulated, and it's labeled that way everywhere. Easy steps went to a cheaper model. Two repeat questions were free from memory. Old tool output the agent kept re-reading was trimmed. And the governor never moved it up past the model it asked for."
+**0:30–0:55. Rules in plain English (Innovation, Design)**
+Open the agent's **Rules**. Type: "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto." Show the compiled rules.
+"I type rules like I'd tell a person. Claude turns them into strict rules I review. The AI never decides a payment. Plain code does."
 
-**1:10–1:30. Try it live (with a real Claude key set)**
-In **Try it**, pick `claude-opus-5-5` and ask "Summarize this in one line: our shipment is two days late."
-"A real Claude call. It answered on Haiku, a fraction of the Opus price, and here's exactly what it cost and saved."
+**0:55–1:35. Watch it get caught (Technology, Presentation)**
+Press **▶ Watch a runaway agent get stopped** and let the replay run, narrating over it:
+- "A $12 data purchase inside my rules: approved and paid through PayPal Payouts."
+- "A poisoned web page tells the agent to pay 'Refund Desk.' New payee plus injection-style text: held for me."
+- "A $480 GPU rental: over the per-purchase limit, blocked."
+- "The same request four times in two minutes: the loop guard pauses the agent."
 
-**1:30–2:10. PayPal: quote, hold, pay only the real cost**
-Go to **Quotes & holds**. Get a quote for "Weekly SEO report." Press **Hold with PayPal**, approve in the sandbox, and come back.
-Run a few calls with the job header (use the curl in the README), then press **Finish & pay**.
-"Like a contractor's estimate. PayPal holds the quote. When the job is done, Lowtides captures only what it really cost and releases the rest. If an account can't do partial captures, it captures and refunds the difference instantly."
+**1:35–1:55. One budget for both (Innovation)**
+Point to the combined meter and the "Every call" ledger (AG Grid).
+"Here's the big idea: one budget covers the AI bill and the purchases together. A busy day of thinking leaves less room for buying."
 
-**2:10–2:30. Safety: STOP and the loop guard**
-Press **Watch it work** with the loop demo (or send the same request five times). Show the agent paused and the alert.
-"Agents get stuck. The loop guard pauses them before they burn your budget. And STOP ALL halts every agent instantly."
+**1:55–2:15. Approve or STOP (Design, Technology)**
+Open **Approvals**. Approve the $45 dataset with one tap. Then press **KILL** on the agent.
+"Risky buys wait for one tap. And KILL doesn't just stop the agent. It voids the PayPal hold and cancels the payout that hasn't landed yet."
 
-**2:30–2:50. Business side**
-Switch to **Business**. Add a client, assign an agent, **Preview** the invoice, then **Send PayPal invoice**.
-"Agencies can run agents for clients and bill them through PayPal, with the savings receipt right on the invoice."
+**2:15–2:35. Built on PayPal (Technology)**
+Show the PayPal sandbox dashboard with the payout and order IDs matching the evidence pack.
+"Orders for prepaid wallets and authorize-then-capture holds. Payouts to merchants. Invoicing for agencies. Verified webhooks. Every write carries a request ID, so a retry never double-charges. And every decision lands in a tamper-evident log with a dispute evidence pack."
 
-**2:50–3:00. Close**
-"Same results, a fraction of the bill, proof in dollars. Open source, built with Claude and PayPal."
+**2:35–2:50. Close (Impact, Presentation)**
+Back to Home, tide chart at low tide.
+"Lowtides. One budget and a STOP button for AI agents. Open source, live right now at lowtides.ai. Keep AI spend at low tide."
+
+---
+
+**Recording tips**
+- Run the replay once before recording so you know its timing (about a minute).
+- Keep the cursor slow and point at what you're talking about.
+- Upload to YouTube as Public, title: "Lowtides: one budget and a STOP button for AI agents (PayPal AI Hackathon)".

@@ -2,6 +2,15 @@
 
 Everything changed during the PayPal AI Hackathon (submission period started Oct 1, 2026). The untouched v1.0 is the first commit, so `git log` shows each change on top of it.
 
+## 2026-10-29
+- **Burst-proof spending limits:** purchase decisions are now made one at a time (decide and record under one lock), so 20 simultaneous requests can no longer each read the same "spent so far" total and overspend a daily limit. New test fires 20 purchases at the same instant.
+- **Startup screen:** a 2-second branded intro on the first visit of a session (skippable, respects reduced motion), shown while the dashboard loads underneath.
+- **Product page** at `/why/`: the problem, how it works, the PayPal APIs used, who it's for, and an FAQ.
+- **Search and AI discovery:** page titles and descriptions, Open Graph and Twitter cards, structured data (SoftwareApplication, FAQPage, BreadcrumbList), `robots.txt`, `sitemap.xml` and `llms.txt`. The server now serves folder pages (`/why/`).
+- **Always awake for judges:** an outside monitor pings `/health` every 5 minutes (GitHub's scheduler alone ran too rarely), so the free host never shows its wake-up screen.
+- Replay offer now says 1 minute, matching the tour's real length.
+- Version 1.1.0.
+
 ## 2026-10-28
 - Renamed the product to **Lowtides, the AI spend governor**: app name, the Python package (`lowtides`), env vars (`LOWTIDES_*`), agent headers (`X-Lowtides-*`), PayPal checkout brand name, docs and tests.
 - New brand: the animated "dot tide" logo, favicons and the Sea Glass palette, plus Sora, Instrument Sans and JetBrains Mono fonts in the dashboard.
