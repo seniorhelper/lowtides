@@ -1,0 +1,101 @@
+/* Guided runaway-agent replay (tour.js). Uses the palette from style.css. */
+
+/* Call to action inside the demo banner */
+.demo-banner .tour-cta {
+  background: var(--stop-strong, #B8352A); border-color: var(--stop-strong, #B8352A); color: #fff;
+  font-size: 1.05rem; min-height: 48px; padding: .6rem 1.15rem; flex: 0 0 auto;
+  box-shadow: 0 2px 0 rgba(10, 27, 30, .25);
+}
+.demo-banner .tour-cta:hover { background: #962A21; border-color: #962A21; }
+.demo-banner .tour-cta:focus-visible { outline: 3px solid var(--focus, #0F7F6A); outline-offset: 3px; }
+@media (max-width: 560px) { .demo-banner .tour-cta { width: 100%; } }
+
+/* First-visit offer */
+.tour-pill {
+  position: fixed; z-index: 900; right: 16px; bottom: 16px; left: auto; max-width: calc(100vw - 32px);
+  display: flex; align-items: stretch; border-radius: 999px; overflow: hidden;
+  background: var(--deep, #0A1B1E); color: var(--deep-ink, #E6F4F1);
+  box-shadow: 0 8px 24px rgba(10, 27, 30, .35); animation: tour-rise .35s ease-out both;
+}
+.tour-pill button { font: 600 .95rem var(--font, system-ui, sans-serif); color: inherit; background: none; border: 0; cursor: pointer; min-height: 44px; }
+.tour-pill-go { padding: .55rem .5rem .55rem 1.1rem; text-align: left; }
+.tour-pill-x { padding: 0 1rem; font-size: 1.25rem; border-left: 1px solid var(--deep-line, #24434A) !important; }
+.tour-pill button:hover { background: var(--deep-2, #10272B); }
+.tour-pill button:focus-visible { outline: 3px solid var(--deep-tide, #3FD6B5); outline-offset: -3px; }
+
+/* Dialog */
+html.tour-open { overflow: hidden; }
+.tour-overlay[hidden], .tour-dialog [hidden] { display: none !important; }
+.tour-overlay {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(5, 14, 16, .72);
+}
+.tour-dialog {
+  width: 100%; max-width: 600px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto;
+  background: var(--deep, #0A1B1E); color: var(--deep-ink, #E6F4F1); border: 1px solid var(--deep-line, #24434A);
+  border-radius: 12px; padding: 1.25rem 1.25rem 1rem; box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+  font-family: var(--font, system-ui, sans-serif);
+}
+.tour-head { margin-bottom: .75rem; }
+.tour-h { margin: 0; font-size: 1.15rem; color: var(--deep-ink, #E6F4F1); }
+.tour-sub { margin: .2rem 0 0; font-size: .85rem; color: var(--deep-muted, #9DB5B1); }
+
+.tour-dots { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 1rem; }
+.tour-dots li { flex: 1 1 0; height: 6px; border-radius: 3px; background: var(--deep-line, #24434A); transition: background .3s; }
+.tour-dots li.done { background: var(--deep-tide, #3FD6B5); }
+.tour-dots li.now { background: var(--deep-limit, #F2B24D); }
+
+.tour-card { background: var(--deep-2, #10272B); border: 1px solid var(--deep-line, #24434A); border-radius: 10px; padding: 1rem; }
+.tour-dialog.anim .tour-card { animation: tour-in .35s ease-out both; }
+.tour-count { margin: 0 0 .3rem; font: 600 .75rem var(--font-num, monospace); letter-spacing: .08em; text-transform: uppercase; color: var(--deep-muted, #9DB5B1); }
+.tour-title { margin: 0 0 .4rem; font: 600 1.2rem/1.3 var(--font-head, var(--font, sans-serif)); letter-spacing: -.01em; }
+.tour-tried { margin: 0 0 .75rem; color: var(--deep-muted, #9DB5B1); font-size: .95rem; }
+.tour-ticker { margin: 0 0 .5rem; font: .85rem var(--font-num, monospace); color: var(--deep-ink, #E6F4F1); min-height: 0; }
+.tour-ticker:empty { display: none; }
+.tour-verdict {
+  display: inline-block; margin: 0 0 .5rem; padding: .3rem .65rem; border-radius: 6px;
+  font: 700 .9rem var(--font-num, monospace); letter-spacing: .06em;
+}
+.tour-verdict.wait { background: transparent; color: var(--deep-muted, #9DB5B1); border: 1px dashed var(--deep-line, #24434A); font-weight: 600; letter-spacing: 0; }
+.tour-verdict.ok { background: var(--deep-tide, #3FD6B5); color: #0A1B1E; }
+.tour-verdict.hold { background: var(--deep-limit, #F2B24D); color: #0A1B1E; }
+.tour-verdict.bad { background: var(--stop-strong, #B8352A); color: #fff; }
+.tour-why { margin: 0; font-size: 1rem; line-height: 1.45; }
+.tour-why:empty { display: none; }
+
+.tour-log { list-style: none; margin: .75rem 0 0; padding: 0; max-height: 9.5rem; overflow-y: auto; font-size: .8rem; color: var(--deep-muted, #9DB5B1); }
+.tour-log li { padding: .2rem 0; border-top: 1px solid var(--deep-line, #24434A); }
+.tour-log strong { font-family: var(--font-num, monospace); font-size: .72rem; letter-spacing: .05em; margin-right: .35rem; }
+.tour-log-ok strong { color: var(--deep-tide, #3FD6B5); }
+.tour-log-hold strong { color: var(--deep-limit, #F2B24D); }
+.tour-log-bad strong { color: var(--deep-kill, #FF7A66); }
+
+.tour-bar { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.tour-dialog .tour-btn {
+  flex: 1 1 auto; min-height: 44px; background: transparent; color: var(--deep-ink, #E6F4F1);
+  border-color: var(--deep-line, #24434A);
+}
+.tour-dialog .tour-btn:hover { background: var(--deep-2, #10272B); border-color: var(--deep-muted, #9DB5B1); }
+.tour-dialog .tour-btn:focus-visible { outline: 3px solid var(--deep-tide, #3FD6B5); outline-offset: 2px; }
+.tour-dialog .tour-btn[aria-pressed="true"] { border-color: var(--deep-limit, #F2B24D); color: var(--deep-limit, #F2B24D); }
+.tour-dialog .tour-primary { background: var(--deep-tide, #3FD6B5); border-color: var(--deep-tide, #3FD6B5); color: #0A1B1E; }
+.tour-dialog .tour-primary:hover { background: #6BE2C8; border-color: #6BE2C8; }
+.tour-dialog.is-paused .tour-dots li.now { animation: none; opacity: .6; }
+
+.tour-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 420px) {
+  .tour-overlay { padding: 8px; align-items: flex-end; }
+  .tour-dialog { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); padding: 1rem .9rem .85rem; }
+  .tour-title { font-size: 1.08rem; }
+  .tour-pill { left: 16px; right: 16px; border-radius: 14px; }
+  .tour-pill-go { flex: 1 1 auto; }
+}
+
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes tour-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-pill, .tour-dialog.anim .tour-card { animation: none; }
+  .tour-dots li { transition: none; }
+}

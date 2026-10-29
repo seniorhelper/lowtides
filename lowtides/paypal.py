@@ -36,6 +36,46 @@ class PayPalError(Exception):
             return details[0].get("issue", "")
         return self.body.get("name", "")
 
+    @property
+    def name(self):
+        return self.body.get("name") or self.body.get("error") or ""
+
+    @property
+    def debug_id(self):
+        return self.body.get("debug_id", "")
+
+    @property
+    def retryable(self):
+        """Network failure or a PayPal 5xx: the request may or may not have gone through."""
+        return self.status == 0 or self.status >= 500
+
+    def summary(self):
+        """'NAME: message (issue) [debug_id X]' -- what PayPal actually said, for the UI and audit log."""
+        parts = []
+        if self.name:
+            parts.append(self.name + ":")
+        parts.append(str(self))
+        details = self.body.get("details") or []
+        if details:
+            d = details[0]
+            extra = d.get("issue", "")
+            if d.get("description"):
+                extra = (extra + " - " if extra else "") + d["description"]
+            if extra and extra not in str(self):
+                parts.append("(%s)" % extra)
+        if self.debug_id:
+            parts.append("[debug_id %s]" % self.debug_id)
+        return " ".join(parts)
+
+
+PAYOUTS_SCOPE = "https://uri.paypal.com/payments/payouts"
+
+# Payout item transaction_status values (Payouts v1 schema). Money never reached the
+# receiver and is back with (or never left) the sender:
+PAYOUT_FAILED = ("FAILED", "BLOCKED", "RETURNED", "REFUNDED", "REVERSED", "DENIED")
+# Cancel works only on UNCLAIMED items.
+PAYOUT_CANCELLABLE = ("UNCLAIMED",)
+
 
 def cents(amount):
     """Format dollars for PayPal: two decimals, rounded half-up."""
@@ -48,9 +88,11 @@ class PayPal:
         self.client_id = client_id
         self.client_secret = client_secret
         self.base = (base_url or BASES.get(env, BASES["sandbox"])).rstrip("/")
+        self.env = "live" if self.base == BASES["live"] else "sandbox"
         self.currency = currency
         self._token = None
         self._token_exp = 0
+        self.scopes = None  # set of scopes the token grants, once signed in
 
     @property
     def configured(self):
@@ -68,12 +110,24 @@ class PayPal:
             with urllib.request.urlopen(req, timeout=30) as r:
                 data = json.loads(r.read().decode())
         except urllib.error.HTTPError as e:
-            raise PayPalError("PayPal sign-in failed (HTTP %d). Check the client ID and secret." % e.code, e.code)
+            try:
+                b = json.loads(e.read().decode("utf-8", "replace"))
+            except ValueError:
+                b = {}
+            why = b.get("error_description") or b.get("error") or ""
+            raise PayPalError("PayPal sign-in failed (HTTP %d%s). Check the client ID and secret, and that they are %s keys."
+                              % (e.code, ": " + why if why else "", self.env), e.code, b)
         except urllib.error.URLError as e:
             raise PayPalError("Could not reach PayPal: %s" % e)
         self._token = data["access_token"]
         self._token_exp = time.time() + int(data.get("expires_in", 3000))
+        if data.get("scope"):
+            self.scopes = set(str(data["scope"]).split())
         return self._token
+
+    def payouts_enabled(self):
+        """True/False from the token's scopes, None if unknown (not signed in yet)."""
+        return None if self.scopes is None else PAYOUTS_SCOPE in self.scopes
 
     def _call(self, method, path, body=None, request_id=None, prefer=None, raw_data=None):
         if not self.configured:
@@ -175,13 +229,17 @@ class PayPal:
 
     # ---- payouts (agent purchases) --------------------------------------------------
     def create_payout(self, receiver_email, amount, note, item_id):
-        """Pay a merchant from the owner's PayPal balance. The request ID is the spend
-        request's ID, so a retry can never pay the same purchase twice."""
+        """Pay a merchant from the owner's PayPal balance (Payouts v1, POST /v1/payments/payouts).
+
+        Idempotent twice over: sender_batch_id (PayPal rejects a reuse within 30 days) and
+        PayPal-Request-Id (PayPal replays the original response for 30 days) are both the
+        spend request's ID, so a retry can never pay the same purchase twice. The reply is
+        201 with batch_header.batch_status PENDING; item IDs come later from get_payout_batch."""
         body = {
-            "sender_batch_header": {"sender_batch_id": str(item_id)[:30], "email_subject": "Payment from an AI agent (Lowtides)",
-                                    "email_message": note[:255]},
-            "items": [{"recipient_type": "EMAIL", "receiver": receiver_email, "note": note[:255], "sender_item_id": str(item_id)[:30],
-                       "amount": {"currency": self.currency, "value": cents(amount)}}],
+            "sender_batch_header": {"sender_batch_id": str(item_id)[:256], "email_subject": "Payment from an AI agent (Lowtides)",
+                                    "email_message": note[:1000]},
+            "items": [{"recipient_type": "EMAIL", "receiver": receiver_email[:127], "note": note[:1000],
+                       "sender_item_id": str(item_id)[:63], "amount": {"currency": self.currency, "value": cents(amount)}}],
         }
         return self._call("POST", "/v1/payments/payouts", body, request_id="payout-" + str(item_id))
 
@@ -189,9 +247,23 @@ class PayPal:
         return self._call("GET", "/v1/payments/payouts/" + urllib.parse.quote(batch_id))
 
     def cancel_payout_item(self, item_id):
-        """Only works while the payout is UNCLAIMED (the receiver hasn't accepted it yet)."""
-        return self._call("POST", "/v1/payments/payouts-item/%s/cancel" % urllib.parse.quote(item_id), {},
+        """Only works while the payout is UNCLAIMED (the receiver hasn't accepted it yet).
+        The cancel operation takes no request body."""
+        return self._call("POST", "/v1/payments/payouts-item/%s/cancel" % urllib.parse.quote(item_id), raw_data=b"",
                           request_id="cancel-" + item_id)
+
+    @staticmethod
+    def payout_item(batch):
+        """(payout_item_id, transaction_status, item error summary) of a one-item batch."""
+        items = (batch or {}).get("items") or []
+        if not items:
+            return None, "", ""
+        it = items[0]
+        err = it.get("errors") or {}
+        why = ""
+        if err:
+            why = ("%s: %s" % (err.get("name", ""), err.get("message", ""))).strip(": ")
+        return it.get("payout_item_id"), it.get("transaction_status", ""), why
 
     # ---- invoices ----------------------------------------------------------------
     def create_invoice(self, recipient_email, items, note, memo="", request_id=None):

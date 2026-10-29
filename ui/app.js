@@ -176,6 +176,25 @@
     b.hidden = false;
   }
 
+  // Hero: money Lowtides kept from leaving today (counted server-side from real records).
+  function renderProtected() {
+    var p = S.protected || {};
+    var stopped = Number(p.stopped || 0);
+    tweenMoney($("prot-today"), stopped);
+    var chips = [];
+    if (p.scam_held) chips.push(["", plural(p.scam_held, "scam payment held", "scam payments held")]);
+    if (p.blocked) chips.push(["", plural(p.blocked, "over-limit purchase blocked", "over-limit purchases blocked")]);
+    if (p.cancelled) chips.push(["", plural(p.cancelled, "payout pulled back", "payouts pulled back")]);
+    if (p.loops) chips.push(["", plural(p.loops, "runaway loop stopped", "runaway loops stopped")]);
+    if (p.waiting) chips.push(["wait", '<a href="#approvals">' + esc(money(p.waiting_amount)) + " waiting for you</a>"]);
+    var any = stopped > 0 || p.loops || p.waiting;
+    $("prot-label").textContent = stopped > 0 ? "stopped before it left" : (any ? "no money needed stopping" : "nothing needed stopping today");
+    if (!chips.length) chips.push(["calm", "Every purchase stayed inside your rules"]);
+    $("prot-chips").innerHTML = chips.map(function (c) {
+      return "<li" + (c[0] ? ' class="' + c[0] + '"' : "") + ">" + (c[0] === "wait" ? c[1] : esc(c[1])) + "</li>";
+    }).join("");
+  }
+
   function render() {
     if (!S) return;
     document.title = S.app;
@@ -186,6 +205,7 @@
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
+    renderProtected();
     var t = S.today.totals;
     tweenMoney($("saved-today"), Number(t.saved || 0));
     $("saved-sub").textContent = "Would have cost " + money(t.baseline) + ". You paid " + money(t.cost) + "." +

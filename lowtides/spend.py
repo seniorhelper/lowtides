@@ -13,12 +13,13 @@ import json
 import re
 import secrets
 import statistics
+import threading
 import time
 import urllib.error
 import urllib.request
 
 from .guard import start_of_today
-from .paypal import PayPalError
+from .paypal import PAYOUT_CANCELLABLE, PAYOUT_FAILED, PayPalError
 
 DEFAULT_RULES = {
     "max_per_purchase": 50.0,
@@ -46,6 +47,7 @@ INJECTION = re.compile(
 
 DUP_WINDOW = 600          # seconds: same agent, merchant and amount = possible double charge
 UNUSUAL_MULTIPLE = 3.0    # times the agent's typical purchase
+EXTERNAL = "paid_by_caller"  # flag: the requesting tool settles with PayPal itself, so no payout
 UNUSUAL_MIN_HISTORY = 5
 
 
@@ -352,6 +354,9 @@ class SpendGovernor:
                     ok.append("%s is a known merchant." % merchant)
 
         decision = "denied" if denied else ("needs_approval" if ask else "approved")
+        if str(d.get("settle") or "").lower() == "external":
+            # The caller (e.g. PayPal's Agent Toolkit) moves the money itself; Lowtides only decides and records.
+            flags.append(EXTERNAL)
         sid = "sp_" + secrets.token_hex(8)
         row = self.store.add_spend(id=sid, agent_id=aid, task_id=task_id, amount=amount, merchant=merchant, item=item,
                                    category=category, reason=reason, decision=decision,
@@ -369,40 +374,160 @@ class SpendGovernor:
         return row
 
     # -- paying -------------------------------------------------------------------------
+    # After creating a payout, poll its batch this long (seconds between tries) for the
+    # item ID and status. PayPal processes batches asynchronously; the kill switch needs
+    # the item ID to cancel an UNCLAIMED payout. Whatever is still PENDING after this is
+    # followed up in a background thread (background_poll) and by refresh_payout().
+    poll_delays = (0.25, 0.5, 0.75, 1.0, 1.25)
+    background_poll = (2, 3, 5, 10, 20, 30)
+
+    @staticmethod
+    def _refusal(e):
+        hint = ""
+        name = e.name or e.issue
+        if name in ("AUTHORIZATION_ERROR", "NOT_AUTHORIZED", "REQUIRED_SCOPE_MISSING", "PERMISSION_DENIED"):
+            hint = " Turn on Payouts for this app in the PayPal developer dashboard (Apps & Credentials > app > Features)."
+        elif name in ("INSUFFICIENT_FUNDS", "NEGATIVE_BALANCE"):
+            hint = " The PayPal business account doesn't have enough balance."
+        elif name == "SELF_PAY_NOT_ALLOWED":
+            hint = " The payee is the same PayPal account that is paying."
+        elif e.status == 401 or name in ("AUTHENTICATION_FAILURE", "invalid_client"):
+            hint = " Check PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET."
+        return ("PayPal refused the payout: %s%s" % (e.summary(), hint))[:500]
+
     def _pay(self, row, agent, by):
         sid, amount = row["id"], row["amount"]
         payee = row["payee"] or ((self.store.merchant(row["merchant"]) or {}).get("paypal_email") or "")
         note = "%s: %s" % (agent["name"], row["item"] or row["merchant"])
         fields = {"decided_by": by, "decided_ts": time.time(), "payee": payee}
-        if self.paypal.configured:
+        if EXTERNAL in (row.get("flags") or []):
+            fields.update(payout_batch_id=None, payout_item_id=None, payout_status="PAID_BY_CALLER", simulated=0)
+        elif self.paypal.configured:
+            fields["payout_env"] = getattr(self.paypal, "env", "")
             if not payee:
-                raise SpendError("Add %s's PayPal email on the Merchants list before paying it." % row["merchant"], 409)
-            try:
-                out = self.paypal.create_payout(payee, amount, note, sid.replace("sp_", "LT"))
-            except PayPalError as e:
-                self.store.update_spend(sid, status="failed", payout_status="ERROR", note=str(e)[:300], **fields)
-                self.store.audit("spend.payout_failed", sid, {"error": str(e)[:300]})
-                self.store.event(agent["id"], "spend", "PayPal payout for %s at %s failed: %s" % (money(amount), row["merchant"], e))
-                return self.store.spend(sid)
-            bid = (out.get("batch_header") or {}).get("payout_batch_id")
-            item_id, status = None, (out.get("batch_header") or {}).get("batch_status", "PENDING")
-            try:
-                batch = self.paypal.get_payout_batch(bid) if bid else {}
-                items = batch.get("items") or []
-                if items:
-                    item_id, status = items[0].get("payout_item_id"), items[0].get("transaction_status", status)
-            except PayPalError:
-                pass  # the batch exists; its item ID can be fetched later
-            fields.update(payout_batch_id=bid, payout_item_id=item_id, payout_status=status, simulated=0)
+                why = "Not paid: %s has no PayPal email on the Merchants list." % row["merchant"]
+                return self._fail(sid, agent, row, why, fields, "NO_PAYEE")
+            out = None
+            for attempt in (1, 2):
+                try:
+                    out = self.paypal.create_payout(payee, amount, note, sid.replace("sp_", "LT"))
+                    break
+                except PayPalError as e:
+                    # A timeout or 5xx may or may not have gone through. Retrying with the same
+                    # sender_batch_id + PayPal-Request-Id is safe: PayPal pays it at most once.
+                    if e.retryable and attempt == 1:
+                        time.sleep(1)
+                        continue
+                    why = self._refusal(e)
+                    if e.retryable:
+                        why += " PayPal didn't answer clearly, so check the PayPal activity before retrying."
+                    return self._fail(sid, agent, row, why, fields, "ERROR", error=e)
+            header = out.get("batch_header") or {}
+            bid = header.get("payout_batch_id")
+            if not bid:
+                return self._fail(sid, agent, row, "PayPal accepted the request but returned no payout batch ID.", fields, "ERROR")
+            fields.update(payout_batch_id=bid, payout_item_id=None, payout_status=header.get("batch_status") or "PENDING", simulated=0)
+            fields.update(self._poll(bid, self.poll_delays))
+            if fields.pop("_failed", None):
+                return self._fail(sid, agent, row, fields.pop("note"), fields, fields.get("payout_status") or "FAILED")
         else:
             fields.update(payout_batch_id="SIM-" + sid[3:], payout_item_id="SIMITEM-" + sid[3:], payout_status="SIMULATED", simulated=1)
         if agent["use_wallet"]:
             self.store.wallet_move(agent["id"], -amount, "purchase", ref="buy-" + sid)
         row = self.store.update_spend(sid, status="paid", **fields)
         self.store.audit("spend.paid", sid, {"by": by, "payee": payee, "payout_batch_id": fields["payout_batch_id"],
+                                             "payout_item_id": fields.get("payout_item_id"), "payout_env": fields.get("payout_env", ""),
                                              "payout_status": fields["payout_status"], "simulated": bool(fields["simulated"])})
-        self.store.event(agent["id"], "spend", "Paid %s to %s%s." % (money(amount), row["merchant"],
-                                                                     " (simulated payout)" if fields["simulated"] else " via PayPal"))
+        self.store.event(agent["id"], "spend", "Paid %s to %s%s." % (
+            money(amount), row["merchant"], " (simulated payout)" if fields["simulated"]
+            else " (approved; the PayPal tool that asked moves the money)" if not fields["payout_batch_id"]
+            else " via PayPal %s payout batch %s" % (fields.get("payout_env") or "", fields["payout_batch_id"])))
+        if fields["payout_batch_id"] and not fields["simulated"] and not self._settled(fields):
+            self._follow_up(sid)
+        return row
+
+    def _fail(self, sid, agent, row, why, fields, payout_status, error=None):
+        """Record honestly that no money moved: status 'failed', never 'paid'."""
+        fields = dict(fields, payout_status=payout_status, note=why[:500])
+        self.store.update_spend(sid, status="failed", **fields)
+        data = {"error": why[:500], "payout_batch_id": fields.get("payout_batch_id")}
+        if error is not None:
+            data.update(http=error.status, name=error.name, debug_id=error.debug_id)
+        self.store.audit("spend.payout_failed", sid, data)
+        self.store.event(agent["id"], "spend", "Not paid: %s at %s. %s" % (money(row["amount"]), row["merchant"], why))
+        return self.store.spend(sid)
+
+    @staticmethod
+    def _settled(f):
+        return bool(f.get("payout_item_id")) and f.get("payout_status") not in ("PENDING", "PROCESSING", "")
+
+    def _poll(self, bid, delays):
+        """Read the batch until the item has an ID and a real status (or we run out of tries).
+        Returns spend fields to store; '_failed' + 'note' if PayPal says the money didn't go."""
+        f = {}
+        for d in delays:
+            if d:
+                time.sleep(d)
+            try:
+                batch = self.paypal.get_payout_batch(bid)
+            except PayPalError:
+                continue  # not visible yet; try again
+            bstatus = (batch.get("batch_header") or {}).get("batch_status", "")
+            item_id, tstatus, why = self.paypal.payout_item(batch)
+            if item_id:
+                f["payout_item_id"] = item_id
+            f["payout_status"] = tstatus or bstatus or "PENDING"
+            if tstatus in PAYOUT_FAILED or (bstatus in ("DENIED", "CANCELED") and not tstatus):
+                f.update(_failed=True, note=("PayPal didn't send the payout (%s)%s" % (f["payout_status"], ": " + why if why else ".")))
+                return f
+            if tstatus == "UNCLAIMED":
+                f["note"] = ("Sent. Waiting for the receiver to claim it%s. Cancellable until then."
+                             % (" (" + why + ")" if why else ""))[:500]
+            if self._settled(f):
+                return f
+        return f
+
+    def _follow_up(self, sid):
+        if not self.background_poll:
+            return
+
+        def run():
+            for d in self.background_poll:
+                time.sleep(d)
+                try:
+                    r = self.refresh_payout(sid)
+                except Exception:
+                    return
+                if not r or r["status"] != "paid" or self._settled(r):
+                    return
+        threading.Thread(target=run, daemon=True, name="payout-" + sid).start()
+
+    def refresh_payout(self, sid):
+        """Re-read a real payout from PayPal and store its item ID / status. If PayPal says the
+        money never went (FAILED, RETURNED...), the request becomes 'failed' and any wallet
+        debit is given back. Safe to call on view; does nothing for simulated or settled rows."""
+        row = self.store.spend(sid)
+        if not row or row["simulated"] or not row["payout_batch_id"] or row["status"] != "paid":
+            return row
+        f = self._poll(row["payout_batch_id"], (0,))
+        if not f:
+            return row
+        failed, note = f.pop("_failed", None), f.pop("note", None)
+        if failed:
+            agent = self.store.agent(row["agent_id"]) or {}
+            self.store.update_spend(sid, status="failed", note=note[:500], **f)
+            if agent.get("use_wallet"):
+                self.store.wallet_move(row["agent_id"], row["amount"], "refund", ref="unbuy-" + sid)
+            self.store.audit("spend.payout_failed", sid, {"error": note[:500], "payout_batch_id": row["payout_batch_id"],
+                                                         "payout_status": f.get("payout_status")})
+            self.store.event(row["agent_id"], "spend", "PayPal didn't deliver %s to %s: %s" % (money(row["amount"]), row["merchant"], note))
+            return self.store.spend(sid)
+        if note:
+            f["note"] = note
+        if f.get("payout_item_id") != row["payout_item_id"] or f.get("payout_status") != row["payout_status"]:
+            self.store.audit("spend.payout_update", sid, {"payout_item_id": f.get("payout_item_id"),
+                                                         "payout_status": f.get("payout_status")})
+            return self.store.update_spend(sid, **f)
         return row
 
     # -- a person decides ------------------------------------------------------------------
@@ -460,16 +585,26 @@ class SpendGovernor:
                 out["problems"].append("Hold on task %s: %s" % (t["id"], e))
         since = time.time() - 30 * 86400
         for r in self.store.q("SELECT * FROM spend_requests WHERE agent_id=? AND status='paid' AND ts>=? "
-                              "AND payout_status IN ('UNCLAIMED','PENDING','SIMULATED')", (agent_id, since)):
+                              "AND payout_status IN ('UNCLAIMED','PENDING','PROCESSING','ONHOLD','SIMULATED')", (agent_id, since)):
             try:
                 if r["simulated"]:
                     pass
-                elif r["payout_item_id"]:
-                    self.paypal.cancel_payout_item(r["payout_item_id"])
                 else:
-                    continue
+                    # Get the latest item ID and status first: the batch is processed async.
+                    try:
+                        r = self.refresh_payout(r["id"]) or r
+                    except Exception:
+                        pass
+                    if r["status"] != "paid":
+                        continue  # PayPal already sent it back; nothing to cancel
+                    if not r["payout_item_id"] or r["payout_status"] not in PAYOUT_CANCELLABLE:
+                        out["problems"].append("Payout %s (batch %s) is %s at PayPal, so it can't be cancelled yet. "
+                                               "PayPal only cancels UNCLAIMED payouts." % (
+                                                   r["id"], r["payout_batch_id"], r["payout_status"] or "PENDING"))
+                        continue
+                    self.paypal.cancel_payout_item(r["payout_item_id"])
             except PayPalError as e:
-                out["problems"].append("Payout %s couldn't be cancelled (it may already be claimed): %s" % (r["id"], e))
+                out["problems"].append("Payout %s couldn't be cancelled (it may already be claimed): %s" % (r["id"], e.summary()))
                 continue
             self.store.update_spend(r["id"], status="cancelled", payout_status="RETURNED" if not r["simulated"] else "SIMULATED-RETURNED",
                                     note="Cancelled by the kill switch")
@@ -513,19 +648,34 @@ class SpendGovernor:
         return {"agents": rows, "generated": now}
 
     # -- dispute evidence ---------------------------------------------------------------------
+    def _proof(self, row):
+        if row["simulated"]:
+            return {"simulated": True, "summary": row.get("payout_proof", "")}
+        if not row["payout_batch_id"]:
+            return {"simulated": False, "summary": row.get("note") or "No payout was created."}
+        return {"simulated": False, "environment": row.get("payout_env") or getattr(self.paypal, "env", ""),
+                "payout_batch_id": row["payout_batch_id"], "payout_item_id": row["payout_item_id"],
+                "transaction_status": row["payout_status"], "receiver": row["payee"],
+                "verify_with": "GET %s/v1/payments/payouts/%s" % (getattr(self.paypal, "base", ""), row["payout_batch_id"]),
+                "summary": row.get("payout_proof", "")}
+
     def evidence(self, sid):
         """Everything a merchant or PayPal dispute needs: what the agent asked for and why,
         the rules in force, who approved it, the payout, and proof the log wasn't edited."""
         row = self.store.spend(sid)
         if not row:
             raise SpendError("No such spend request.", 404)
+        try:
+            row = self.refresh_payout(sid) or row
+        except Exception:
+            pass  # evidence must still download if PayPal is unreachable
         entries = self.store.audit_entries(ref=sid)
         rules = {}
         for e in entries:
             if e["kind"] == "spend.request":
                 rules = json.loads(e["data"]).get("rules", {})
         return {"lowtides_evidence_pack": 1, "generated": datetime.datetime.now().isoformat(timespec="seconds"),
-                "request": row, "rules_in_force": rules, "rules_in_plain_english": describe_rules(validate_rules(rules)) if rules else [],
+                "request": row, "paypal_payout": self._proof(row), "rules_in_force": rules, "rules_in_plain_english": describe_rules(validate_rules(rules)) if rules else [],
                 "timeline": [{"ts": e["ts"], "when": datetime.datetime.fromtimestamp(e["ts"]).isoformat(timespec="seconds"),
                               "kind": e["kind"], "data": json.loads(e["data"]), "hash": e["hash"], "prev_hash": e["prev_hash"]}
                              for e in entries],

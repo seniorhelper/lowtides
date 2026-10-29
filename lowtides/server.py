@@ -97,6 +97,38 @@ class App:
             os.replace(tmp, self.config_path)
 
     # ---- dashboard state -------------------------------------------------
+    def protected(self, since):
+        """Money Lowtides kept from leaving since `since`, from real records only:
+        purchases denied (by rules, a person or the kill switch), injection-flagged
+        purchases still held, payouts pulled back, and loop-guard stops. Purchases
+        waiting on a person are reported separately, not counted as stopped."""
+        rows = self.store.q("SELECT amount, status, flags FROM spend_requests WHERE ts>=?", (since,))
+        out = {"stopped": 0.0, "scam_held": 0, "blocked": 0, "cancelled": 0, "loops": 0,
+               "waiting": 0, "waiting_amount": 0.0}
+        for r in rows:
+            amt = float(r["amount"] or 0)
+            try:
+                injected = "possible_injection" in json.loads(r["flags"] or "[]")
+            except ValueError:
+                injected = False
+            status = r["status"]
+            if status == "denied":
+                out["stopped"] += amt
+                out["scam_held" if injected else "blocked"] += 1
+            elif status == "pending" and injected:
+                out["stopped"] += amt
+                out["scam_held"] += 1
+            elif status == "pending":
+                out["waiting"] += 1
+                out["waiting_amount"] += amt
+            elif status == "cancelled":
+                out["stopped"] += amt
+                out["cancelled"] += 1
+        out["loops"] = int(self.store.one("SELECT COUNT(*) AS n FROM events WHERE kind='loop' AND ts>=?", (since,))["n"])
+        out["stopped"] = round(out["stopped"], 2)
+        out["waiting_amount"] = round(out["waiting_amount"], 2)
+        return out
+
     def state(self):
         today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         agents = []
@@ -114,6 +146,7 @@ class App:
             "mode": self.config.data.get("mode", "home"),
             "agents": agents,
             "today": receipt(self.store, since=today),
+            "protected": self.protected(today),
             "week": receipt(self.store, since=week),
             "events": self.store.events(30),
             "clients": self.store.clients(),
@@ -445,7 +478,7 @@ def make_handler(app):
                     row = app.store.spend(path.rsplit("/", 1)[1])
                     if not row or row["agent_id"] != agent["id"]:
                         return self._send(404, {"error": "No such spend request for this agent."})
-                    return self._send(200, row)
+                    return self._send(200, app.spend.refresh_payout(row["id"]))
                 if method == "GET" and path == "/v1/budget":
                     r = agent_rules(agent)
                     today = start_of_today()

@@ -366,6 +366,23 @@ table.plain td.num, table.plain th.num { text-align: right; font-variant-numeric
   table.plain.mtable td { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); border: 0; padding: .2rem 0; }
   .mtable td::before { content: attr(data-k); font-weight: 600; color: var(--ink-2); }
 }
+@media (max-width: 600px) {
+  .tabs {
+    scroll-snap-type: x proximity; scroll-padding: 0 16px; -webkit-overflow-scrolling: touch;
+    padding-right: 40px; /* lets the last tab scroll clear of the fade */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+  .tabs a { scroll-snap-align: start; display: inline-flex; align-items: center; min-height: 44px; padding: .5rem .65rem; font-size: .92rem; }
+  .tabs a:focus-visible { outline-offset: -3px; border-radius: 6px; }
+  .tabs a .badge { margin-left: .3rem; }
+  .row-actions, .appr-btns, .modal-actions { max-width: 100%; }
+  .row-actions .btn { flex: 1 1 auto; }
+  .login-box, .modal-in { max-width: 100%; }
+  main, .foot { overflow-wrap: break-word; }
+  img, svg, video, canvas { max-width: 100%; }
+  input, select, textarea { max-width: 100%; min-width: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
   .heart { animation: none; }
   .t-dot.on { animation: none; }

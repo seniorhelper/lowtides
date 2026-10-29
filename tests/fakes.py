@@ -50,7 +50,11 @@ class FakePayPalHandler(_Base):
         if self.path == "/v1/oauth2/token":
             if not self.headers.get("Authorization", "").startswith("Basic "):
                 return self._send(401, {"error": "invalid_client"})
-            return self._send(200, {"access_token": "A21-fake", "expires_in": 32400})
+            scope = "https://uri.paypal.com/services/invoicing openid"
+            if not st.get("no_payouts_scope"):
+                scope += " https://uri.paypal.com/payments/payouts"
+            return self._send(200, {"scope": scope, "access_token": "A21-fake", "token_type": "Bearer",
+                                    "app_id": "APP-80W284485P519543T", "expires_in": 32400})
         if not self.headers.get("Authorization", "") == "Bearer A21-fake":
             return self._send(401, {"name": "AUTHENTICATION_FAILURE"})
         if rid and rid in st["idem"]:
@@ -136,18 +140,47 @@ class FakePayPalHandler(_Base):
             st["sent"].append(iid)
             return remember(200, {"href": "https://www.sandbox.paypal.com/invoice/p/#" + iid})
         if p == "/v1/payments/payouts":
+            # Shape checks the real Payouts v1 API enforces (it answers 400 VALIDATION_ERROR).
+            hdr = body.get("sender_batch_header") or {}
+            it = (body.get("items") or [{}])[0]
+            amt = (it.get("amount") or {})
+            bad = []
+            if not hdr.get("sender_batch_id") or len(hdr["sender_batch_id"]) > 256:
+                bad.append("sender_batch_id")
+            if it.get("recipient_type") != "EMAIL" or not it.get("receiver") or len(it["receiver"]) > 127:
+                bad.append("receiver")
+            if not isinstance(amt.get("value"), str) or "." not in amt["value"] or len(amt["value"].split(".")[1]) != 2 \
+                    or len(amt.get("currency", "")) != 3:
+                bad.append("amount")
+            if len(it.get("sender_item_id", "")) > 63:
+                bad.append("sender_item_id")
+            if bad:
+                return self._send(400, {"name": "VALIDATION_ERROR", "message": "Invalid request - see details",
+                                        "debug_id": "dbg-validate", "details": [{"field": f, "issue": "INVALID"} for f in bad]})
+            if st.get("payout_error"):
+                code, err = st["payout_error"]
+                if st.get("payout_error_times", 1000) > 0:
+                    st["payout_error_times"] = st.get("payout_error_times", 1000) - 1
+                    return self._send(code, dict(err, debug_id="dbg-" + uuid.uuid4().hex[:8]))
+            if hdr["sender_batch_id"] in st["batch_ids"]:
+                return self._send(400, {"name": "USER_BUSINESS_ERROR", "message": "Batch with given sender_batch_id already exists",
+                                        "debug_id": "dbg-dup"})
+            st["batch_ids"].add(hdr["sender_batch_id"])
             bid = "BATCH" + uuid.uuid4().hex[:10].upper()
-            it = body["items"][0]
             item_id = "ITEM" + uuid.uuid4().hex[:10].upper()
-            st["payouts"][bid] = {"item_id": item_id, "receiver": it["receiver"], "amount": float(it["amount"]["value"]),
-                                  "status": st.get("payout_status", "UNCLAIMED")}
-            return remember(201, {"batch_header": {"payout_batch_id": bid, "batch_status": "PENDING"}})
+            st["payouts"][bid] = {"item_id": item_id, "receiver": it["receiver"], "amount": float(amt["value"]),
+                                  "status": st.get("payout_status", "UNCLAIMED"), "pending_polls": st.get("pending_polls", 0)}
+            return remember(201, {"batch_header": {"payout_batch_id": bid, "batch_status": "PENDING",
+                                                   "sender_batch_header": hdr}})
         if p.startswith("/v1/payments/payouts-item/") and p.endswith("/cancel"):
+            if body:
+                return self._send(400, {"name": "VALIDATION_ERROR", "message": "cancel takes no body"})
             item_id = p.split("/")[4]
             for po in st["payouts"].values():
                 if po["item_id"] == item_id:
                     if po["status"] != "UNCLAIMED":
-                        return self._send(422, {"name": "ITEM_CANCELLATION_FAILED"})
+                        return self._send(400, {"name": "ITEM_INCORRECT_STATUS",
+                                                "message": "Item cannot be cancelled since it is not unclaimed."})
                     po["status"] = "RETURNED"
                     return remember(200, {"payout_item_id": item_id, "transaction_status": "RETURNED"})
             return self._send(404, {"name": "RESOURCE_NOT_FOUND"})
@@ -159,11 +192,20 @@ class FakePayPalHandler(_Base):
     def do_GET(self):
         st = self.server.state
         if self.path.startswith("/v1/payments/payouts/"):
-            po = st["payouts"].get(self.path.split("/")[4])
+            bid = self.path.split("/")[4]
+            po = st["payouts"].get(bid)
             if not po:
                 return self._send(404, {"name": "RESOURCE_NOT_FOUND"})
-            return self._send(200, {"batch_header": {"batch_status": "SUCCESS"}, "items": [
-                {"payout_item_id": po["item_id"], "transaction_status": po["status"]}]})
+            if po["pending_polls"] > 0:  # PayPal still processing: no items yet
+                po["pending_polls"] -= 1
+                return self._send(200, {"batch_header": {"payout_batch_id": bid, "batch_status": "PENDING"}, "items": []})
+            item = {"payout_item_id": po["item_id"], "transaction_status": po["status"]}
+            if po["status"] == "UNCLAIMED":
+                item["errors"] = {"name": "RECEIVER_UNREGISTERED", "message": "Receiver is unregistered", "debug_id": "x"}
+            elif po["status"] == "FAILED":
+                item["errors"] = {"name": "RECEIVER_ACCOUNT_LOCKED", "message": "Receiver account is locked", "debug_id": "y"}
+            bstatus = "DENIED" if po["status"] in ("FAILED", "BLOCKED") else "SUCCESS"
+            return self._send(200, {"batch_header": {"payout_batch_id": bid, "batch_status": bstatus}, "items": [item]})
         if self.path.startswith("/v2/checkout/orders/"):
             oid = self.path.split("/")[4]
             o = st["orders"].get(oid)
@@ -175,7 +217,7 @@ class FakePayPalHandler(_Base):
 
 def paypal_state():
     return {"requests": [], "idem": {}, "orders": {}, "auths": {}, "captures": {}, "invoices": {}, "sent": [], "partial_capture": True,
-            "payouts": {}, "payout_status": "UNCLAIMED"}
+            "payouts": {}, "payout_status": "UNCLAIMED", "batch_ids": set(), "pending_polls": 0, "payout_error": None}
 
 
 def approve(state, order_id):
