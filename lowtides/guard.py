@@ -9,6 +9,8 @@ import json
 import threading
 import time
 
+from . import notify
+
 
 class Blocked(Exception):
     def __init__(self, reason, code, http=402):
@@ -82,6 +84,7 @@ class Guard:
             self.store.update_agent(aid, status="paused")
             self.store.event(aid, "loop", "Loop guard: %s sent the same request %d times in %ds. Paused it before it burned more money."
                              % (agent["name"], same, int(self.policy.get("loop_window_seconds", 120))))
+            notify.emit(self.store, "loop_guard.paused", {"agent_id": aid, "agent_name": agent["name"], "repeats": same})
             raise Blocked("Loop detected: the same request repeated %d times. The agent is paused." % same, "loop_detected", 429)
         cap = int(self.policy.get("max_calls_per_minute", 60))
         if cap > 0 and per_min > cap:

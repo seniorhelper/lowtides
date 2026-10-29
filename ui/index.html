@@ -34,22 +34,6 @@
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="tour.css">
 <style>
-  /* Protected-today hero (kept here so style.css stays untouched) */
-  .tide-saved .prot-v { color: #fff; }
-  .prot-label { font-size: .95rem; color: var(--deep-ink); margin: .1rem 0 .55rem; }
-  .prot-chips { list-style: none; margin: 0 0 .7rem; padding: 0; display: flex; flex-wrap: wrap; gap: .35rem; justify-content: flex-end; max-width: 40ch; margin-left: auto; }
-  .prot-chips li { font-size: .82rem; font-weight: 600; line-height: 1.25; padding: .25rem .6rem; border-radius: 999px; background: #B8352A; color: #fff; }
-  .prot-chips li.wait { background: transparent; color: var(--deep-limit); border: 1px solid var(--deep-limit); }
-  .prot-chips li.calm { background: transparent; color: var(--deep-muted); border: 1px solid var(--deep-line); font-weight: 500; }
-  .prot-chips li a { color: inherit; }
-  .prot-saved { display: flex; gap: .5rem; justify-content: flex-end; align-items: baseline; font-size: .88rem; color: var(--deep-muted); }
-  .prot-saved-v { font: 500 1.05rem var(--font-num); color: var(--deep-tide); font-variant-numeric: tabular-nums; }
-  @media (max-width: 600px) {
-    .prot-chips { justify-content: flex-start; margin-left: 0; }
-    .prot-saved { justify-content: flex-start; }
-  }
-</style>
-<style>
   /* Startup screen: about 2 seconds, once per visit, skippable, never delays the app (it loads underneath). */
   #lt-splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; cursor: pointer;
     background: radial-gradient(120% 90% at 80% 10%, #123A3D 0%, #0A1B1E 62%); color: #E6F4F1;
@@ -177,7 +161,7 @@
           <div class="tide-saved-v prot-v" id="prot-today">$0.00</div>
           <div class="prot-label" id="prot-label">nothing needed stopping today</div>
           <ul class="prot-chips" id="prot-chips" aria-label="What Lowtides stopped today"></ul>
-          <div class="prot-saved">
+          <div class="prot-saved" id="prot-saved">
             <span class="prot-saved-k">Saved on AI calls</span>
             <span class="prot-saved-v" id="saved-today">$0.00</span>
           </div>
@@ -325,6 +309,11 @@
       <p class="muted">Turn on "Pay from wallet" for an agent and it spends only what you've loaded. When the wallet is empty, it stops. No surprise bills.</p>
       <div id="wallets"></div>
     </div>
+    <div class="panel" id="vault-panel">
+      <h2>PayPal on file</h2>
+      <p class="muted">Save a PayPal payment method for an agent so its wallet can be topped up without a checkout page. KILL and STOP ALL revoke it at PayPal, so a stopped agent can't be charged again until you reconnect it.</p>
+      <div id="vaults"></div>
+    </div>
   </section>
 
   <!-- CLIENTS -->
@@ -371,6 +360,20 @@
         <label>Category<input id="mc-cat" autocomplete="off" placeholder="Like: data, software, travel"></label>
         <div class="form-end"><button type="submit" class="btn go">Add merchant</button></div>
       </form>
+    </div>
+    <div class="panel" id="hooks-panel">
+      <h2>Alerts to Zapier / webhooks</h2>
+      <p class="muted">Get a text, email or Slack message when a purchase needs you. Paste a Zapier "Catch Hook" URL (or Make, or any URL). Lowtides sends signed JSON and never waits for it before deciding. <a href="https://github.com/seniorhelper/lowtides/blob/main/docs/ZAPIER.md" target="_blank" rel="noopener">How to set up the Zap</a></p>
+      <div id="hk-list"></div>
+      <form id="hk-form" class="form-grid" novalidate>
+        <label class="wide">Webhook URL<input id="hk-url" type="url" autocomplete="off" placeholder="https://hooks.zapier.com/hooks/catch/..."></label>
+        <label>Label<input id="hk-label" autocomplete="off" placeholder="Like: Text my phone"></label>
+        <label style="display:flex;align-items:center;gap:.5em;align-self:end"><input id="hk-approvals" type="checkbox" checked style="width:auto;height:auto;margin:0"> Only approvals and stops</label>
+        <div class="form-end"><button type="submit" class="btn go">Add webhook</button></div>
+      </form>
+      <p id="hk-secret" class="small" hidden>Signing secret (shown once): <code id="hk-secret-val"></code></p>
+      <p id="hk-msg" class="small muted" role="status"></p>
+      <div id="hk-log"></div>
     </div>
     <div class="panel">
       <h2>Rules of the road</h2>
@@ -504,7 +507,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js" defer></script>
+<script src="/dialog.js" defer></script>
 <script src="/app.js" defer></script>
 <script src="tour.js" defer></script>
+<script src="/webhooks.js" defer></script>
 </body>
 </html>

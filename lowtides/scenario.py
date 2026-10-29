@@ -11,7 +11,8 @@ they are simulated and labeled that way.
 
 Story: an overnight research agent does honest work, buys data it needs, then reads a
 poisoned web page telling it to pay a stranger, tries a huge purchase, tries to push a
-giant data dump through one AI call (blocked by the leash), gets stuck in a loop, and finally the owner hits KILL. Every step shows what Lowtides decided and why.
+giant data dump through one AI call (blocked by the leash), gets stuck in a loop, and finally the owner hits KILL,
+which also revokes the agent's saved PayPal payment method. Every step shows what Lowtides decided and why.
 """
 import argparse
 import json
@@ -38,14 +39,17 @@ def data_dump(tokens=80000):
 
 
 class Client:
-    def __init__(self, base, admin_token=""):
+    def __init__(self, base, admin_token="", headers=None):
         self.base = base.rstrip("/")
         self.admin = admin_token
+        self.headers = headers or {}  # e.g. the demo sandbox cookie when the server seeds a sandbox
 
     def call(self, method, path, body=None, key=None):
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method)
         req.add_header("Content-Type", "application/json")
+        for k, v in self.headers.items():
+            req.add_header(k, v)
         if key:
             req.add_header("Authorization", "Bearer " + key)
         elif self.admin:
@@ -78,17 +82,17 @@ def show(r, pause):
         time.sleep(1.5)
 
 
-def seed(base, admin=""):
+def seed(base, admin="", headers=None):
     """Load the story into a fresh public demo, quietly, and stop before the KILL so
     visitors find purchases waiting for them to approve, deny, or kill."""
     import contextlib
     import io
     with contextlib.redirect_stdout(io.StringIO()):
-        run(base, admin, pause=False, kill=False)
+        run(base, admin, pause=False, kill=False, headers=headers)
 
 
-def run(base, admin="", pause=True, kill=True):
-    c = Client(base, admin)
+def run(base, admin="", pause=True, kill=True, headers=None):
+    c = Client(base, admin, headers)
     s, health = c.call("GET", "/health")
     if s != 200:
         sys.exit("Lowtides isn't running at %s. Start it first (run.bat or python -m lowtides.server)." % base)
@@ -109,6 +113,11 @@ def run(base, admin="", pause=True, kill=True):
     say("   Read by %s and saved:" % ("Claude" if comp.get("source") == "claude" else "the offline parser"), pause, 0.4)
     for line in comp.get("plain", []):
         say("     * " + line, False)
+    s, v = c.call("POST", "/api/agents/%d/vault/connect" % agent["id"], {})
+    if s == 200 and v.get("status") == "active":
+        say("   PayPal on file connected for the agent%s." % (" (simulated)" if v.get("simulated") else ""), False)
+    elif s == 200 and v.get("approve_url"):
+        say("   To give the agent PayPal on file, approve it here (optional): %s" % v["approve_url"], False)
     if pause:
         time.sleep(1.5)
 
@@ -172,6 +181,9 @@ def run(base, admin="", pause=True, kill=True):
     s, k = c.call("POST", "/api/agents/%d/kill" % agent["id"])
     say("    Stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts cancelled."
         % (k.get("denied", 0), k.get("holds_voided", 0), k.get("payouts_cancelled", 0)), pause)
+    pof = k.get("paypal_on_file") or {}
+    if pof.get("status") in ("revoked", "revoke_failed"):
+        say("    " + (pof.get("message") or pof["status"]), pause)
     s, r = c.call("POST", "/v1/spend", {"amount": 5.00, "merchant": "Acme Data", "item": "one more thing", "category": "data",
                                         "reason": "please"}, key)
     say("    A purchase after the kill:", False)

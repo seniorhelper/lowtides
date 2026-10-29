@@ -17,13 +17,14 @@ Lowtides puts **one budget, plain-English rules, one-tap approvals and a kill sw
 - **One combined daily cap** covers AI usage plus purchases, per agent.
 - **Rules in plain English:** "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto." Claude turns them into strict, validated rules a person reviews. **The AI never decides a payment; code does.**
 - **Held for a person:** purchases over your line, new payees, text that reads like prompt injection, duplicate charges and unusual amounts.
-- **STOP ALL / KILL:** stops agents, denies pending buys, **voids open PayPal holds and cancels unclaimed PayPal payouts**.
+- **STOP ALL / KILL:** stops agents, denies pending buys, **voids open PayPal holds, cancels unclaimed PayPal payouts and revokes the agent's saved PayPal payment method** (Vault v3), so Lowtides can't charge it again until you reconnect it.
 - **Burst-proof limits:** simultaneous requests are decided one at a time, so 20 purchases fired at once can't overspend a limit.
 - **Proof:** a hash-chained, tamper-evident audit log and a one-click dispute evidence pack per purchase.
+- **Alerts anywhere:** signed outbound webhooks (Zapier, Slack, your phone) for approvals and stops; an OpenAPI 3.1 spec and a Postman collection for developers.
 - **Home and Business modes:** a family can give a teen's or parent's agent a $25 "ask me" line; agencies get per-client budgets and PayPal invoices.
 
 ## How we built it
-Python standard library only (no dependencies), SQLite for the ledger, a vanilla JS dashboard with an **AG Grid** ledger, hosted on **Render** with a health check. Claude (Anthropic) was the coding partner, and Claude Haiku compiles plain-English rules. 250+ automated tests, including end-to-end runs against a fake PayPal server.
+Python standard library only (no dependencies), SQLite for the ledger, a vanilla JS dashboard with an **AG Grid** ledger, hosted on **Render** with a health check. Claude (Anthropic) was the coding partner, and Claude Haiku compiles plain-English rules. 329 automated tests, including end-to-end runs against a fake PayPal server.
 
 ### PayPal, used for real money movement (sandbox)
 | PayPal API | What Lowtides does with it |
@@ -32,11 +33,12 @@ Python standard library only (no dependencies), SQLite for the ledger, a vanilla
 | Orders v2 (authorize, capture, void) | Quote and hold: PayPal holds the quote, Lowtides captures only the real cost and releases the rest; STOP voids open holds |
 | Payouts | Pays merchants for approved agent purchases; the kill switch cancels unclaimed payouts |
 | Invoicing v2 | Agencies bill clients for their agents' AI usage, with the savings receipt in the memo |
+| Vault v3 (payment tokens) | PayPal on file per agent for no-checkout top-ups; KILL and STOP ALL delete the token at PayPal (simulated in the public demo, real with sandbox keys) |
 | Webhooks | Signature-verified, credited exactly once; a PayPal-Request-Id on every write so retries never double-charge |
 | Agent Toolkit | Lowtides guards the PayPal Agent Toolkit, checking each tool call against your rules first |
 
 ## How it maps to the judging criteria
-- **Technological implementation:** six PayPal surfaces moving real sandbox money, enforcement in the request path, atomic spend decisions, a tamper-evident audit chain, MCP server and API proxy.
+- **Technological implementation:** seven PayPal surfaces (Orders, Payouts and Invoicing move real sandbox money; Vault runs simulated in the public demo), enforcement in the request path, atomic spend decisions, a tamper-evident audit chain, MCP server and API proxy.
 - **Design:** a complete product, not a proof of concept: live dashboard, one-tap approvals, a one-minute guided replay, phone-friendly, accessible.
 - **Potential impact:** the trust gap is the blocker for agentic commerce. Lowtides gives families and small businesses a budget and a STOP button they understand.
 - **Innovation:** one budget across both sides of agent spending, the AI bill and the purchases, plus a kill switch that pulls back money that hasn't landed.
@@ -49,7 +51,7 @@ Python standard library only (no dependencies), SQLite for the ledger, a vanilla
 - Not replaying side effects: answer memory never caches tool-calling responses.
 
 ## What we built during the submission period
-All of it was built in October 2026, inside the submission period (which opened Oct 1). The project started as a cost-saving AI proxy (v1.0, the first commit). Everything that governs **purchases** was then added on top for this hackathon: the spend API, rules engine, plain-English rules, approvals, PayPal Payouts, kill switch with payout cancellation, audit chain and evidence packs, MCP server, guided replay, the combined budget, burst-proof limits, the product page and the rebrand. The full list is in `CHANGELOG.md`, and `git log` shows each change.
+Lowtides starts from CostCop v1.0, my earlier cost-saving AI proxy. It's the first commit, kept untouched, so `git diff` against it shows exactly what's new. Everything that governs **purchases** was built during the submission period (which opened Oct 1): the spend API, rules engine, plain-English rules, approvals, PayPal Payouts, the kill switch with payout cancellation and PayPal Vault revocation, the audit chain and evidence packs, the MCP server, signed webhooks, the OpenAPI spec, the guided replay, the combined budget, burst-proof limits, per-visitor demo sandboxes, the product page and the rebrand. The full list is in `CHANGELOG.md`, and `git log` shows each change.
 
 ## What's next
 A hosted version for families and small businesses, phone push approvals, per-client dashboards for agencies, and a governor bundled with every agent we lease.

@@ -2,7 +2,7 @@
 
 # Lowtides
 
-**▶ Live demo: https://lowtides.ai** (no login needed). It's a public demo: PayPal sandbox and simulated AI models, so nothing costs real money, and there's a "Reset demo" button. Product overview and FAQ: https://lowtides.ai/why/
+**▶ Live demo: https://lowtides.ai** (no login needed). It's a public demo: PayPal sandbox and simulated AI models, so nothing costs real money, and there's a "Reset demo" button. Each browser gets its own private copy of the demo, so what you do there (STOP ALL, KILL, Reset, the replay) doesn't touch other visitors. Scripts without a cookie, and a network that opens a very large number of demos in an hour, share one common demo instead. Product overview and FAQ: https://lowtides.ai/why/
 
 **The AI spend governor.** Keep AI spend at low tide.
 
@@ -25,6 +25,7 @@ Your agents don't change. You point them at Lowtides instead of the model provid
 ### Built on PayPal
 - **Orders v2:** prepaid agent wallets (checkout top-ups), and quote-and-hold jobs (authorize, then capture only the real cost; void or refund the rest).
 - **Payouts:** pay merchants for approved agent purchases; cancel unclaimed payouts from the kill switch.
+- **Vault v3 (payment tokens):** "PayPal on file" per agent (setup token, then payment token, `usage_type` MERCHANT), wallet top-ups charged to the saved token with Orders v2 `payment_source.paypal.vault_id`, and the kill switch and STOP ALL **delete the token at PayPal**, so a stopped agent's money source is cut off, not just the agent. Simulated and labeled so without keys and in the public demo.
 - **Invoicing v2:** bill clients for their agents' usage, with the savings receipt in the memo.
 - **Webhooks:** with signature verification, so top-ups and reversals are credited exactly once.
 
@@ -259,6 +260,8 @@ An agent can blow your budget in one call by pasting a huge file into a prompt o
 
 Or just write it: `Keep replies short. Never send more than 50 pages. No single call over 25 cents.` Calls over a limit are blocked with a message the agent can read; unusually big ones are flagged. Token counts are estimates. Details: [docs/LEASH.md](docs/LEASH.md).
 
+---
+
 ## Use Lowtides from any agent (MCP)
 
 `python -m lowtides.mcp` runs a stdio MCP server that gives an agent three tools: `request_spend`, `check_spend` and `get_budget`. They call the Lowtides `/v1` spend API (see `docs/SPEND-API.md`). Add it to Claude Desktop or Claude Code (run from the repo folder, or set `cwd`):
@@ -314,10 +317,10 @@ Off by default. It needs an org admin key set as an environment variable. See [d
 ## Tests
 
 ```bash
-cd tests && python -m unittest test_core test_http test_fixes test_mcp test_spend
+cd tests && python -m unittest discover -s .
 ```
 
-The 125 tests run with no internet and no money. Local fake servers speak the real PayPal, Anthropic and OpenAI wire formats, so Lowtides's real HTTP clients are exercised end to end. They cover routing, escalation, memory safety (wrong-answer cases included), trimming, budgets, the loop guard, wallets (including pending and reversed payments), holds (partial capture, the capture-then-refund fallback, failed refunds and void), invoices (no double billing), webhook verification and retries, streaming, cross-site protection, the admin lock and path safety.
+The 329 tests run with no internet and no money. Local fake servers speak the real PayPal, Anthropic and OpenAI wire formats, so Lowtides's real HTTP clients are exercised end to end. They cover routing, escalation, memory safety (wrong-answer cases included), trimming, budgets, the loop guard, wallets (including pending and reversed payments), holds (partial capture, the capture-then-refund fallback, failed refunds and void), invoices (no double billing), webhook verification and retries, streaming, cross-site protection, the admin lock and path safety.
 
 `test_fixes.py` holds a regression test for every issue found in an independent code review before release. `test_spend.py` covers every purchase rule, PayPal payouts and payout cancel, approvals, the kill switch, audit-chain tamper detection, evidence packs, forecasts and the plain-English rule parser. `test_mcp.py` covers the MCP server.
 

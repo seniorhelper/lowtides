@@ -18,8 +18,10 @@ import time
 import urllib.error
 import urllib.request
 
+from . import notify
 from .guard import start_of_today
 from .paypal import PAYOUT_CANCELLABLE, PAYOUT_FAILED, PayPalError
+from .vault import Vault
 
 DEFAULT_RULES = {
     "max_per_purchase": 50.0,
@@ -381,10 +383,11 @@ def compile_rules(text, api_key=None, model="claude-haiku-5-5", base_url="https:
 
 # ---- the governor for purchases ------------------------------------------------------------
 class SpendGovernor:
-    def __init__(self, store, paypal, money=None):
+    def __init__(self, store, paypal, money=None, vault=None):
         self.store = store
         self.paypal = paypal
         self.money = money
+        self.vault = vault or Vault(store, paypal)
         self._decide_lock = threading.Lock()
 
     # -- request ------------------------------------------------------------------------
@@ -419,6 +422,10 @@ class SpendGovernor:
                 denied.append("This agent is stopped. Nothing can be bought until a person starts it again.")
             elif agent["status"] == "paused":
                 denied.append("This agent is paused by the loop guard. Review it, then press Resume.")
+            no_source = self.vault.purchase_block(aid)
+            if no_source:
+                denied.append(no_source)
+                flags.append("no_paypal_on_file")
             if merchant.lower() in rules["blocked_merchants"]:
                 denied.append("%s is on this agent's blocked list." % merchant)
             if category and category in rules["blocked_categories"]:
@@ -497,8 +504,10 @@ class SpendGovernor:
                                                     "decision": decision, "reasons": row["reasons"], "flags": flags, "rules": rules})
         if decision == "denied":
             self.store.event(aid, "spend", "Blocked %s at %s: %s" % (money(amount), merchant, denied[0]))
+            notify.emit(self.store, "spend.denied", row, agent)
         elif decision == "needs_approval":
             self.store.event(aid, "spend", "%s wants %s at %s. Waiting for your approval." % (agent["name"], money(amount), merchant))
+            notify.emit(self.store, "spend.needs_approval", row, agent)
         else:
             row = self._pay(row, agent, by="rules")
         return row
@@ -572,6 +581,7 @@ class SpendGovernor:
             money(amount), row["merchant"], " (simulated payout)" if fields["simulated"]
             else " (approved; the PayPal tool that asked moves the money)" if not fields["payout_batch_id"]
             else " via PayPal %s payout batch %s" % (fields.get("payout_env") or "", fields["payout_batch_id"])))
+        notify.emit(self.store, "spend.paid", row, agent)
         if fields["payout_batch_id"] and not fields["simulated"] and not self._settled(fields):
             self._follow_up(sid)
         return row
@@ -670,6 +680,9 @@ class SpendGovernor:
         agent = self.store.agent(row["agent_id"])
         if not agent or agent["status"] == "stopped":
             raise SpendError("The agent is stopped, so nothing can be paid for it.", 409)
+        no_source = self.vault.purchase_block(agent["id"])
+        if no_source:
+            raise SpendError(no_source, 409)
         rules = agent_rules(agent)
         bought_other = self.store.purchases_since(agent["id"], start_of_today()) - row["amount"]
         if bought_other + row["amount"] > rules["daily_purchase_limit"] or row["amount"] > rules["max_per_purchase"]:
@@ -690,17 +703,21 @@ class SpendGovernor:
             raise SpendError("This request is already %s." % row["status"], 409)
         self.store.audit("spend.denied", sid, {"by": by, "note": note[:300]})
         self.store.event(row["agent_id"], "spend", "Denied %s at %s." % (money(row["amount"]), row["merchant"]))
-        return self.store.update_spend(sid, status="denied", decided_by=by, decided_ts=time.time(), note=note[:300])
+        row = self.store.update_spend(sid, status="denied", decided_by=by, decided_ts=time.time(), note=note[:300])
+        notify.emit(self.store, "spend.denied", row)
+        return row
 
     # -- kill switch -----------------------------------------------------------------------
     def kill(self, agent_id, by="owner"):
         """Stop the agent and pull back every dollar still in flight: deny pending
-        purchases, void open PayPal holds, and cancel payouts nobody has claimed yet."""
+        purchases, void open PayPal holds, cancel payouts nobody has claimed yet, and
+        revoke the agent's saved PayPal (Vault payment token) so it can't be charged again."""
         agent = self.store.agent(agent_id)
         if not agent:
             raise SpendError("No such agent.", 404)
         self.store.update_agent(agent_id, status="stopped")
-        out = {"stopped": True, "denied": 0, "holds_voided": 0, "payouts_cancelled": 0, "problems": []}
+        out = {"stopped": True, "denied": 0, "holds_voided": 0, "payouts_cancelled": 0, "tokens_revoked": 0,
+               "paypal_on_file": {"status": "none"}, "problems": []}
         for r in self.store.spends(status="pending", agent_id=agent_id, limit=1000):
             self.store.update_spend(r["id"], status="denied", decided_by="kill switch", decided_ts=time.time(), note="Agent killed")
             self.store.audit("spend.denied", r["id"], {"by": "kill switch"})
@@ -744,9 +761,25 @@ class SpendGovernor:
                 self.store.wallet_move(agent_id, r["amount"], "refund", ref="unbuy-" + r["id"])
             self.store.audit("spend.cancelled", r["id"], {"by": "kill switch", "simulated": bool(r["simulated"])})
             out["payouts_cancelled"] += 1
+        # Cut off the money source itself: delete the saved PayPal payment token.
+        try:
+            rv = self.vault.revoke(agent_id, by="kill switch" if by == "owner" else by)
+        except Exception as e:  # never let this stop the kill from being recorded
+            rv = {"status": "revoke_failed", "error": str(e), "message": "Couldn't revoke the saved PayPal payment method: %s" % e}
+        if rv:
+            out["paypal_on_file"] = rv
+            if rv["status"] == "revoked":
+                out["tokens_revoked"] = 1
+            else:
+                out["problems"].append(rv.get("message") or "Couldn't revoke the saved PayPal payment method.")
+        else:
+            cur = self.vault.status(agent_id)
+            out["paypal_on_file"] = {"status": cur["status"], "already": cur["status"] == "revoked"}
         self.store.audit("agent.killed", str(agent_id), dict(out, by=by))
-        self.store.event(agent_id, "kill", "KILL: %s stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts cancelled."
-                         % (agent["name"], out["denied"], out["holds_voided"], out["payouts_cancelled"]))
+        self.store.event(agent_id, "kill", "KILL: %s stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts cancelled.%s"
+                         % (agent["name"], out["denied"], out["holds_voided"], out["payouts_cancelled"],
+                            " Saved PayPal payment method revoked." if out["tokens_revoked"]
+                            else " Revoking the saved PayPal payment method failed, so its purchases stay blocked." if rv else ""))
         return out
 
     # -- forecast ---------------------------------------------------------------------------

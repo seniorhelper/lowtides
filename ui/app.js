@@ -122,11 +122,25 @@
       var on = a.dataset.tab === t;
       a.classList.toggle("on", on);
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+      if (on) {  // keep the active tab fully visible (clear of the edge fades) in the scrollable tab bar
+        var bar = a.parentNode, br = bar.getBoundingClientRect(), ar = a.getBoundingClientRect();
+        if (ar.left < br.left + 40 || ar.right > br.right - 40) {
+          var to = bar.scrollLeft + (ar.left - br.left) - (br.width - ar.width) / 2;
+          if (bar.scrollTo) bar.scrollTo({ left: Math.max(0, to), behavior: RM.matches ? "auto" : "smooth" }); else bar.scrollLeft = Math.max(0, to);
+        }
+      }
     });
+    tabHint();
     var q = location.hash.split("?")[1] || "";
     if (q.indexOf("paid=1") >= 0) flash("Payment received. Your wallet is topped up.");
     if (q.indexOf("held=1") >= 0) flash("Hold approved on PayPal. The job can start.");
+    if (q.indexOf("vault=1") >= 0) flash("PayPal on file is connected for this agent.");
     if (q.indexOf("canceled=1") >= 0) flash("PayPal checkout was canceled. Nothing was charged.", true);
+    if (q.indexOf("try=1") >= 0) {
+      flash("Your turn: approve or deny the held purchases. Then on Home: press Resume, check its Rules, and hit KILL.");
+      if (history.replaceState) history.replaceState(null, "", location.pathname + location.search + "#" + t);
+      setTimeout(function () { var s = $("tab-" + t); if (s) s.scrollIntoView({ block: "start" }); }, 350);  // skip past the banner on a phone
+    }
     var m = q.match(/msg=([^&]+)/);
     if (m) flash(decodeURIComponent(m[1]), true);
     if (t === "ledger") loadLedger();
@@ -134,6 +148,26 @@
     if (t === "settings") loadMerchants();
   }
   window.addEventListener("hashchange", showTab);
+
+  // Scrollable tab bar: fade + arrow on whichever side has more tabs, so Wallet and Settings
+  // are visibly "over there" on a phone. The arrow scrolls; keyboard users just Tab through.
+  var tabsEl = document.querySelector(".tabs"), tabMore = document.createElement("button");
+  tabMore.type = "button"; tabMore.className = "tabs-more"; tabMore.tabIndex = -1;
+  tabMore.setAttribute("aria-hidden", "true"); tabMore.innerHTML = "&#8250;";
+  tabsEl.parentNode.insertBefore(tabMore, tabsEl.nextSibling);
+  function tabHint() {
+    var max = tabsEl.scrollWidth - tabsEl.clientWidth;
+    var left = tabsEl.scrollLeft > 4, right = max > 4 && tabsEl.scrollLeft < max - 4;
+    tabsEl.classList.toggle("ov-l", left);
+    tabsEl.classList.toggle("ov-r", right);
+    tabMore.hidden = !right;
+  }
+  tabMore.addEventListener("click", function () {
+    tabsEl.scrollBy ? tabsEl.scrollBy({ left: tabsEl.clientWidth * 0.6, behavior: RM.matches ? "auto" : "smooth" }) : (tabsEl.scrollLeft += tabsEl.clientWidth * 0.6);
+  });
+  tabsEl.addEventListener("scroll", tabHint, { passive: true });
+  window.addEventListener("resize", tabHint);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(tabHint);
 
   // ---------- mode ----------
   document.querySelectorAll(".mode-btn").forEach(function (b) {
@@ -209,9 +243,20 @@
     });
     renderProtected();
     var t = S.today.totals;
-    tweenMoney($("saved-today"), Number(t.saved || 0));
-    $("saved-sub").textContent = "Would have cost " + money(t.baseline) + ". You paid " + money(t.cost) + "." +
-      (t.baseline > 0 ? " That's " + S.today.percent_saved + "% less." : "");
+    // Pennies of savings read weak as a dollar figure: under $1, lead with the (real) percentage instead.
+    var savedN = Number(t.saved || 0), pctMode = t.baseline > 0 && savedN > 0 && savedN < 1 && S.today.percent_saved > 0;
+    var sv = $("saved-today");
+    $("prot-saved").classList.toggle("pct", pctMode);
+    if (pctMode) {
+      sv.dataset.v = "";
+      sv.innerHTML = esc(S.today.percent_saved) + '%<span class="prot-saved-u"> less than unmanaged</span>';
+      $("saved-sub").textContent = plural(Number(t.calls || 0), "AI call", "AI calls") + " today. Would have cost " + money4(t.baseline) +
+        ", you paid " + money4(t.cost) + " (saved " + money4(savedN) + ").";
+    } else {
+      tweenMoney(sv, savedN);
+      $("saved-sub").textContent = "Would have cost " + money(t.baseline) + ". You paid " + money(t.cost) + "." +
+        (t.baseline > 0 ? " That's " + S.today.percent_saved + "% less." : "");
+    }
     var lines = t.calls ? S.today.lines : ["No calls yet today. Connect an agent or press Watch it work."];
     $("receipt-lines").innerHTML = lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("");
     var w = S.week.totals;
@@ -230,8 +275,10 @@
     renderSelects();
     renderTasks();
     renderWallets();
+    renderVaults();
     renderClients();
     renderSettings();
+    tabHint();
   }
 
   function renderAgents() {
@@ -247,6 +294,11 @@
           ? '<button class="btn warn sm" data-act="resume" data-id="' + a.id + '">Resume</button>'
           : '<button class="btn go sm" data-act="start" data-id="' + a.id + '">Start</button>');
       var wallet = a.use_wallet ? " Wallet " + money(a.balance) + "." : "";
+      var pof = a.paypal_on_file || {};
+      if (pof.status && pof.status !== "none") {
+        wallet += " PayPal on file: " + (pof.status === "active" ? "connected" : (pof.label || pof.status)) +
+          (pof.simulated && pof.status !== "waiting_for_paypal" ? " (simulated)" : "") + ".";
+      }
       var nm = esc(a.name);
       var kill = a.status === "stopped" ? "" :
         '<button class="btn kill sm" data-act="kill" data-id="' + a.id + '" aria-label="Kill ' + nm + '">KILL</button>';
@@ -285,12 +337,14 @@
     } else if (act === "key") {
       lastAgent = a; showConnect();
     } else if (act === "edit") {
-      var v = prompt("Daily allowance in dollars for " + a.name + ":", a.daily_budget);
-      if (v === null) return;
-      var t = prompt("Most one job can spend, in dollars:", a.task_budget);
-      if (t === null) return;
-      api("POST", "/api/agents/" + id + "/update", { daily_budget: Number(v), task_budget: Number(t) })
-        .then(function () { flash("Allowance saved."); refresh(); }).catch(fail);
+      LT.form({ title: "Allowance for " + a.name, ok: "Save allowance", check: dollarsCheck(["daily", "task"]),
+        fields: [{ id: "daily", label: "Daily allowance ($)", type: "number", min: "0.01", step: "0.01", inputmode: "decimal", value: a.daily_budget },
+                 { id: "task", label: "Most one job can spend ($)", type: "number", min: "0.01", step: "0.01", inputmode: "decimal", value: a.task_budget }]
+      }).then(function (v) {
+        if (!v) return;
+        api("POST", "/api/agents/" + id + "/update", { daily_budget: Number(v.daily), task_budget: Number(v.task) })
+          .then(function () { flash("Allowance saved."); refresh(); }).catch(fail);
+      });
     } else if (act === "wallet") {
       api("POST", "/api/agents/" + id + "/update", { use_wallet: !a.use_wallet }).then(refresh).catch(fail);
     } else if (act === "kill") {
@@ -333,12 +387,21 @@
   $("setup-budget").addEventListener("input", function () { $("setup-budget-val").textContent = "$" + this.value; });
   $("setup-go").addEventListener("click", function () { createAgent($("setup-name").value, Number($("setup-budget").value)); });
   $("add-agent").addEventListener("click", function () {
-    var n = prompt("Name your agent:");
-    if (!n) return;
-    var b = prompt("Daily allowance in dollars:", "5");
-    if (b === null) return;
-    createAgent(n, Number(b));
+    LT.form({ title: "Add an agent", body: "It can never spend more than its daily allowance.", ok: "Turn it on",
+      check: function (v) { return !v.name.trim() ? { field: "name", message: "Give your agent a name." } : dollarsCheck(["daily"])(v); },
+      fields: [{ id: "name", label: "Name your agent", placeholder: "Like: Support bot", autocomplete: "off" },
+               { id: "daily", label: "Daily allowance ($)", type: "number", min: "0.01", step: "0.01", inputmode: "decimal", value: "5" }]
+    }).then(function (v) { if (v) createAgent(v.name, Number(v.daily)); });
   });
+  function dollarsCheck(keys) {
+    return function (v) {
+      for (var i = 0; i < keys.length; i++) {
+        var n = Number(v[keys[i]]);
+        if (!(v[keys[i]] !== "" && isFinite(n) && n > 0)) return { field: keys[i], message: "Use a dollar amount over $0, like 5 or 2.50." };
+      }
+      return null;
+    };
+  }
   function createAgent(name, daily) {
     if (!name || !name.trim()) { flash("Give your agent a name first.", true); return; }
     api("POST", "/api/agents", { name: name.trim(), daily_budget: daily, task_budget: Math.max(0.5, daily / 5) })
@@ -408,7 +471,7 @@
     var text = $(b.dataset.copy).textContent;
     (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
       b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy"; }, 1500);
-    }).catch(function () { prompt("Copy this:", text); });
+    }).catch(function () { LT.copy({ text: text, label: b.dataset.copy === "c-key" ? "API key" : "Base URL" }); });
   });
 
   // ---------- demo & try ----------
@@ -524,6 +587,74 @@
     }).catch(fail);
   });
 
+  // ---------- PayPal on file (Vault payment token per agent) ----------
+  var VAULT_PILL = { active: "ok", revoked: "bad", revoke_failed: "bad", waiting_for_paypal: "warn" };
+  function vaultCell(v) {
+    v = v || { status: "none", label: "not connected" };
+    var label = v.status === "active" ? "connected" : (v.label || v.status);
+    var sim = v.simulated && v.status !== "none" && v.status !== "waiting_for_paypal" ? " (simulated)" : "";
+    return '<span class="pill ' + (VAULT_PILL[v.status] || "neutral") + '">' + esc(label + sim) + "</span>";
+  }
+  function renderVaults() {
+    var box = $("vaults");
+    if (!box) return;
+    if (!S.agents.length) { box.innerHTML = '<div class="empty">Add an agent first.</div>'; return; }
+    var html = '<div class="table-wrap"><table class="plain"><thead><tr><th>Agent</th><th>PayPal on file</th><th>Details</th><th>Actions</th></tr></thead><tbody>' +
+      S.agents.map(function (a) {
+        var v = a.paypal_on_file || { status: "none" };
+        var bits = [];
+        if (v.payer_email) bits.push(esc(v.payer_email));
+        if (v.token_id) bits.push('<code class="small">' + esc(v.token_id) + "</code>");
+        if (v.status === "revoked" && v.revoked_ts) bits.push("revoked " + esc(when(v.revoked_ts)) + (v.revoked_by ? " by " + esc(v.revoked_by) : ""));
+        if (v.status === "revoke_failed" && v.note) bits.push("PayPal said: " + esc(v.note) + ". Purchases stay blocked.");
+        if (v.status === "revoked") bits.push("Purchases are blocked until you reconnect.");
+        var acts = [];
+        if (v.status === "active") {
+          acts.push('<button class="btn ghost sm" data-vault="topup" data-id="' + a.id + '">Top up $10 from it</button>');
+          acts.push('<button class="btn stop sm" data-vault="revoke" data-id="' + a.id + '">Revoke</button>');
+        } else if (v.status === "revoke_failed") {
+          acts.push('<button class="btn stop sm" data-vault="revoke" data-id="' + a.id + '">Try revoking again</button>');
+        }
+        if (v.status !== "active") {
+          acts.push('<button class="btn go sm" data-vault="connect" data-id="' + a.id + '">' +
+            (v.status === "none" ? "Connect PayPal" : "Reconnect PayPal") + "</button>");
+        }
+        return "<tr><td>" + esc(a.name) + "</td><td>" + vaultCell(v) + '</td><td class="small">' + (bits.join(" · ") || '<span class="muted">-</span>') +
+          "</td><td>" + acts.join(" ") + "</td></tr>";
+      }).join("") + "</tbody></table></div>" +
+      (S.vault_simulated ? '<p class="muted small">Simulated: ' + (S.public_demo ? "this is the public demo, so " : "PayPal keys aren't set, so ") +
+        "connecting and revoking are recorded here but nothing is sent to PayPal.</p>" : "");
+    if (box.dataset.html === html) return;
+    box.innerHTML = html;
+    box.dataset.html = html;
+  }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-vault]");
+    if (!b) return;
+    var id = Number(b.dataset.id), act = b.dataset.vault;
+    var a = S.agents.find(function (x) { return x.id === id; }) || { name: "this agent" };
+    var sure = act !== "revoke" ? Promise.resolve(true) : LT.confirm({ tone: "stop",
+      title: "Revoke PayPal on file for " + a.name + "?",
+      body: "Its purchases are blocked until you reconnect it. Nothing already paid is reversed.",
+      ok: "Revoke it", cancel: "Keep it connected" });
+    sure.then(function (yes) { if (yes) vaultAct(b, id, act, a); });
+  });
+  function vaultAct(b, id, act, a) {
+    b.disabled = true;
+    api("POST", "/api/agents/" + id + "/vault/" + act, act === "topup" ? { amount: 10 } : {}).then(function (r) {
+      if (act === "connect") {
+        if (r.approve_url) { location.href = r.approve_url; return; }
+        flash("PayPal on file connected for " + a.name + (r.simulated ? " (simulated: nothing was sent to PayPal)." : "."));
+      } else if (act === "revoke") {
+        flash(r.status === "revoked" ? r.message : (r.message || "Revoking didn't go through."), r.status !== "revoked");
+      } else {
+        flash(r.status === "COMPLETED" ? "Wallet topped up with $10 from PayPal on file" + (r.simulated ? " (simulated)." : ".")
+          : "PayPal says the top-up is " + r.status + ".", r.status !== "COMPLETED");
+      }
+      return refresh();
+    }).catch(fail).then(function () { b.disabled = false; });
+  }
+
   // ---------- clients ----------
   $("cl-add").addEventListener("click", function () {
     api("POST", "/api/clients", { name: $("cl-name").value, email: $("cl-email").value, markup_percent: Number($("cl-markup").value || 0) })
@@ -559,12 +690,15 @@
     if (!b) return;
     var cid = b.dataset.inv, preview = !!b.dataset.preview;
     if (!preview && !S.paypal_ready) { flash("PayPal isn't connected yet.", true); return; }
-    if (!preview && !confirm("Create and send a PayPal invoice to this client for the last 30 days?")) return;
-    api("POST", "/api/clients/" + cid + "/invoice", { days: 30, preview: preview, send: !preview }).then(function (r) {
-      var out = $("inv-" + cid);
-      if (preview) out.innerHTML = '<p class="small"><strong>' + esc(money(r.amount)) + "</strong> for " + esc(r.period) + ". " + esc(r.receipt) + "</p>";
-      else { flash("Invoice " + r.status.toLowerCase() + ": " + money(r.amount) + "."); return refresh(); }
-    }).catch(fail);
+    (preview ? Promise.resolve(true) : LT.confirm({ title: "Send a PayPal invoice?", body: "Lowtides creates and sends a PayPal invoice to this client for the last 30 days.",
+      ok: "Send invoice", cancel: "Not now" })).then(function (yes) {
+      if (!yes) return;
+      api("POST", "/api/clients/" + cid + "/invoice", { days: 30, preview: preview, send: !preview }).then(function (r) {
+        var out = $("inv-" + cid);
+        if (preview) out.innerHTML = '<p class="small"><strong>' + esc(money(r.amount)) + "</strong> for " + esc(r.period) + ". " + esc(r.receipt) + "</p>";
+        else { flash("Invoice " + r.status.toLowerCase() + ": " + money(r.amount) + "."); return refresh(); }
+      }).catch(fail);
+    });
   });
 
   // ---------- ledger ----------
@@ -597,10 +731,12 @@
           pagination: true, paginationPageSize: 50, paginationPageSizeSelector: [50, 100, 500] });
       } else {
         el.style.height = "auto";
-        el.innerHTML = '<div class="table-wrap"><table class="plain"><thead><tr><th>When</th><th>Agent</th><th>Asked for</th><th>Answered by</th><th class="num">Paid</th><th class="num">Would have cost</th><th class="num">Saved</th><th>Note</th></tr></thead><tbody>' +
+        if (!rows.length) { el.innerHTML = '<div class="empty">No calls yet. Press <strong>Watch it work</strong> on Home and every call lands here with what it cost and saved.</div>'; return; }
+        el.innerHTML = '<div class="table-wrap"><table class="plain mtable ledger-table"><thead><tr><th>When</th><th>Agent</th><th>Asked for</th><th>Answered by</th><th class="num">Paid</th><th class="num">Would have cost</th><th class="num">Saved</th><th>Note</th></tr></thead><tbody>' +
           rows.slice(0, 300).map(function (x) {
-            return "<tr><td>" + esc(x.when) + "</td><td>" + esc(x.agent) + "</td><td>" + esc(x.asked) + "</td><td>" + esc(x.used) + '</td><td class="num">' + esc(money4(x.cost)) +
-              '</td><td class="num">' + esc(money4(x.would_have)) + '</td><td class="num">' + esc(money4(x.saved)) + "</td><td>" + esc(x.note) + "</td></tr>";
+            return '<tr><td data-k="When">' + esc(x.when) + '</td><td data-k="Agent">' + esc(x.agent) + '</td><td data-k="Asked for">' + esc(x.asked) + '</td><td data-k="Answered by">' + esc(x.used) +
+              '</td><td class="num" data-k="Paid">' + esc(money4(x.cost)) + '</td><td class="num" data-k="Would have cost">' + esc(money4(x.would_have)) +
+              '</td><td class="num" data-k="Saved">' + esc(money4(x.saved)) + '</td><td data-k="Note">' + esc(x.note) + "</td></tr>";
           }).join("") + "</tbody></table></div>";
       }
     }).catch(fail);
@@ -671,8 +807,11 @@
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-del-model]");
     if (!b) return;
-    if (!confirm("Remove " + b.dataset.delModel + " from your price list?")) return;
-    api("DELETE", "/api/models/" + encodeURIComponent(b.dataset.delModel)).then(refresh).catch(fail);
+    var name = b.dataset.delModel;
+    LT.confirm({ tone: "stop", title: "Remove " + name + "?", body: "It comes off your price list. You can add it back under Add or update a model.",
+                 ok: "Remove it", cancel: "Keep it" }).then(function (yes) {
+      if (yes) api("DELETE", "/api/models/" + encodeURIComponent(name)).then(refresh).catch(fail);
+    });
   });
   $("p-save").addEventListener("click", function () {
     api("POST", "/api/providers", { name: $("p-name").value.trim(), type: "openai", base_url: $("p-url").value.trim(), api_key_env: $("p-env").value.trim() })
@@ -716,6 +855,9 @@
       '<header class="tcard-head"><h3 class="tcard-name"></h3><span class="tstat"></span></header>' +
       '<div class="tfield">' + svg + "</div>" +
       '<p class="tnums"><span class="tspent" data-v="">$0.00</span> <span class="tof"></span></p>' +
+      '<div class="tsplit" hidden><div class="tsplit-bar" role="img"><i class="ai"></i><i class="buy"></i></div>' +
+      '<ul class="tsplit-k"><li><span class="lg-dot lg-tide" aria-hidden="true"></span>AI usage <b class="tsplit-ai"></b></li>' +
+      '<li><span class="lg-dot" style="background:var(--deep-ink)" aria-hidden="true"></span>Purchases <b class="tsplit-buy"></b></li></ul></div>' +
       '<p class="tpace"></p>';
     return card;
   }
@@ -762,7 +904,9 @@
   }
 
   function updateTideCard(card, a, t) {
-    card.querySelector(".tcard-name").textContent = a.name;
+    var nm = card.querySelector(".tcard-name");
+    nm.textContent = a.name;
+    nm.title = a.name;
     var st = card.querySelector(".tstat");
     var label = a.status === "on" ? "Running" : (a.status === "paused" ? "Paused" : "Stopped");
     st.textContent = label;
@@ -772,6 +916,17 @@
     card.classList.toggle("over", over);
     tweenMoney(card.querySelector(".tspent"), t.spent, money4);
     card.querySelector(".tof").textContent = "of " + money(t.limit) + " limit · " + Math.round(Math.min(t.pct, 9.99) * 100) + "%";
+    // One budget, two kinds of spend: show the AI-usage / purchases split when the forecast has it.
+    var f = FC[a.id], sp = card.querySelector(".tsplit");
+    if (f && (f.tokens_today != null || f.purchases_today != null)) {
+      var ai = Number(f.tokens_today || 0), buy = Number(f.purchases_today || 0), cap = Math.max(t.limit, ai + buy) || 1;
+      sp.hidden = false;
+      sp.querySelector("i.ai").style.width = (ai / cap * 100).toFixed(2) + "%";
+      sp.querySelector("i.buy").style.width = (buy / cap * 100).toFixed(2) + "%";
+      sp.querySelector(".tsplit-ai").textContent = money4(ai);
+      sp.querySelector(".tsplit-buy").textContent = money(buy);
+      sp.querySelector(".tsplit-bar").setAttribute("aria-label", "AI usage " + money4(ai) + " plus purchases " + money(buy) + " of a " + money(t.limit) + " limit");
+    } else sp.hidden = true;
     var pt = card.querySelector(".tpace");
     pt.textContent = t.paceText;
     pt.hidden = !t.paceText;
@@ -897,6 +1052,25 @@
     var id = b.dataset.spend, act = b.dataset.do;
     var x = PEND.find(function (p) { return String(p.id) === id; }) || {};
     var card = b.closest(".appr");
+    var inj = (x.flags || []).indexOf("possible_injection") >= 0;
+    if (act === "approve" && inj) {
+      // A prompt-injected purchase must never be one green tap away: ask, with Deny as the default.
+      LT.ask({ tone: "stop", title: "Approve a possible prompt injection?",
+        body: "This request contains text that looks like instructions to the agent" +
+              (x.reason ? " (“" + String(x.reason).slice(0, 140) + (String(x.reason).length > 140 ? "…" : "") + "”)" : "") +
+              ". Approving pays " + money(x.amount) + " to " + (x.merchant || "this merchant") + ". Approve anyway?",
+        actions: [{ id: "deny", label: "Deny it", cls: "stop", focus: true },
+                  { id: "approve", label: "Approve anyway", cls: "ghost" }]
+      }).then(function (choice) {
+        if (!choice) return;
+        var now = $("appr-list").querySelector('button[data-spend="' + id + '"]');  // the list may have re-rendered meanwhile
+        decide(now ? now.closest(".appr") : card, id, choice, x);
+      });
+      return;
+    }
+    decide(card, id, act, x);
+  });
+  function decide(card, id, act, x) {
     card.querySelectorAll("button").forEach(function (btn) { btn.disabled = true; });
     var body = act === "deny" ? { note: "Denied from the dashboard." } : {};
     api("POST", "/api/spend/" + encodeURIComponent(id) + "/" + act, body).then(function (r) {
@@ -929,7 +1103,7 @@
       if (!msg) { msg = document.createElement("p"); msg.className = "appr-err"; msg.setAttribute("role", "alert"); card.querySelector(".appr-main").appendChild(msg); }
       msg.textContent = (act === "approve" ? "Couldn't approve: " : "Couldn't deny: ") + (e && e.message ? e.message : "please try again.");
     });
-  });
+  }
 
   var STATUS = {
     paid: ["Paid", "ok", "&#10003;"], approved: ["Approved", "ok", "&#10003;"], pending: ["Waiting for you", "warn", "&#8230;"],
@@ -993,11 +1167,13 @@
     killReturn = from || $("stop-all");
     $("kill-h").textContent = a ? "Kill " + a.name + "?" : "Stop every agent?";
     $("kill-text").textContent = (a ? "This stops " + a.name + " right now. " : "This stops all your agents right now. ") +
-      "Lowtides denies " + (a ? "its" : "their") + " waiting purchases, voids open PayPal holds and cancels payouts nobody has claimed yet. You can start " + (a ? "it" : "them") + " again later.";
+      "Lowtides denies " + (a ? "its" : "their") + " waiting purchases, voids open PayPal holds, cancels payouts nobody has claimed yet and revokes " +
+      (a ? "its" : "their") + " saved PayPal payment method. You can start " + (a ? "it" : "them") + " again later.";
     $("kill-yes").textContent = a ? "Kill it now" : "Stop all now";
     var dlg = $("kill-dlg");
     if (dlg.showModal) { dlg.showModal(); $("kill-yes").focus(); }
-    else if (confirm($("kill-h").textContent + " " + $("kill-text").textContent)) doKill();
+    else LT.confirm({ tone: "stop", title: $("kill-h").textContent, body: $("kill-text").textContent, ok: $("kill-yes").textContent, cancel: "Keep it running" })
+      .then(function (yes) { if (yes) doKill(); });
   }
   $("kill-dlg").addEventListener("close", function () { if (killReturn && document.body.contains(killReturn)) killReturn.focus(); });
   $("kill-yes").addEventListener("click", doKill);
@@ -1006,6 +1182,7 @@
     if (r.denied) bits.push("denied " + plural(r.denied, "pending purchase", "pending purchases"));
     if (r.holds_voided) bits.push("voided " + plural(r.holds_voided, "PayPal hold", "PayPal holds"));
     if (r.payouts_cancelled) bits.push("cancelled " + plural(r.payouts_cancelled, "payout", "payouts"));
+    if (r.tokens_revoked) bits.push("revoked " + (r.tokens_revoked === 1 ? "the saved PayPal payment method" : r.tokens_revoked + " saved PayPal payment methods"));
     if (!bits.length) return "Nothing else was waiting.";
     var s = bits.length > 1 ? bits.slice(0, -1).join(", ") + " and " + bits[bits.length - 1] : bits[0];
     return s.charAt(0).toUpperCase() + s.slice(1) + ".";
@@ -1283,8 +1460,10 @@
   }
   $("out-check").addEventListener("click", function () { outDo("/api/outside/check", {}, "Checked your provider bills."); });
   $("out-disable").addEventListener("click", function () {
-    if (!confirm("Disable the protected API keys now? Anything using them will stop working. (OpenAI keys are deleted.)")) return;
-    outDo("/api/outside/disable", {}, "Disable request sent. Check the results above.");
+    LT.confirm({ tone: "stop", title: "Disable the protected API keys now?", body: "Anything using them stops working. OpenAI keys are deleted, since OpenAI has no disable.",
+                 ok: "Disable keys", cancel: "Not now" }).then(function (yes) {
+      if (yes) outDo("/api/outside/disable", {}, "Disable request sent. Check the results above.");
+    });
   });
   $("out-dismiss").addEventListener("click", function () { outDo("/api/outside/clear", {}); });
   $("out-sim").addEventListener("click", function () { outDo("/api/outside/simulate", { amount: 25 }, "Simulated a runaway script."); });

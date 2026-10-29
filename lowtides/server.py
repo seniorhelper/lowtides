@@ -22,11 +22,12 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import APP_NAME, __version__
+from . import APP_NAME, __version__, notify
 from .config import ROOT, Config
 from .demo import DEMO_NAME, run_demo, run_loop_demo
 from .engine import Engine
 from .money import Money, MoneyError
+from .openapi import SPEC as OPENAPI_SPEC
 from .outside import OutsideGuard
 from .paypal import PayPal, PayPalError
 from .pricing import money
@@ -34,7 +35,9 @@ from .quote import quote as make_quote
 from .guard import start_of_today
 from .receipts import ledger_csv, receipt
 from .spend import SpendError, SpendGovernor, agent_rules, compile_rules, describe_rules, validate_rules
+from .sandbox import COOKIE as DEMO_COOKIE, INTERNAL_HEADER, TooManySandboxes
 from .store import Store
+from .vault import Vault, VaultError
 
 UI_DIR = os.path.join(ROOT, "ui")
 MAX_BODY = 20 * 1024 * 1024
@@ -88,7 +91,7 @@ def key_env_ok(name):
 
 
 class App:
-    def __init__(self, config, store, paypal=None, providers=None, config_path=None):
+    def __init__(self, config, store, paypal=None, providers=None, config_path=None, public_demo=None):
         self.config = config
         self.store = store
         self.engine = Engine(config, store, providers)
@@ -96,11 +99,17 @@ class App:
         self.paypal = paypal or PayPal(config.secret(pp_cfg.get("client_id_env")), config.secret(pp_cfg.get("client_secret_env")),
                                        env=pp_cfg.get("env", "sandbox"), currency=pp_cfg.get("currency", "USD"))
         self.money = Money(config, store, self.paypal)
-        self.spend = SpendGovernor(store, self.paypal, self.money)
         # Public demo: no password, PayPal sandbox only, simulated models only, resettable.
-        self.public_demo = os.environ.get("LOWTIDES_PUBLIC_DEMO", "").lower() in ("1", "true", "yes")
+        self.public_demo = (os.environ.get("LOWTIDES_PUBLIC_DEMO", "").lower() in ("1", "true", "yes")
+                            if public_demo is None else bool(public_demo))
+        # PayPal on file per agent. Simulated (and labeled so) without keys or in the public
+        # demo, where strangers shouldn't be sent through a real PayPal vault approval.
+        self.vault = Vault(store, self.paypal, base_url=lambda: self.money.base_url, simulate=self.public_demo)
+        self.spend = SpendGovernor(store, self.paypal, self.money, vault=self.vault)
+        self.notify = notify.attach(store, public_demo=self.public_demo, base_url=pp_cfg.get("public_base_url", ""))  # outbound webhooks
         self.engine.sim_only = self.public_demo
         self.demo_policy = copy.deepcopy(config.data.get("policy", {})) if self.public_demo else None
+        self.demo_mode = config.data.get("mode", "home")
         self.self_url = None
         self.claude_compiles = collections.deque()
         self.admin_token = os.environ.get("LOWTIDES_ADMIN_TOKEN", "")
@@ -109,17 +118,35 @@ class App:
         self.loopback = True  # set by serve(); a loopback server only answers to localhost names
         # Watches the provider's real bill, including scripts that never touch Lowtides.
         self.outside = OutsideGuard(config, store, stop_all=self.stop_all, demo=self.public_demo)
+        # Public demo: each browser gets its own sandbox (see sandbox.py); this App is the
+        # shared one that cookie-less callers (curl, the scenario CLI) still use.
+        self.sandbox_id = None
+        self.seed_headers = None
+        self.on_reset = None
+        self.sandboxes = self.limiter = None
+        if self.public_demo and public_demo is None:
+            from .sandbox import RateLimiter, Sandboxes
+            self.sandboxes = Sandboxes(self)
+            self.limiter = RateLimiter()
 
     def stop_all(self, by="STOP ALL"):
-        totals = {"denied": 0, "holds_voided": 0, "payouts_cancelled": 0}
+        totals = {"denied": 0, "holds_voided": 0, "payouts_cancelled": 0, "tokens_revoked": 0, "revoke_failed": 0}
+        problems = []
         for a in self.store.agents():
             r = self.spend.kill(a["id"], by=by)
-            for k in totals:
+            for k in ("denied", "holds_voided", "payouts_cancelled", "tokens_revoked"):
                 totals[k] += r[k]
+            if r["paypal_on_file"].get("status") == "revoke_failed":
+                totals["revoke_failed"] += 1
+            problems += [p if a["name"] in p else "%s: %s" % (a["name"], p) for p in r["problems"]]
         who = "STOP ALL pressed" if by == "STOP ALL" else by + " pressed STOP ALL"
         self.store.event(None, "control", "%s. Every agent is stopped, %d pending purchases denied, %d holds voided, "
-                                          "%d payouts cancelled." % (who, totals["denied"], totals["holds_voided"],
-                                                                     totals["payouts_cancelled"]))
+                                          "%d payouts cancelled, %d saved PayPal payment method%s revoked%s."
+                         % (who, totals["denied"], totals["holds_voided"], totals["payouts_cancelled"], totals["tokens_revoked"],
+                            "" if totals["tokens_revoked"] == 1 else "s",
+                            (" (%d could not be revoked)" % totals["revoke_failed"]) if totals["revoke_failed"] else ""))
+        totals["problems"] = problems
+        notify.emit(self.store, "stop_all", dict(totals, by=by))
         return totals
 
     def reset_demo(self, seed_story=True):
@@ -130,11 +157,15 @@ class App:
             raise ValueError("Reset is only available in the public demo.")
         with self.store.lock:
             for table in ("spend_requests", "merchants", "audit", "events", "ledger", "memory", "tasks",
-                          "wallets", "wallet_tx", "topups", "shadow", "agents"):
+                          "wallets", "wallet_tx", "topups", "shadow", "vault_tokens", "agents",
+                          "outbound_webhooks", "webhook_deliveries"):
                 self.store.db.execute("DELETE FROM " + table)
             self.store.db.commit()
+        if self.on_reset:  # the deleted agents' keys no longer route here
+            self.on_reset()
         if self.demo_policy is not None:  # undo any visitor's policy changes
             self.config.data["policy"] = copy.deepcopy(self.demo_policy)
+            self.config.data["mode"] = self.demo_mode
         old, self.outside = self.outside, OutsideGuard(self.config, self.store, stop_all=self.stop_all, demo=True)
         if old._thread:  # fresh simulated bill; keep watching
             old.stop()
@@ -142,7 +173,7 @@ class App:
         if self.self_url and seed_story:
             from .scenario import seed
             try:
-                seed(self.self_url)
+                seed(self.self_url, headers=self.seed_headers)
             except Exception as e:  # the demo still works empty; say why
                 self.store.event(None, "control", "Demo story could not load: %s" % e)
         self.store.event(None, "control", "Public demo reset. The runaway-agent story is loaded: try Approvals, Rules and KILL.")
@@ -196,7 +227,7 @@ class App:
             ratio = spent / budget if budget else 1
             light = "red" if a["status"] != "on" or ratio >= 1 else ("yellow" if ratio >= 0.8 else "green")
             agents.append(dict(a, spent_today=round(spent, 6), light=light, balance=round(self.store.balance(a["id"]), 6),
-                               simulated=a["name"] == DEMO_NAME))
+                               simulated=a["name"] == DEMO_NAME, paypal_on_file=self.vault.status(a["id"])))
         week = time.time() - 7 * 86400
         return {
             "app": self.config.data.get("app_name", APP_NAME),
@@ -215,14 +246,22 @@ class App:
             "admin_protected": bool(self.admin_token) and not self.public_demo,
             "public_demo": self.public_demo,
             "paypal_ready": self.paypal.configured,
+            "vault_simulated": self.vault.simulated,
             "outside": self.outside.status(),
         }
 
 
+AGENT_PATHS = ("/chat/completions", "/messages")
+
+
 def make_handler(app):
+    root = app
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "Lowtides/" + __version__
         protocol_version = "HTTP/1.1"
+        app = root  # per request: the caller's demo sandbox in public-demo mode (see _route)
+        _new_cookie = None
 
         def log_message(self, fmt, *args):
             if os.environ.get("LOWTIDES_QUIET"):
@@ -239,7 +278,7 @@ def make_handler(app):
                 raise ValueError("Bad Content-Length")
             if n < 0:
                 raise ValueError("Bad Content-Length")
-            if n > (DEMO_MAX_BODY if app.public_demo else MAX_BODY):
+            if n > (DEMO_MAX_BODY if self.app.public_demo else MAX_BODY):
                 raise ValueError("Request too large")
             raw = self.rfile.read(n) if n else b""
             self._consumed = True
@@ -278,8 +317,87 @@ def make_handler(app):
             self.send_header("X-Content-Type-Options", "nosniff")
             for k, v in (headers or {}).items():
                 self.send_header(k, str(v))
+            if self._new_cookie:
+                self.send_header("Set-Cookie", self._demo_cookie(self._new_cookie))
             self.end_headers()
             self.wfile.write(data)
+
+        # ---- public demo: which sandbox is this request for? -------------------
+        def _cookie(self, name):
+            for part in (self.headers.get("Cookie") or "").split(";"):
+                k, _, v = part.strip().partition("=")
+                if k == name:
+                    return urllib.parse.unquote(v)
+            return ""
+
+        def _client_ip(self):
+            # Behind a proxy (Render) every request arrives from the proxy, so the visitor's
+            # address comes from a header, and only where a proxy sets it. Render's edge puts
+            # the visitor first in X-Forwarded-For and appends its own hops after it, and its
+            # CDN sets CF-Connecting-IP / True-Client-IP. Only rate limits use this address.
+            hdr = os.environ.get("LOWTIDES_CLIENT_IP_HEADER", "")
+            if hdr and self.headers.get(hdr):
+                return self.headers.get(hdr).split(",")[0].strip()
+            if os.environ.get("RENDER") or os.environ.get("LOWTIDES_TRUST_PROXY"):
+                for h in ("CF-Connecting-IP", "True-Client-IP"):
+                    if self.headers.get(h):
+                        return self.headers.get(h).strip()
+                xff = self.headers.get("X-Forwarded-For", "")
+                if xff:
+                    return xff.split(",")[0].strip()
+            return self.client_address[0]
+
+        def _demo_cookie(self, value):
+            https = (self.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+            return "%s=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400%s" % (DEMO_COOKIE, value, "; Secure" if https else "")
+
+        def _too_many(self, msg):
+            self._send(429, {"error": msg}, {"Retry-After": "5"})
+
+        def _route(self):
+            """Pick the App this request works on. Outside the public demo it is always the
+            one App. In the demo: dashboard calls go to the cookie's sandbox, agent calls to
+            the sandbox that owns the key, everything else (pages, /health) stays shared.
+            Returns False if an error was already sent."""
+            self.app, self._new_cookie = root, None
+            sb = root.sandboxes
+            if sb is None:
+                return True
+            path = self._path()[0]
+            internal = (sb.internal_ok(self.headers.get(INTERNAL_HEADER))
+                        and self.client_address[0] in ("127.0.0.1", "::1"))
+            ip = self._client_ip()
+            agentish = path.startswith("/v1/") or path in AGENT_PATHS
+            if (self.command == "POST" and not internal and (agentish or path.startswith("/api/"))
+                    and not root.limiter.allow(ip)):
+                self._too_many("Easy there: that's a lot of requests at once. Wait a few seconds and try again.")
+                return False
+            if agentish:
+                self.app = sb.by_key(self._agent_key()) or root
+                return True
+            sid = sb.parse(self._cookie(DEMO_COOKIE))
+            if path.startswith("/api/") or path == "/paypal/return":
+                if (not sid and not internal and path.startswith("/api/") and self._same_site()
+                        and (self.headers.get("Sec-Fetch-Site") or "").lower() == "same-origin"):
+                    # No (or a stale) cookie, say after a restart: give this browser its own
+                    # sandbox now rather than drop it into the shared demo.
+                    self._new_cookie = sb.new_id()
+                    sid = sb.parse(self._new_cookie)
+                if sid and (path == "/paypal/return" or self._same_site()):
+                    try:
+                        found = sb.get(sid, ip, wait=not internal, create=not internal)
+                    except TooManySandboxes:
+                        # Lots of new demos from one network (or a proxy hiding addresses):
+                        # share the common demo rather than turn a visitor away.
+                        found = root
+                    if found is None:
+                        self._send(410, {"error": "This demo sandbox is gone. Reload the page for a fresh one."})
+                        return False
+                    self.app = found
+                return True
+            if self.command == "GET" and not sid and (path.endswith("/") or path.endswith(".html")):
+                self._new_cookie = sb.new_id()  # the sandbox itself is built on the first dashboard call
+            return True
 
         def _redirect(self, where):
             self.send_response(302)
@@ -288,7 +406,7 @@ def make_handler(app):
             self.end_headers()
 
         def _admin_ok(self):
-            if not app.admin_token or app.public_demo:
+            if not self.app.admin_token or self.app.public_demo:
                 return True
             given = self.headers.get("X-Admin-Token", "")
             if not given:
@@ -297,13 +415,13 @@ def make_handler(app):
                     k, _, v = part.strip().partition("=")
                     if k == "lt_admin":
                         given = urllib.parse.unquote(v)
-            return safe_equal(given, app.admin_token)
+            return safe_equal(given, self.app.admin_token)
 
         def _same_site(self):
             """Blocks other websites (and DNS-rebinding tricks) from driving the dashboard API
             through your browser. The dashboard itself is same-origin, so it always passes."""
             host = (self.headers.get("Host") or "").strip().lower()
-            if app.loopback and host.rsplit(":", 1)[0].strip("[]") not in LOCAL_NAMES:
+            if self.app.loopback and host.rsplit(":", 1)[0].strip("[]") not in LOCAL_NAMES:
                 return False
             origin = (self.headers.get("Origin") or "").strip().lower()
             if origin and origin != "null":
@@ -401,6 +519,8 @@ def make_handler(app):
 
         def do_GET(self):
             try:
+                if not self._route():
+                    return
                 self._get()
             except Exception as e:  # keep the server alive, report plainly
                 self._send(500, {"error": "Server error: %s" % e})
@@ -408,6 +528,8 @@ def make_handler(app):
         def do_POST(self):
             self._consumed = False
             try:
+                if not self._route():
+                    return
                 self._post()
             except LengthRequired:
                 self._send(411, {"error": "Send a Content-Length (chunked bodies are not supported)."})
@@ -423,6 +545,8 @@ def make_handler(app):
         def do_DELETE(self):
             self._consumed = False
             try:
+                if not self._route():
+                    return
                 self._delete()
             except Exception as e:
                 self._send(500, {"error": "Server error: %s" % e})
@@ -435,8 +559,10 @@ def make_handler(app):
             path, qs = self._path()
             if path == "/health":
                 return self._send(200, {"ok": True, "version": __version__})
+            if path == "/openapi.json":
+                return self._send(200, OPENAPI_SPEC, {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"})
             if path == "/v1/models":
-                data = [{"id": n, "object": "model", "owned_by": m.get("provider")} for n, m in app.config.models.items()]
+                data = [{"id": n, "object": "model", "owned_by": m.get("provider")} for n, m in self.app.config.models.items()]
                 return self._send(200, {"object": "list", "data": data})
             if path == "/v1/budget" or path.startswith("/v1/spend/"):
                 return self._spend_api("GET", path)
@@ -445,12 +571,16 @@ def make_handler(app):
                 kind = qs.get("kind", "")
                 try:
                     if kind == "topup":
-                        app.money.topup_finish(order_id)
+                        self.app.money.topup_finish(order_id)
                         return self._redirect("/#wallet?paid=1")
                     if kind == "hold":
-                        app.money.hold_finish(order_id)
+                        self.app.money.hold_finish(order_id)
                         return self._redirect("/#tasks?held=1")
-                except (MoneyError, PayPalError) as e:
+                    if kind == "vault":
+                        # PayPal sends the approved setup token back (approval_token_id; token on some flows).
+                        self.app.vault.connect_finish(qs.get("approval_token_id") or order_id)
+                        return self._redirect("/#wallet?vault=1")
+                except (MoneyError, PayPalError, VaultError) as e:
                     return self._redirect("/#error?msg=" + urllib.parse.quote(str(e)))
                 return self._redirect("/")
             if path == "/paypal/cancel":
@@ -480,47 +610,56 @@ def make_handler(app):
             self._send(200, data, {"Cache-Control": "no-cache"}, ctype=ctype)
 
         def _api_get(self, path, qs):
+            if path.startswith("/api/webhooks"):
+                return self._send(*self.app.notify.api("GET", path))
             if path == "/api/state":
-                return self._send(200, app.state())
+                return self._send(200, self.app.state())
             if path == "/api/ledger":
                 aid = int(qs["agent"]) if qs.get("agent") else None
-                return self._send(200, {"rows": app.store.ledger(aid, limit=int(qs.get("limit", 300)))})
+                return self._send(200, {"rows": self.app.store.ledger(aid, limit=int(qs.get("limit", 300)))})
             if path == "/api/ledger.csv":
                 aid = int(qs["agent"]) if qs.get("agent") else None
-                data = ledger_csv(app.store.ledger(aid, limit=100000)).encode("utf-8")
+                data = ledger_csv(self.app.store.ledger(aid, limit=100000)).encode("utf-8")
                 return self._send(200, data, {"Content-Disposition": "attachment; filename=lowtides-ledger.csv"}, ctype="text/csv")
             if path == "/api/receipt":
                 days = float(qs.get("days", 30))
                 aid = int(qs["agent"]) if qs.get("agent") else None
-                return self._send(200, receipt(app.store, agent_id=aid, since=time.time() - days * 86400))
+                return self._send(200, receipt(self.app.store, agent_id=aid, since=time.time() - days * 86400))
             if path.startswith("/api/wallet/"):
+                if not path.rsplit("/", 1)[1].isdigit():
+                    return self._send(400, {"error": "Give an agent id, like /api/wallet/1."})
                 aid = int(path.rsplit("/", 1)[1])
-                return self._send(200, {"balance": app.store.balance(aid), "history": app.store.wallet_history(aid)})
+                return self._send(200, {"balance": self.app.store.balance(aid), "history": self.app.store.wallet_history(aid)})
             if path == "/api/quote":
-                q = make_quote(app.store, app.config, int(qs.get("agent", 0)), label=qs.get("label", ""),
+                q = make_quote(self.app.store, self.app.config, int(qs.get("agent", 0)), label=qs.get("label", ""),
                                description=qs.get("description", ""), model=qs.get("model"))
                 return self._send(200, q)
             if path == "/api/spend":
                 status = qs.get("status", "all")
-                return self._send(200, {"requests": app.store.spends(status=None if status == "all" else status,
+                return self._send(200, {"requests": self.app.store.spends(status=None if status == "all" else status,
                                                                       limit=min(int(qs.get("limit", 100)), 1000))})
             if path.startswith("/api/spend/") and path.endswith("/evidence"):
                 try:
-                    pack = app.spend.evidence(path.split("/")[3])
+                    pack = self.app.spend.evidence(path.split("/")[3])
                 except SpendError as e:
                     return self._send(e.http, {"error": str(e)})
                 data = json.dumps(pack, indent=2).encode("utf-8")
                 return self._send(200, data, {"Content-Disposition": "attachment; filename=lowtides-evidence-%s.json" % pack["request"]["id"]})
             if path == "/api/merchants":
-                return self._send(200, {"merchants": app.store.merchants()})
+                return self._send(200, {"merchants": self.app.store.merchants()})
             if path == "/api/forecast":
-                return self._send(200, app.spend.forecast())
+                return self._send(200, self.app.spend.forecast())
             if path == "/api/outside":
-                return self._send(200, app.outside.status())
+                return self._send(200, self.app.outside.status())
             if path == "/api/audit/verify":
-                return self._send(200, app.store.audit_verify())
+                return self._send(200, self.app.store.audit_verify())
+            if path.startswith("/api/agents/") and path.endswith("/vault"):
+                aid = int(path.split("/")[3])
+                if not self.app.store.agent(aid):
+                    return self._send(404, {"error": "No such agent."})
+                return self._send(200, self.app.vault.status(aid))
             if path.startswith("/api/agents/") and path.endswith("/rules"):
-                a = app.store.agent(int(path.split("/")[3]))
+                a = self.app.store.agent(int(path.split("/")[3]))
                 if not a:
                     return self._send(404, {"error": "No such agent."})
                 r = agent_rules(a)
@@ -528,7 +667,7 @@ def make_handler(app):
             return self._send(404, {"error": "Unknown endpoint"})
 
         def _agent_or_401(self):
-            agent = app.store.agent_by_key(self._agent_key()) if self._agent_key() else None
+            agent = self.app.store.agent_by_key(self._agent_key()) if self._agent_key() else None
             if not agent:
                 self._send(401, {"error": "Unknown or missing Lowtides agent key."})
             return agent
@@ -540,23 +679,23 @@ def make_handler(app):
                 return
             try:
                 if method == "POST" and path == "/v1/spend":
-                    return self._send(200, app.spend.request(agent, self._json_in()))
+                    return self._send(200, self.app.spend.request(agent, self._json_in()))
                 if method == "GET" and path.startswith("/v1/spend/"):
-                    row = app.store.spend(path.rsplit("/", 1)[1])
+                    row = self.app.store.spend(path.rsplit("/", 1)[1])
                     if not row or row["agent_id"] != agent["id"]:
                         return self._send(404, {"error": "No such spend request for this agent."})
-                    return self._send(200, app.spend.refresh_payout(row["id"]))
+                    return self._send(200, self.app.spend.refresh_payout(row["id"]))
                 if method == "GET" and path == "/v1/budget":
                     r = agent_rules(agent)
                     today = start_of_today()
-                    bought = app.store.purchases_since(agent["id"], today)
+                    bought = self.app.store.purchases_since(agent["id"], today)
                     return self._send(200, {
                         "agent": agent["name"], "status": agent["status"],
-                        "tokens": {"daily_budget": agent["daily_budget"], "spent_today": round(app.store.spend_since(agent["id"], today), 6)},
+                        "tokens": {"daily_budget": agent["daily_budget"], "spent_today": round(self.app.store.spend_since(agent["id"], today), 6)},
                         "purchases": {"daily_limit": r["daily_purchase_limit"], "spent_today": round(bought, 2),
                                       "remaining_today": round(max(0.0, r["daily_purchase_limit"] - bought), 2),
                                       "auto_approve_up_to": r["approval_over"], "max_per_purchase": r["max_per_purchase"]},
-                        "wallet_balance": round(app.store.balance(agent["id"]), 2) if agent["use_wallet"] else None,
+                        "wallet_balance": round(self.app.store.balance(agent["id"]), 2) if agent["use_wallet"] else None,
                         "rules": r, "rules_in_plain_english": describe_rules(r)})
             except SpendError as e:
                 return self._send(e.http, {"error": str(e)})
@@ -569,39 +708,39 @@ def make_handler(app):
             if path in ("/v1/chat/completions", "/v1/messages", "/chat/completions", "/messages"):
                 api = "openai" if path.endswith("chat/completions") else "anthropic"
                 body = self._json_in()
-                if app.public_demo and (app.config.model(body.get("model") or "") or {}).get("provider") != "simulator":
+                if self.app.public_demo and (self.app.config.model(body.get("model") or "") or {}).get("provider") != "simulator":
                     return self._send(403, {"error": {"message": "This public demo runs on the built-in simulated models only "
                                                                  "(sim-small, sim-medium, sim-large), so nobody can spend real AI credit.",
                                                       "type": "public_demo"}})
                 hdrs = {k: v for k, v in self.headers.items()}
-                status, resp, extra = app.engine.handle(api, body, self._agent_key(), hdrs)
+                status, resp, extra = self.app.engine.handle(api, body, self._agent_key(), hdrs)
                 if status == 200 and body.get("stream"):
                     return self._sse(api, resp, extra, body)
                 return self._send(status, resp, extra)
             if path == "/webhooks/paypal":
                 raw = self._body()
                 event = json.loads(raw.decode("utf-8") or "{}")
-                wid = app.config.secret(app.config.paypal.get("webhook_id_env", ""))
+                wid = self.app.config.secret(self.app.config.paypal.get("webhook_id_env", ""))
                 if not wid:
                     return self._send(400, {"error": "Set PAYPAL_WEBHOOK_ID to accept webhooks."})
-                if not app.paypal.verify_webhook(dict(self.headers.items()), event, wid, raw=raw):
+                if not self.app.paypal.verify_webhook(dict(self.headers.items()), event, wid, raw=raw):
                     return self._send(400, {"error": "Webhook signature did not verify."})
                 eid = event.get("id", "")
-                if eid and app.store.webhook_seen(eid):
+                if eid and self.app.store.webhook_seen(eid):
                     return self._send(200, {"ok": True, "duplicate": True})
                 try:
-                    result = app.money.on_webhook(event)
+                    result = self.app.money.on_webhook(event)
                 except Exception as e:
                     # Not marked as seen, so PayPal retries it later.
                     return self._send(500, {"error": "Could not process event yet: %s" % e})
                 if eid:
-                    app.store.webhook_done(eid)
+                    self.app.store.webhook_done(eid)
                 return self._send(200, {"ok": True, "result": result})
             if path == "/api/login":
                 if not self._same_site():
                     return self._send(403, {"error": "Cross-site request refused."})
                 data = self._json_in()
-                if app.admin_token and not safe_equal(str(data.get("token", "")), app.admin_token):
+                if self.app.admin_token and not safe_equal(str(data.get("token", "")), self.app.admin_token):
                     return self._send(401, {"error": "Wrong password."})
                 cookie = "lt_admin=%s; Path=/; HttpOnly; SameSite=Strict" % urllib.parse.quote(str(data.get("token", "")))
                 return self._send(200, {"ok": True}, {"Set-Cookie": cookie})
@@ -612,20 +751,22 @@ def make_handler(app):
             return self._api_post(path, self._json_in())
 
         def _api_post(self, path, d):
-            s = app.store
+            s = self.app.store
             parts = path.strip("/").split("/")
-            if app.public_demo:
+            if path.startswith("/api/webhooks"):
+                return self._send(*self.app.notify.api("POST", path, d))
+            if self.app.public_demo:
                 if path in ("/api/providers", "/api/models"):
                     return self._send(403, {"error": "Changing model connections is turned off in the public demo."})
                 if path == "/api/demo/reset":
-                    app.reset_demo(seed_story=not d.get("empty"))
+                    self.app.reset_demo(seed_story=not d.get("empty"))
                     return self._send(200, {"ok": True})
             if path == "/api/agents":
                 name = (d.get("name") or "").strip()
                 if not name:
                     raise ValueError("Give your agent a name.")
-                daily = float(d.get("daily_budget", app.config.policy.get("default_daily_budget", 5)))
-                task = float(d.get("task_budget", app.config.policy.get("default_task_budget", 1)))
+                daily = float(d.get("daily_budget", self.app.config.policy.get("default_daily_budget", 5)))
+                task = float(d.get("task_budget", self.app.config.policy.get("default_task_budget", 1)))
                 if daily <= 0 or task <= 0:
                     raise ValueError("Budgets must be more than $0.")
                 aid = s.add_agent(name, daily, task, client_id=d.get("client_id") or None, use_wallet=bool(d.get("use_wallet")))
@@ -633,24 +774,24 @@ def make_handler(app):
             if len(parts) == 4 and parts[1] == "spend" and parts[3] in ("approve", "deny"):
                 try:
                     if parts[3] == "approve":
-                        return self._send(200, app.spend.approve(parts[2]))
-                    return self._send(200, app.spend.deny(parts[2], note=str(d.get("note", ""))))
+                        return self._send(200, self.app.spend.approve(parts[2]))
+                    return self._send(200, self.app.spend.deny(parts[2], note=str(d.get("note", ""))))
                 except SpendError as e:
                     return self._send(e.http, {"error": str(e)})
             if path == "/api/rules/compile":
                 key = os.environ.get("ANTHROPIC_API_KEY", "")
-                if key and app.public_demo:
+                if key and self.app.public_demo:
                     # Cap the owner's Claude spend from strangers: 30 translations an hour, then offline.
                     now = time.time()
-                    while app.claude_compiles and app.claude_compiles[0] < now - 3600:
-                        app.claude_compiles.popleft()
-                    if len(app.claude_compiles) >= 30:
+                    while self.app.claude_compiles and self.app.claude_compiles[0] < now - 3600:
+                        self.app.claude_compiles.popleft()
+                    if len(self.app.claude_compiles) >= 30:
                         key = ""
                     else:
-                        app.claude_compiles.append(now)
+                        self.app.claude_compiles.append(now)
                 try:
                     return self._send(200, compile_rules(d.get("text", ""), api_key=key,
-                                                         model=app.config.policy.get("rules_model", "claude-haiku-5-5")))
+                                                         model=self.app.config.policy.get("rules_model", "claude-haiku-5-5")))
                 except SpendError as e:
                     return self._send(e.http, {"error": str(e)})
             if path == "/api/merchants":
@@ -663,13 +804,17 @@ def make_handler(app):
                 m = s.add_merchant(name[:120], email[:200], (d.get("category") or "")[:60])
                 s.audit("merchant.saved", name[:120], {"paypal_email": email, "category": m["category"]})
                 return self._send(200, {"merchant": m})
+            if len(parts) == 5 and parts[1] == "agents" and parts[3] == "vault":
+                return self._vault_post(int(parts[2]), parts[4], d)
             if len(parts) == 4 and parts[1] == "agents" and parts[3] in ("rules", "kill"):
                 aid = int(parts[2])
                 if not s.agent(aid):
                     return self._send(404, {"error": "No such agent."})
                 try:
                     if parts[3] == "kill":
-                        return self._send(200, app.spend.kill(aid))
+                        out = self.app.spend.kill(aid)
+                        notify.emit(s, "agent.killed", dict(out, agent_id=aid, agent_name=s.agent(aid)["name"]))
+                        return self._send(200, out)
                     rules = validate_rules(d.get("rules") if isinstance(d.get("rules"), dict) else {})
                 except SpendError as e:
                     return self._send(e.http, {"error": str(e)})
@@ -700,17 +845,17 @@ def make_handler(app):
                     return self._send(404, {"error": "Unknown action"})
                 return self._send(200, {"agent": s.agent(aid)})
             if path == "/api/stop-all":
-                return self._send(200, dict(app.stop_all(), ok=True))
+                return self._send(200, dict(self.app.stop_all(), ok=True))
             if path.startswith("/api/outside/"):
                 return self._outside_post(parts[2] if len(parts) == 3 else "", d)
             if path == "/api/policy":
-                if app.public_demo and any(k != "mode" for k in d):
+                if self.app.public_demo and any(k != "mode" for k in d):
                     return self._send(403, {"error": "Changing the governor's settings is turned off in the public demo. Run your own copy to tune them."})
-                app.config.update_policy(d)
+                self.app.config.update_policy(d)
                 if "mode" in d and d["mode"] in ("home", "business"):
-                    app.config.data["mode"] = d["mode"]
-                app.save_config()
-                return self._send(200, {"policy": app.config.policy, "mode": app.config.data.get("mode")})
+                    self.app.config.data["mode"] = d["mode"]
+                self.app.save_config()
+                return self._send(200, {"policy": self.app.config.policy, "mode": self.app.config.data.get("mode")})
             if path == "/api/models":
                 name = (d.pop("name", "") or "").strip()
                 if not name:
@@ -721,70 +866,70 @@ def make_handler(app):
                         spec[k] = float(spec[k])
                 if "tier" in spec:
                     spec["tier"] = int(spec["tier"])
-                app.config.upsert_model(name, spec)
-                app.save_config()
-                return self._send(200, {"models": app.config.models})
+                self.app.config.upsert_model(name, spec)
+                self.app.save_config()
+                return self._send(200, {"models": self.app.config.models})
             if path == "/api/providers":
                 name = (d.get("name") or "").strip()
                 if not name or d.get("type") not in ("openai", "anthropic"):
                     raise ValueError("A provider needs a name and type 'openai' or 'anthropic'.")
                 if not key_env_ok(d.get("api_key_env", "")):
                     raise ValueError("The key setting must name an environment variable ending in _API_KEY (for example GROQ_API_KEY), or be empty.")
-                app.config.data["providers"][name] = {"type": d["type"], "base_url": d.get("base_url", ""),
+                self.app.config.data["providers"][name] = {"type": d["type"], "base_url": d.get("base_url", ""),
                                                       "api_key_env": d.get("api_key_env", "")}
-                app.engine.providers._cache.pop(name, None)
-                app.save_config()
-                return self._send(200, {"providers": app.config.public()["providers"]})
+                self.app.engine.providers._cache.pop(name, None)
+                self.app.save_config()
+                return self._send(200, {"providers": self.app.config.public()["providers"]})
             if path == "/api/tasks":
-                res = app.money.new_task(int(d["agent_id"]), d.get("label", ""), d.get("description", ""),
+                res = self.app.money.new_task(int(d["agent_id"]), d.get("label", ""), d.get("description", ""),
                                          budget=float(d["budget"]) if d.get("budget") else None, model=d.get("model"))
                 return self._send(200, res)
             if len(parts) == 4 and parts[1] == "tasks":
                 tid, action = parts[2], parts[3]
                 if action == "hold":
-                    return self._send(200, app.money.hold_start(tid))
+                    return self._send(200, self.app.money.hold_start(tid))
                 if action == "settle":
-                    return self._send(200, app.money.settle(tid))
+                    return self._send(200, self.app.money.settle(tid))
                 if action == "cancel":
-                    return self._send(200, app.money.cancel_hold(tid))
+                    return self._send(200, self.app.money.cancel_hold(tid))
                 if action == "done":
-                    return self._send(200, app.money.finish_without_charge(tid))
+                    return self._send(200, self.app.money.finish_without_charge(tid))
                 return self._send(404, {"error": "Unknown action"})
             if path == "/api/wallet/topup":
-                return self._send(200, app.money.topup_start(int(d["agent_id"]), float(d.get("amount", 10))))
+                return self._send(200, self.app.money.topup_start(int(d["agent_id"]), float(d.get("amount", 10))))
             if path == "/api/clients":
                 name = (d.get("name") or "").strip()
                 if not name:
                     raise ValueError("Client name is required.")
-                cid = s.add_client(name, d.get("email", ""), float(d.get("markup_percent", app.config.business.get("default_markup_percent", 0))))
+                cid = s.add_client(name, d.get("email", ""), float(d.get("markup_percent", self.app.config.business.get("default_markup_percent", 0))))
                 return self._send(200, {"client": s.client(cid)})
             if len(parts) == 4 and parts[1] == "clients" and parts[3] == "invoice":
                 cid = int(parts[2])
-                start, end = app.money.invoice_period(cid, float(d.get("days", 30)))
+                start, end = self.app.money.invoice_period(cid, float(d.get("days", 30)))
                 if d.get("preview"):
-                    p = app.money.invoice_preview(cid, start, end)
+                    p = self.app.money.invoice_preview(cid, start, end)
                     return self._send(200, p)
-                return self._send(200, app.money.invoice_client(cid, start, end, send=bool(d.get("send"))))
+                return self._send(200, self.app.money.invoice_client(cid, start, end, send=bool(d.get("send"))))
             if path == "/api/memory/clear":
                 s.memory_clear(int(d["agent_id"]) if d.get("agent_id") else None)
                 return self._send(200, {"ok": True})
             if path == "/api/demo":
                 if d.get("loop"):
-                    return self._send(200, run_loop_demo(app.engine))
-                return self._send(200, run_demo(app.engine))
+                    return self._send(200, run_loop_demo(self.app.engine))
+                return self._send(200, run_demo(self.app.engine))
             if path == "/api/try":
                 aid = int(d["agent_id"])
                 a = s.agent(aid)
                 if not a:
                     return self._send(404, {"error": "No such agent."})
-                model = d.get("model") or next(iter(app.config.models))
-                if app.public_demo and (app.config.providers.get((app.config.model(model) or {}).get("provider"), {}) or {}).get("type") != "simulator":
+                model = d.get("model") or next(iter(self.app.config.models))
+                if self.app.public_demo and (self.app.config.providers.get((self.app.config.model(model) or {}).get("provider"), {}) or {}).get("type") != "simulator":
                     return self._send(403, {"error": "This public demo runs on the built-in simulated models only."})
                 body = {"model": model, "messages": [{"role": "user", "content": str(d.get("prompt", ""))[:20000]}], "max_tokens": 600}
-                spec = app.config.model(model) or {}
-                prov = app.config.providers.get(spec.get("provider"), {})
+                spec = self.app.config.model(model) or {}
+                prov = self.app.config.providers.get(spec.get("provider"), {})
                 api = "anthropic" if prov.get("type") == "anthropic" else "openai"
-                status, resp, extra = app.engine.handle(api, body, a["key"], {})
+                status, resp, extra = self.app.engine.handle(api, body, a["key"], {})
                 if api == "anthropic":
                     text = "".join(b.get("text", "") for b in resp.get("content", []) if isinstance(b, dict))
                 else:
@@ -794,8 +939,27 @@ def make_handler(app):
                 return self._send(200, {"status": status, "text": text, "headers": extra})
             return self._send(404, {"error": "Unknown endpoint"})
 
+        def _vault_post(self, aid, action, d):
+            """PayPal on file: /api/agents/{id}/vault/connect | revoke | topup."""
+            if not self.app.store.agent(aid):
+                return self._send(404, {"error": "No such agent."})
+            try:
+                if action == "connect":
+                    return self._send(200, self.app.vault.connect_start(aid))
+                if action == "revoke":
+                    r = self.app.vault.revoke(aid, by="owner")
+                    if not r:
+                        return self._send(409, {"error": "This agent has no saved PayPal payment method to revoke.",
+                                                "paypal_on_file": self.app.vault.status(aid)})
+                    return self._send(200, dict(r, paypal_on_file=self.app.vault.status(aid)))
+                if action == "topup":
+                    return self._send(200, self.app.vault.topup(aid, d.get("amount", 10)))
+            except VaultError as e:
+                return self._send(e.http, {"error": str(e)})
+            return self._send(404, {"error": "Unknown action"})
+
         def _outside_post(self, action, d):
-            g = app.outside
+            g = self.app.outside
             if action == "check":
                 return self._send(200, g.check())
             if action == "disable":
@@ -805,11 +969,11 @@ def make_handler(app):
                 return self._send(200, g.status())
             if action == "settings":
                 g.update_settings(d)
-                if not app.public_demo:
-                    app.save_config()
+                if not self.app.public_demo:
+                    self.app.save_config()
                 return self._send(200, g.status())
             if action == "simulate":
-                if not app.public_demo:
+                if not self.app.public_demo:
                     return self._send(403, {"error": "The runaway simulation only runs in the public demo."})
                 amount = d.get("amount") or 25
                 if isinstance(amount, bool) or not isinstance(amount, (int, float, str)):
@@ -824,7 +988,7 @@ def make_handler(app):
             return self._send(404, {"error": "Unknown endpoint"})
 
         def _delete(self):
-            if app.public_demo and self._path()[0].startswith("/api/models/"):
+            if self.app.public_demo and self._path()[0].startswith("/api/models/"):
                 return self._send(403, {"error": "Changing models is turned off in the public demo."})
             path, _ = self._path()
             if not path.startswith("/api/"):
@@ -832,15 +996,20 @@ def make_handler(app):
             if not self._api_allowed(write=False):
                 return
             parts = path.strip("/").split("/")
-            if len(parts) == 3 and parts[1] == "agents":
-                app.store.delete_agent(int(parts[2]))
+            if path.startswith("/api/webhooks"):
+                return self._send(*self.app.notify.api("DELETE", path))
+            if len(parts) == 3 and parts[1] == "agents" and parts[2].isdigit():
+                aid = int(parts[2])
+                if self.app.store.agent(aid):
+                    self.app.vault.revoke(aid, by="agent deleted")  # never leave a chargeable token behind
+                self.app.store.delete_agent(aid)
                 return self._send(200, {"ok": True})
             if len(parts) == 3 and parts[1] == "models":
                 name = urllib.parse.unquote(parts[2])
-                if name in app.config.models:
-                    del app.config.data["models"][name]
-                    app.save_config()
-                return self._send(200, {"models": app.config.models})
+                if name in self.app.config.models:
+                    del self.app.config.data["models"][name]
+                    self.app.save_config()
+                return self._send(200, {"models": self.app.config.models})
             return self._send(404, {"error": "Unknown endpoint"})
 
     return Handler
@@ -850,6 +1019,9 @@ def build_app(config_path=None, db_path=None, providers=None, paypal=None):
     cfg = Config.load(config_path)
     db = db_path or os.environ.get("LOWTIDES_DB") or os.path.join(ROOT, "data", "lowtides.db")
     store = Store(db)
+    if os.environ.get("LOWTIDES_PUBLIC_DEMO", "").lower() in ("1", "true", "yes"):
+        # The shared demo (callers without a cookie) gets a hard size cap too, like each sandbox.
+        store.db.execute("PRAGMA max_page_count=%d" % (64 * 256))  # 64 MB of 4 KB pages
     save_to = config_path if (config_path and os.path.basename(config_path) != "config.example.json") else None
     return App(cfg, store, paypal=paypal, providers=providers, config_path=save_to)
 
@@ -872,6 +1044,7 @@ def serve(host=None, port=None):
     print("%s %s running at http://%s:%d  (dashboard + agent API)" % (APP_NAME, __version__, host, port))
     if app.public_demo:
         app.self_url = "http://127.0.0.1:%d" % port
+        app.sandboxes.start()
         print("PUBLIC DEMO: no password, PayPal sandbox only, simulated models only. Loading the demo story...")
         if not app.store.agents():
             threading.Thread(target=app.reset_demo, daemon=True).start()

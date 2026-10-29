@@ -66,6 +66,41 @@ class FakePayPalHandler(_Base):
                 st["idem"][rid] = (code, resp)
             return self._send(code, resp)
         p = self.path
+        if p == "/v3/vault/setup-tokens":
+            pp = (body.get("payment_source") or {}).get("paypal") or {}
+            ctx = pp.get("experience_context") or {}
+            if pp.get("usage_type") not in ("MERCHANT", "PLATFORM") or not ctx.get("return_url") or not ctx.get("cancel_url"):
+                return self._send(400, {"name": "INVALID_REQUEST", "message": "Request is not well-formed",
+                                        "details": [{"issue": "MISSING_REQUIRED_PARAMETER"}]})
+            sid = "SETUP" + uuid.uuid4().hex[:12].upper()
+            st["setup_tokens"][sid] = {"approved": False, "usage_type": pp["usage_type"], "return_url": ctx["return_url"]}
+            return remember(201, {"id": sid, "customer": {"id": "CUST" + uuid.uuid4().hex[:8].upper()},
+                                  "status": "PAYER_ACTION_REQUIRED", "payment_source": {"paypal": {}},
+                                  "links": [{"rel": "self", "href": "x"},
+                                            {"rel": "approve", "href": "https://www.sandbox.paypal.com/agreements/approve?approval_session_id=" + sid}]})
+        if p == "/v3/vault/payment-tokens":
+            src = (body.get("payment_source") or {}).get("token") or {}
+            stok = st["setup_tokens"].get(src.get("id"))
+            if src.get("type") != "SETUP_TOKEN" or not stok:
+                return self._send(404, {"name": "RESOURCE_NOT_FOUND", "details": [{"issue": "INVALID_RESOURCE_ID"}]})
+            if not stok["approved"]:
+                return self._send(422, {"name": "UNPROCESSABLE_ENTITY", "message": "The requested action could not be performed.",
+                                        "details": [{"issue": "SETUP_TOKEN_NOT_APPROVED"}], "debug_id": "dbg-vault"})
+            tid = "PTOK" + uuid.uuid4().hex[:10].upper()
+            st["payment_tokens"][tid] = {"setup": src["id"], "deleted": False, "email": st.get("payer_email", "buyer@example.com")}
+            return remember(200, {"id": tid, "customer": {"id": "CUSTFAKE"},
+                                  "payment_source": {"paypal": {"email_address": st["payment_tokens"][tid]["email"],
+                                                                "payer_id": "PAYERFAKE", "usage_type": stok["usage_type"]}}})
+        if p == "/v2/checkout/orders" and ((body.get("payment_source") or {}).get("paypal") or {}).get("vault_id"):
+            vid = body["payment_source"]["paypal"]["vault_id"]
+            t = st["payment_tokens"].get(vid)
+            if not t or t["deleted"]:
+                return self._send(422, {"name": "UNPROCESSABLE_ENTITY", "details": [{"issue": "PAYMENT_SOURCE_NOT_FOUND"}]})
+            oid = "ORD" + uuid.uuid4().hex[:12].upper()
+            amount = body["purchase_units"][0]["amount"]
+            st["orders"][oid] = {"id": oid, "intent": body["intent"], "amount": amount, "status": "COMPLETED", "vault_id": vid}
+            return remember(201, {"id": oid, "status": "COMPLETED", "purchase_units": [{"payments": {"captures": [
+                {"id": "CAP" + uuid.uuid4().hex[:10].upper(), "status": "COMPLETED", "amount": amount}]}}]})
         if p == "/v2/checkout/orders":
             oid = "ORD" + uuid.uuid4().hex[:12].upper()
             amount = body["purchase_units"][0]["amount"]
@@ -189,8 +224,32 @@ class FakePayPalHandler(_Base):
             return self._send(200, {"verification_status": "SUCCESS" if ok else "FAILURE"})
         return self._send(404, {"name": "NOT_FOUND", "path": p})
 
+    def do_DELETE(self):
+        st = self.server.state
+        st["requests"].append(("DELETE " + self.path, dict(self.headers.items()), {}))
+        if not self.headers.get("Authorization", "") == "Bearer A21-fake":
+            return self._send(401, {"name": "AUTHENTICATION_FAILURE"})
+        if self.path.startswith("/v3/vault/payment-tokens/"):
+            only = st.get("vault_delete_error_ids")  # fail only these token IDs, if set
+            if st.get("vault_delete_error") and st.get("vault_delete_error_times", 1000) > 0 \
+                    and (not only or self.path.split("/")[4] in only):
+                st["vault_delete_error_times"] = st.get("vault_delete_error_times", 1000) - 1
+                code, err = st["vault_delete_error"]
+                return self._send(code, dict(err, debug_id="dbg-" + uuid.uuid4().hex[:8]))
+            t = st["payment_tokens"].get(self.path.split("/")[4])
+            if not t or t["deleted"]:
+                return self._send(404, {"name": "RESOURCE_NOT_FOUND", "details": [{"issue": "INVALID_RESOURCE_ID"}]})
+            t["deleted"] = True
+            return self._send(204, {})
+        return self._send(404, {"name": "NOT_FOUND"})
+
     def do_GET(self):
         st = self.server.state
+        if self.path.startswith("/v3/vault/payment-tokens/"):
+            t = st["payment_tokens"].get(self.path.split("/")[4])
+            if not t or t["deleted"]:
+                return self._send(404, {"name": "RESOURCE_NOT_FOUND"})
+            return self._send(200, {"id": self.path.split("/")[4], "payment_source": {"paypal": {"email_address": t["email"]}}})
         if self.path.startswith("/v1/payments/payouts/"):
             bid = self.path.split("/")[4]
             po = st["payouts"].get(bid)
@@ -217,12 +276,18 @@ class FakePayPalHandler(_Base):
 
 def paypal_state():
     return {"requests": [], "idem": {}, "orders": {}, "auths": {}, "captures": {}, "invoices": {}, "sent": [], "partial_capture": True,
-            "payouts": {}, "payout_status": "UNCLAIMED", "batch_ids": set(), "pending_polls": 0, "payout_error": None}
+            "payouts": {}, "payout_status": "UNCLAIMED", "batch_ids": set(), "pending_polls": 0, "payout_error": None,
+            "setup_tokens": {}, "payment_tokens": {}, "vault_delete_error": None}
 
 
 def approve(state, order_id):
     """What the buyer does on PayPal's page."""
     state["orders"][order_id]["approved"] = True
+
+
+def approve_vault(state, setup_token_id):
+    """What the payer does on PayPal's 'save PayPal for later' page."""
+    state["setup_tokens"][setup_token_id]["approved"] = True
 
 
 # --------------------------------------------------------------------------

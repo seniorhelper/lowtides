@@ -8,6 +8,7 @@
   var SEEN_KEY = "lt_tour_seen";
   var STEP_MS = 5000;
   var TOTAL = 10;
+  var TRY_LABEL = "▶ Now you try: approve or deny the $45 dataset";
 
   // A giant scraped page, built in code: about `tokens` tokens of filler (4 chars each). Same as scenario.py.
   function dataDump(tokens) {
@@ -86,7 +87,10 @@
         }).then(function (res) {
           var a = must(res, "Creating the agent").agent;
           ctx.agent = a; ctx.key = a.key;
-          return call("POST", "/api/rules/compile", { text: RULES_TEXT });
+          // Give the agent PayPal on file (simulated in the public demo) so KILL can revoke it.
+          return call("POST", "/api/agents/" + a.id + "/vault/connect", {}).then(function () {
+            return call("POST", "/api/rules/compile", { text: RULES_TEXT });
+          });
         }).then(function (res) {
           var comp = must(res, "Reading the rules");
           ctx.plain = comp.plain || [];
@@ -170,16 +174,20 @@
         return next();
       } },
     { title: "The owner wakes up to the alert and hits KILL.",
-      tried: "One button: stop the agent, deny what's waiting, cancel what can still be cancelled.",
+      tried: "One button: stop the agent, deny what's waiting, cancel what can still be cancelled, and revoke its saved PayPal.",
       run: function (ctx) {
         return call("POST", "/api/agents/" + ctx.agent.id + "/kill").then(function (res) {
           var k = ctx.kill = must(res, "KILL");
           return call("POST", "/v1/spend", { amount: 5.00, merchant: "Acme Data", item: "one more thing", category: "data", reason: "please" }, ctx.key)
             .then(function (r2) {
               var after = spendResult(r2.body || {});
+              var pof = k.paypal_on_file || {};
+              var vault = pof.status === "revoked"
+                ? " Revoked the saved PayPal payment method" + (pof.simulated ? " (simulated)" : "") + ", so this agent can't be charged again until you reconnect it."
+                : (pof.status === "revoke_failed" ? " Revoking the saved PayPal payment method failed: " + (pof.error || "see the activity feed") + "." : "");
               return { verdict: "AGENT KILLED", tone: "bad",
                 why: n(k.denied, "waiting purchase") + " denied, " + n(k.payouts_cancelled, "payout") + " cancelled, " +
-                     n(k.holds_voided, "PayPal hold") + " voided. A $5 purchase tried after the kill: " + after.verdict.toLowerCase() + ". " + after.why };
+                     n(k.holds_voided, "PayPal hold") + " voided." + vault + " A $5 purchase tried after the kill: " + after.verdict.toLowerCase() + ". " + after.why };
             });
         });
       } },
@@ -226,7 +234,12 @@
     var ticker = el("p", "tour-ticker");
     var verdict = el("p", "tour-verdict");
     var why = el("p", "tour-why");
-    [count, title, tried, ticker, verdict, why].forEach(function (x) { card.appendChild(x); });
+    var next = el("ol", "tour-next");
+    next.hidden = true;
+    ["Approve or deny the held $45 dataset. The $19 “verification fee” asks you twice: it looks like prompt injection.",
+     "On Home, the loop guard paused the agent. Press Resume, then ask it something in the Try box: every call is checked against its budget.",
+     "Press KILL yourself: waiting purchases are denied, the payout is pulled back and its saved PayPal is revoked."].forEach(function (t) { next.appendChild(el("li", null, t)); });
+    [count, title, tried, ticker, verdict, why, next].forEach(function (x) { card.appendChild(x); });
 
     var live = el("p", "tour-sr");
     live.setAttribute("aria-live", "polite");
@@ -239,8 +252,9 @@
     var pause = el("button", "btn tour-btn", "Pause"); pause.type = "button";
     var skip = el("button", "btn tour-btn", "Skip step"); skip.type = "button";
     var close = el("button", "btn tour-btn tour-close", "Close"); close.type = "button";
+    var go = el("button", "btn tour-btn tour-primary tour-try", TRY_LABEL); go.type = "button"; go.hidden = true;
     pause.setAttribute("aria-pressed", "false");
-    bar.appendChild(pause); bar.appendChild(skip); bar.appendChild(close);
+    bar.appendChild(go); bar.appendChild(pause); bar.appendChild(skip); bar.appendChild(close);
 
     [head, dots, card, live, log, bar].forEach(function (x) { dlg.appendChild(x); });
     ov.appendChild(dlg);
@@ -249,12 +263,13 @@
     pause.addEventListener("click", function () { if (run) setPaused(!run.paused); });
     skip.addEventListener("click", function () { if (run && run.wake) run.wake(); });
     close.addEventListener("click", function () { closeTour(); });
+    go.addEventListener("click", tryIt);
     ov.addEventListener("mousedown", function (ev) { if (ev.target === ov) ev.preventDefault(); });
     // On document, not the dialog: a click on plain text inside it drops focus to <body>.
     document.addEventListener("keydown", onKey);
 
     D = { ov: ov, dlg: dlg, dots: dots, count: count, title: title, tried: tried, ticker: ticker,
-          verdict: verdict, why: why, live: live, log: log, pause: pause, skip: skip, close: close };
+          verdict: verdict, why: why, next: next, live: live, log: log, pause: pause, skip: skip, close: close, tryIt: go };
   }
 
   function onKey(ev) {
@@ -322,24 +337,44 @@
   function finish(ctx) {
     var lis = D.dots.children;
     for (var k = 0; k < lis.length; k++) lis[k].className = "done";
-    D.count.textContent = "Done";
+    D.count.textContent = "Done. Your turn";
     D.title.textContent = "One runaway night, stopped at every turn.";
     var k = ctx.kill || {};
     D.tried.textContent = "The $12 data purchase was approved by the rules. The injected $19 and the $45 waited for a person, " +
       "the $480 was blocked, the leash refused the data dump and the loop was cut off. Then KILL denied " + n(k.denied || 0, "waiting purchase") +
-      (k.payouts_cancelled ? " and pulled back " + n(k.payouts_cancelled, "payout") + " PayPal hadn't delivered yet, including the $12" : "") + ".";
+      (k.payouts_cancelled ? " and pulled back " + n(k.payouts_cancelled, "payout") + " PayPal hadn't delivered yet, including the $12" : "") +
+      (k.tokens_revoked ? ", and revoked the agent's saved PayPal payment method" : "") + ".";
     D.ticker.textContent = "";
-    D.verdict.textContent = "Now look at the dashboard";
+    D.verdict.textContent = "NOW YOU TRY";
     D.verdict.className = "tour-verdict ok";
-    D.why.textContent = "“" + ((ctx.agent && ctx.agent.name) || "Night-shift research agent") + "” and every decision are in the activity feed and audit log.";
-    D.live.textContent = "Replay finished. " + D.tried.textContent;
+    D.why.textContent = "We'll load the same night again, stopped just before the KILL, so it's your call:";
+    D.next.hidden = false;
+    D.live.textContent = "Replay finished. " + D.tried.textContent + " Now you try: " + Array.prototype.map.call(D.next.children, function (li) { return li.textContent; }).join(" ");
     D.pause.hidden = true;
     D.skip.hidden = true;
-    D.close.textContent = "See the dashboard";
-    D.close.classList.add("tour-primary");
-    D.close.focus();
+    D.tryIt.hidden = false;
+    D.log.hidden = true;  // the steps are summed up above; make room for what to do next
+    D.close.textContent = "Just look around";
+    D.tryIt.focus();
     run.finished = true;
-    return wait(6000).then(function () { if (run && !run.stopped) closeTour(); });
+    return null;  // no auto-close: the judge picks what to do next
+  }
+
+  // Re-seed the story (two purchases held, agent still running) and land on Approvals.
+  function tryIt() {
+    var b = D.tryIt;
+    b.disabled = true;
+    b.textContent = "Loading the story…";
+    call("POST", "/api/demo/reset", {}).then(function (res) {
+      must(res, "Loading the story");
+      if (run) { run.stopped = true; if (run.wake) run.wake(); }
+      location.hash = "#approvals?try=1";
+      location.reload();
+    }).catch(function (e) {
+      b.disabled = false;
+      b.textContent = TRY_LABEL;
+      D.why.textContent = "Couldn't load the story: " + String((e && e.message) || e) + " Use Reset demo on the banner instead.";
+    });
   }
 
   function fail(err) {
@@ -354,12 +389,12 @@
   function openTour() {
     if (run) return;
     markSeen();
-    hidePill();
     lastFocus = document.activeElement;
     if (!D) build();
     D.log.textContent = "";
     D.pause.hidden = false; D.skip.hidden = false;
-    D.close.textContent = "Close"; D.close.classList.remove("tour-primary");
+    D.close.textContent = "Close";
+    D.tryIt.hidden = true; D.tryIt.disabled = false; D.tryIt.textContent = TRY_LABEL; D.next.hidden = true; D.log.hidden = false;
     D.ov.hidden = false;
     document.documentElement.classList.add("tour-open");
     run = { paused: false, stopped: false, wake: null, started: false };
@@ -406,25 +441,8 @@
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
 
-  // ---------- entry points ----------
-  var pill = null;
-  function hidePill() { if (pill) { pill.remove(); pill = null; } }
-  function offer() {
-    if (seen() || pill) return;
-    if (document.documentElement.classList.contains("lt-splashing")) return void setTimeout(offer, 400);
-    pill = el("div", "tour-pill");
-    pill.setAttribute("role", "status");
-    var go = el("button", "tour-pill-go", "▶ New here? Watch the 1-minute replay");
-    go.type = "button";
-    var x = el("button", "tour-pill-x", "×");
-    x.type = "button";
-    x.setAttribute("aria-label", "Dismiss the replay offer");
-    go.addEventListener("click", openTour);
-    x.addEventListener("click", function () { markSeen(); hidePill(); });
-    pill.appendChild(go); pill.appendChild(x);
-    document.body.appendChild(pill);
-  }
-
+  // ---------- entry point ----------
+  // One clear way in: the red button on the demo banner. (The old floating pill is gone: it covered content.)
   function addCta(banner) {
     if ($("tour-cta")) return;
     var b = el("button", "btn tour-cta", "▶ Watch a runaway agent get stopped");
@@ -433,7 +451,7 @@
     b.addEventListener("click", openTour);
     banner.classList.add("has-tour");
     banner.insertBefore(b, banner.firstChild);
-    setTimeout(offer, 1200);
+    if (!seen()) b.classList.add("tour-cta-new");  // first visit: a gentle pulse, never an overlay
   }
 
   function whenBanner(cb) {
