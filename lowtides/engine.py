@@ -198,6 +198,10 @@ class Engine:
         if not req_spec:
             msg = "Model '%s' is not in your Lowtides price list. Add it on the Models screen so its cost can be tracked." % requested
             return 400, blocked_body(api, msg, "unknown_model"), {}
+        if getattr(self, "sim_only", False) and (self.config.providers.get(req_spec.get("provider"), {}) or {}).get("type") != "simulator":
+            # Public demo: strangers must never reach a paid model, whatever route they come in by.
+            return 403, blocked_body(api, "This public demo runs on the built-in simulated models only. "
+                                          "Run your own copy to use real models.", "public_demo"), {}
 
         try:
             task = self._task_for(agent, headers)

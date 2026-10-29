@@ -2,6 +2,8 @@
 import os
 import threading
 import unittest
+import urllib.error
+import urllib.request
 from http.server import ThreadingHTTPServer
 
 import fakes
@@ -53,6 +55,35 @@ class TestPublicDemo(unittest.TestCase):
         s, r, _ = http("POST", self.url + "/v1/chat/completions",
                        {"model": "sim-small", "messages": [{"role": "user", "content": "hi"}]}, {"Authorization": "Bearer " + key})
         self.assertEqual(s, 200)
+
+    def test_try_box_and_engine_refuse_paid_models(self):
+        s, r, _ = http("POST", self.url + "/api/agents", {"name": "Tryer"})
+        aid, key = r["agent"]["id"], r["agent"]["key"]
+        s, r, _ = http("POST", self.url + "/api/try", {"agent_id": aid, "model": "claude-opus-5-5", "prompt": "hi"})
+        self.assertEqual(s, 403)
+        # Even a route that reaches the engine directly can't get past it.
+        status, resp, _ = self.app.engine.handle("anthropic", {"model": "claude-opus-5-5", "max_tokens": 5,
+                                                              "messages": [{"role": "user", "content": "hi"}]}, key, {})
+        self.assertEqual(status, 403)
+        s, r, _ = http("POST", self.url + "/api/try", {"agent_id": aid, "model": "sim-large", "prompt": "hi"})
+        self.assertEqual((s, r["status"]), (200, 200))
+
+    def test_visitors_cannot_change_the_governor(self):
+        s, r, _ = http("POST", self.url + "/api/policy", {"loop_max_repeats": "x"})
+        self.assertEqual(s, 403)
+        s, r, _ = http("POST", self.url + "/api/policy", {"mode": "business"})
+        self.assertEqual(s, 200)
+        http("POST", self.url + "/api/policy", {"mode": "home"})
+
+    def test_reset_restores_policy_and_body_cap(self):
+        self.app.config.data["policy"]["loop_max_repeats"] = 999
+        self.app.reset_demo(seed_story=False)
+        self.assertNotEqual(self.app.config.policy.get("loop_max_repeats"), 999)
+        req = urllib.request.Request(self.url + "/api/agents", data=b"{" + b" " * (1200 * 1024) + b"}", method="POST",
+                                     headers={"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertIn(cm.exception.code, (400, 413))
 
     def test_connections_locked(self):
         s, _, _ = http("POST", self.url + "/api/providers", {"name": "x", "base_url": "https://evil.example", "api_key_env": "X_API_KEY"})
