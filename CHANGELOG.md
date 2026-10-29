@@ -2,7 +2,20 @@
 
 Everything changed during the PayPal AI Hackathon (submission period started Oct 1, 2026). The untouched v1.0 is the first commit, so `git log` shows each change on top of it.
 
+## 2026-10-29 (b)
+- **PayPal on file, revoked by the kill switch** (new `lowtides/vault.py`): each agent can have a saved PayPal payment method, a **PayPal Vault v3** payment token (setup token with `usage_type` MERCHANT, approved by the payer, then turned into a payment token).
+  - **KILL and STOP ALL now revoke it at PayPal** (`DELETE /v3/vault/payment-tokens/{id}`), so Lowtides can't charge that saved PayPal again until the owner reconnects it. The kill result, the activity feed and the audit log all say so: "Revoked the saved PayPal payment method, so this agent can't be charged again until you reconnect it."
+  - **Honest failures:** if PayPal refuses the revoke, the token is marked `revoke_failed`, the kill result lists it under problems, and the agent's purchases stay blocked. A PayPal server error is retried once; the next KILL or the Revoke button tries again.
+  - **Purchases refused after a revoke:** once an agent has had PayPal on file, `POST /v1/spend` is denied (and approving a held purchase is refused) until you reconnect it.
+  - **Top up from PayPal on file:** wallet top-ups charged straight to the saved token with Orders v2 `payment_source.paypal.vault_id`, no checkout page.
+  - New routes: `POST /api/agents/{id}/vault/connect|revoke|topup`, `GET /api/agents/{id}/vault`, and `/paypal/return?kind=vault`.
+  - Simulated, and labeled "simulated", without PayPal keys and in the public demo. The demo story and the guided tour connect a simulated token, so KILL visibly revokes it.
+- **Dashboard:** a "PayPal on file" panel on the Wallet tab (connected / revoked, Connect, Revoke, top up), the status on each agent card, and the kill dialog and summary mention the revoke.
+- New `vault_tokens` table, created on start for existing databases too.
+- **Tests:** 21 new tests (fake PayPal now speaks the Vault v3 endpoints): connect, return URL, revoke on KILL and on STOP ALL, purchases denied after a revoke, failed and retried revokes, simulated mode, demo seed, old databases.
+
 ## 2026-10-29
+- **A private demo for every visitor** (public demo only, new `lowtides/sandbox.py`): each browser gets a signed `lt_demo` cookie (HttpOnly, SameSite=Lax, Secure over https) and its own in-memory sandbox, seeded with the runaway-agent story. STOP ALL, KILL, Reset, "simulate runaway" and the guided replay now affect only the caller; agent calls find their sandbox by agent key. Bounded: 200 sandboxes (least recently used evicted), 2 hours idle expiry, 8 MB per sandbox database and 160 MB for all of them, 30 new sandboxes per IP per hour (after that, the shared demo), and per-IP rate limits on POSTs (20/s, bursts of 80) with a friendly 429. Callers without a cookie (curl, the scenario CLI) keep the shared demo. Self-hosted mode is unchanged.
 - **Burst-proof spending limits:** purchase decisions are now made one at a time (decide and record under one lock), so 20 simultaneous requests can no longer each read the same "spent so far" total and overspend a daily limit. New test fires 20 purchases at the same instant.
 - **Startup screen:** a 2-second branded intro on the first visit of a session (skippable, respects reduced motion), shown while the dashboard loads underneath.
 - **Product page** at `/why/`: the problem, how it works, the PayPal APIs used, who it's for, and an FAQ.

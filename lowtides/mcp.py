@@ -216,6 +216,7 @@ def _tool_get_budget(args):
     return _format_budget(_call_api("GET", "/v1/budget"))
 
 
+
 HANDLERS = {"request_spend": _tool_request_spend, "check_spend": _tool_check_spend, "get_budget": _tool_get_budget}
 
 

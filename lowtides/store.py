@@ -158,6 +158,23 @@ CREATE TABLE IF NOT EXISTS merchants (
   category TEXT DEFAULT '',
   created REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS vault_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent_id INTEGER NOT NULL,
+  setup_token_id TEXT,
+  token_id TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  simulated INTEGER NOT NULL DEFAULT 0,
+  payer_email TEXT DEFAULT '',
+  customer_id TEXT DEFAULT '',
+  env TEXT DEFAULT '',
+  created REAL NOT NULL,
+  connected_ts REAL,
+  revoked_ts REAL,
+  revoked_by TEXT DEFAULT '',
+  note TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS vault_agent ON vault_tokens(agent_id, id);
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -511,6 +528,47 @@ class Store:
                  "ON CONFLICT(name) DO UPDATE SET paypal_email=excluded.paypal_email, category=excluded.category",
                  (name.strip(), paypal_email.strip(), category.strip().lower(), time.time()))
         return self.merchant(name)
+
+    # ---- PayPal on file (Vault v3 payment tokens, one current record per agent) ----------------
+    VAULT_FIELDS = {"setup_token_id", "token_id", "status", "simulated", "payer_email", "customer_id", "env",
+                    "connected_ts", "revoked_ts", "revoked_by", "note"}
+
+    def add_vault(self, agent_id, **fields):
+        fields = {k: v for k, v in fields.items() if k in self.VAULT_FIELDS}
+        fields.update(agent_id=agent_id, created=time.time())
+        cols = ",".join(fields)
+        return self.run("INSERT INTO vault_tokens(" + cols + ") VALUES(" + ",".join("?" for _ in fields) + ")",
+                        tuple(fields.values()))
+
+    def update_vault(self, vid, **fields):
+        fields = {k: v for k, v in fields.items() if k in self.VAULT_FIELDS}
+        if fields:
+            self.run("UPDATE vault_tokens SET " + ",".join(k + "=?" for k in fields) + " WHERE id=?",
+                     tuple(fields.values()) + (vid,))
+        return self.vault_row(vid)
+
+    @staticmethod
+    def _vault(r):
+        if r:
+            r["simulated"] = bool(r.get("simulated"))
+        return r
+
+    def vault_row(self, vid):
+        return self._vault(self.one("SELECT * FROM vault_tokens WHERE id=?", (vid,)))
+
+    def vault_current(self, agent_id):
+        """The agent's latest PayPal-on-file record (active, revoked or revoke_failed),
+        ignoring connects that were started but never finished or that PayPal refused."""
+        r = self.one("SELECT * FROM vault_tokens WHERE agent_id=? AND status NOT IN ('pending','failed') "
+                     "ORDER BY id DESC LIMIT 1", (agent_id,))
+        return self._vault(r)
+
+    def vault_pending(self, agent_id=None, setup_token_id=None):
+        if setup_token_id:
+            return self._vault(self.one("SELECT * FROM vault_tokens WHERE setup_token_id=? ORDER BY id DESC LIMIT 1",
+                                        (setup_token_id,)))
+        return self._vault(self.one("SELECT * FROM vault_tokens WHERE agent_id=? AND status='pending' ORDER BY id DESC LIMIT 1",
+                                    (agent_id,)))
 
     # ---- tamper-evident audit log ----------------------------------------------------------
     @staticmethod

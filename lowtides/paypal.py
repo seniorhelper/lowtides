@@ -1,8 +1,10 @@
 """PayPal REST client (sandbox by default).
 
-Used for three money flows:
+Used for these money flows:
   * Wallet top-ups       Orders API, intent CAPTURE
   * Quote & hold tasks   Orders API, intent AUTHORIZE, then capture only the real cost and void the rest
+  * Agent purchases      Payouts API
+  * PayPal on file       Vault v3 payment tokens per agent; the kill switch deletes them
   * Client invoices      Invoicing API v2 (business side)
 plus webhook signature verification.
 
@@ -265,6 +267,55 @@ class PayPal:
         if err:
             why = ("%s: %s" % (err.get("name", ""), err.get("message", ""))).strip(": ")
         return it.get("payout_item_id"), it.get("transaction_status", ""), why
+
+    # ---- vault v3 (saved PayPal for an agent) -----------------------------------------
+    def create_setup_token(self, return_url, cancel_url, description, request_id=None):
+        """Step 1 of saving a payer's PayPal (POST /v3/vault/setup-tokens). The reply's
+        'approve' link sends the payer to PayPal to agree to let this merchant charge them
+        later without them present (usage_type MERCHANT)."""
+        body = {"payment_source": {"paypal": {
+            "description": description[:127],
+            "usage_type": "MERCHANT",
+            "usage_pattern": "IMMEDIATE",
+            "customer_type": "CONSUMER",
+            "permit_multiple_payment_tokens": False,
+            "experience_context": {"return_url": return_url, "cancel_url": cancel_url, "brand_name": "Lowtides",
+                                   "shipping_preference": "NO_SHIPPING"},
+        }}}
+        return self._call("POST", "/v3/vault/setup-tokens", body, request_id=request_id)
+
+    def get_setup_token(self, setup_token_id):
+        return self._call("GET", "/v3/vault/setup-tokens/" + urllib.parse.quote(setup_token_id))
+
+    def create_payment_token(self, setup_token_id):
+        """Step 2, after the payer approved: turn the setup token into a saved payment token
+        (POST /v3/vault/payment-tokens). Same setup token = same request id, so a double
+        return from PayPal can't save two tokens."""
+        body = {"payment_source": {"token": {"id": setup_token_id, "type": "SETUP_TOKEN"}}}
+        return self._call("POST", "/v3/vault/payment-tokens", body, request_id="vault-" + setup_token_id)
+
+    def get_payment_token(self, token_id):
+        return self._call("GET", "/v3/vault/payment-tokens/" + urllib.parse.quote(token_id))
+
+    def delete_payment_token(self, token_id):
+        """Revoke the saved PayPal (DELETE /v3/vault/payment-tokens/{id}, 204). After this
+        nobody can charge it, including anyone holding the token ID."""
+        return self._call("DELETE", "/v3/vault/payment-tokens/" + urllib.parse.quote(token_id))
+
+    @staticmethod
+    def payer_email(token):
+        return ((token.get("payment_source") or {}).get("paypal") or {}).get("email_address", "")
+
+    def charge_vaulted(self, vault_id, amount, description, custom_id, request_id):
+        """Charge a saved PayPal with no payer present: Orders v2, intent CAPTURE,
+        payment_source.paypal.vault_id. PayPal completes it in one call (no approve step)."""
+        body = {
+            "intent": "CAPTURE",
+            "purchase_units": [{"amount": {"currency_code": self.currency, "value": cents(amount)},
+                                "description": description[:127], "custom_id": str(custom_id)[:127]}],
+            "payment_source": {"paypal": {"vault_id": vault_id}},
+        }
+        return self._call("POST", "/v2/checkout/orders", body, request_id=request_id)
 
     # ---- invoices ----------------------------------------------------------------
     def create_invoice(self, recipient_email, items, note, memo="", request_id=None):

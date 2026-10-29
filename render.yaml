@@ -19,6 +19,13 @@ services:
       # a "Reset demo" button. Remove this line to run your own private, password-protected copy.
       - key: LOWTIDES_PUBLIC_DEMO
         value: "1"
+      # The base of "Approve or deny" links.
+      # Request headers never choose it.
+      # Signs each visitor's demo cookie, so cookies stay valid across restarts.
+      - key: LOWTIDES_DEMO_SECRET
+        generateValue: true
+      - key: LOWTIDES_PUBLIC_URL
+        value: https://lowtides.ai
       - key: LOWTIDES_DB
         value: /tmp/lowtides.db
       - key: LOWTIDES_CONFIG

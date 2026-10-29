@@ -207,7 +207,7 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></div><h3>Loop guard</h3><p>Pauses an agent repeating itself before it burns more money.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 8v5M12 16h.01"/></svg></div><h3>Prompt-injection hold</h3><p>New payees and instruction-like text wait for a person.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h5"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div><h3>Burst-proof limits</h3><p>Simultaneous requests are decided one at a time, so a burst can't overspend.</p></div>
-      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg></div><h3>Real kill switch</h3><p>Stops agents and pulls back money that hasn't landed yet.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg></div><h3>Real kill switch</h3><p>Stops agents, pulls back money that hasn't landed yet and revokes their saved PayPal.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></div><h3>One-tap approvals</h3><p>Small, known, in-budget buys go through. Only the risky ones wait.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></div><h3>Tamper-evident log</h3><p>A hash-chained audit trail and a dispute evidence pack per purchase.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Receipt in dollars</h3><p>"Would have cost $X. You paid $Y." Honest, strict math.</p></div>
@@ -226,6 +226,7 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
         <tr><td><code>Orders v2</code> authorize, capture, void</td><td>Quote and hold: PayPal holds the quote, Lowtides captures only the real cost and releases the rest. STOP voids open holds.</td></tr>
         <tr><td><code>Payouts</code></td><td>Pays merchants for approved agent purchases. The kill switch cancels payouts that haven't been claimed.</td></tr>
         <tr><td><code>Invoicing v2</code></td><td>Agencies bill clients for the AI their agents ran, with the savings receipt in the memo.</td></tr>
+        <tr><td><code>Vault v3</code></td><td>PayPal on file for each agent. KILL and STOP ALL delete the saved payment token at PayPal, so it can't be charged again until you reconnect it (simulated in the public demo).</td></tr>
         <tr><td><code>Webhooks</code></td><td>Signature-verified events credit top-ups and reversals exactly once.</td></tr>
         <tr><td>Agent Toolkit</td><td>Lowtides can guard the PayPal Agent Toolkit, checking each tool call against your rules first.</td></tr>
       </tbody>

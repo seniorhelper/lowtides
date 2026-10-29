@@ -6,7 +6,8 @@
 - One combined daily budget covering AI model costs and agent purchases.
 - Spending rules typed in plain English ("Max $100 a day. Ask me over $25. Never buy gift cards or crypto."). Claude turns them into strict, validated rules that a person reviews. The AI never decides a payment; code does.
 - Purchases over the auto-approve line, new payees, possible prompt injection, duplicate charges and unusual amounts wait for a person (one-tap Approve/Deny).
-- STOP ALL / KILL: stops agents, denies pending purchases, voids open PayPal authorization holds and cancels unclaimed PayPal payouts.
+- STOP ALL / KILL: stops agents, denies pending purchases, voids open PayPal authorization holds, cancels unclaimed PayPal payouts and revokes the agent's saved PayPal payment method (Vault v3; simulated in the public demo).
+- Alerts: signed outbound webhooks (Zapier, Slack, phone) for approvals and stops. OpenAPI 3.1 spec at /openapi.json.
 - Runaway-loop detection, per-call cost caps, prompt-size limits and a per-agent reply cap.
 - Simultaneous purchase requests are decided one at a time, so a burst can't overspend a limit.
 - Hash-chained, tamper-evident audit log and a per-purchase dispute evidence pack.
@@ -16,6 +17,7 @@
 - Orders v2: prepaid wallet top-ups (capture) and quote-and-hold jobs (authorize, then capture the real cost or void).
 - Payouts: pay merchants for approved agent purchases; cancel unclaimed payouts from the kill switch.
 - Invoicing v2: bill clients for their agents' AI usage.
+- Vault v3 payment tokens: PayPal on file per agent; KILL and STOP ALL delete the token at PayPal.
 - Webhooks with signature verification; PayPal-Request-Id on every write so retries never double-charge.
 - Works alongside the PayPal Agent Toolkit as a guard in front of its tools.
 
