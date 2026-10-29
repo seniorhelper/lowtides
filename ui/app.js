@@ -1063,8 +1063,62 @@
     var h = plain && plain.length ? plain : humanRules(r);
     return h.length ? h.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") : '<li class="muted">No purchase rules set yet.</li>';
   }
+  var currentRules = {};
+  var LEASH_KEYS = ["max_reply_tokens", "max_input_tokens", "max_cost_per_call", "dump_alert_multiple"];
+  function fillLeash(r) {
+    r = r || {};
+    var sel = $("leash-reply"), cu = $("leash-reply-custom"), n = r.max_reply_tokens;
+    if (n == null) { sel.value = ""; cu.value = ""; }
+    else if (n === 400 || n === 1000 || n === 4000) { sel.value = String(n); cu.value = ""; }
+    else { sel.value = "custom"; cu.value = n; }
+    cu.hidden = sel.value !== "custom";
+    $("leash-pages").value = r.max_input_tokens != null ? Math.round(r.max_input_tokens / 500 * 100) / 100 : "";
+    $("leash-cost").value = r.max_cost_per_call != null ? r.max_cost_per_call : "";
+    $("leash-alert").value = r.dump_alert_multiple != null ? r.dump_alert_multiple : 5;
+  }
+  function numOrNull(id) {
+    var v = $(id).value.trim();
+    if (v === "") return null;
+    var n = Number(v);
+    return isFinite(n) && n >= 0 ? n : NaN;
+  }
+  function readLeash() {
+    var out = {}, sel = $("leash-reply").value, n;
+    if (sel === "") out.max_reply_tokens = null;
+    else { n = sel === "custom" ? numOrNull("leash-reply-custom") : Number(sel); if (n == null || isNaN(n) || n < 1) return { error: "Type how many tokens a reply may use.", focus: "leash-reply-custom" }; out.max_reply_tokens = Math.round(n); }
+    n = numOrNull("leash-pages");
+    if (n !== null && isNaN(n)) return { error: "Pages must be a number, or blank for no limit.", focus: "leash-pages" };
+    out.max_input_tokens = n === null || n === 0 ? null : Math.round(n * 500);
+    n = numOrNull("leash-cost");
+    if (n !== null && isNaN(n)) return { error: "Cost must be a dollar amount, or blank for no limit.", focus: "leash-cost" };
+    out.max_cost_per_call = n === null || n === 0 ? null : n;
+    n = numOrNull("leash-alert");
+    if (isNaN(n)) return { error: "The alert multiple must be a number. Use 0 to turn it off.", focus: "leash-alert" };
+    out.dump_alert_multiple = n === null ? 5 : n;
+    return { rules: out };
+  }
+  $("leash-reply").addEventListener("change", function () {
+    var cu = $("leash-reply-custom"); cu.hidden = this.value !== "custom";
+    if (!cu.hidden) cu.focus();
+  });
+  $("leash-save").addEventListener("click", function () {
+    if (!rulesAgent) return;
+    var l = readLeash();
+    if (l.error) { flash(l.error, true); $(l.focus).focus(); return; }
+    var merged = {}, b = this;
+    Object.keys(currentRules).forEach(function (k) { merged[k] = currentRules[k]; });
+    Object.keys(l.rules).forEach(function (k) { if (l.rules[k] == null) delete merged[k]; else merged[k] = l.rules[k]; });
+    b.disabled = true;
+    api("POST", "/api/agents/" + rulesAgent.id + "/rules", { rules: merged }).then(function (r) {
+      currentRules = (r && r.rules) || merged;
+      fillLeash(currentRules);
+      $("rules-now").innerHTML = ruleItems(currentRules, r && r.plain);
+      flash("Leash saved for " + rulesAgent.name + ".");
+    }).catch(fail).then(function () { b.disabled = false; });
+  });
   function openRules(a, from) {
     rulesAgent = a; draftRules = null; rulesReturn = from || null;
+    currentRules = {}; fillLeash({});
     $("rules-h").textContent = "Rules for " + a.name;
     $("rules-preview").hidden = true;
     $("rules-text").value = "";
@@ -1073,7 +1127,9 @@
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
     $("rules-text").focus();
     api("GET", "/api/agents/" + a.id + "/rules").then(function (r) {
-      $("rules-now").innerHTML = ruleItems((r && r.rules) || {}, r && r.plain);
+      currentRules = (r && r.rules) || {};
+      fillLeash(currentRules);
+      $("rules-now").innerHTML = ruleItems(currentRules, r && r.plain);
     }).catch(function (e) {
       if (e && e.status === 404) {
         FEAT.rules = false; if (dlg.open) dlg.close(); applyFeatures();
@@ -1107,8 +1163,10 @@
   $("rules-save").addEventListener("click", function () {
     if (!rulesAgent || !draftRules) return;
     var b = this; b.disabled = true;
+    LEASH_KEYS.forEach(function (k) { if (!(k in draftRules) && currentRules[k] != null) draftRules[k] = currentRules[k]; });
     api("POST", "/api/agents/" + rulesAgent.id + "/rules", { rules: draftRules }).then(function (r) {
-      $("rules-now").innerHTML = ruleItems((r && r.rules) || draftRules, r && r.plain);
+      currentRules = (r && r.rules) || draftRules;
+      $("rules-now").innerHTML = ruleItems(currentRules, r && r.plain);
       $("rules-preview").hidden = true;
       $("rules-text").value = "";
       flash("Rules saved for " + rulesAgent.name + ".");

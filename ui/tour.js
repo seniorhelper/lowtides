@@ -3,10 +3,22 @@
 (function () {
   "use strict";
 
-  var RULES_TEXT = "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto.";
+  var RULES_TEXT = "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto. " +
+    "Keep replies short. Never send more than 50 pages. No single AI call over 25 cents.";
   var SEEN_KEY = "lt_tour_seen";
   var STEP_MS = 5000;
-  var TOTAL = 9;
+  var TOTAL = 10;
+
+  // A giant scraped page, built in code: about `tokens` tokens of filler (4 chars each). Same as scenario.py.
+  function dataDump(tokens) {
+    var out = [], len = 0, i = 0;
+    while (len < tokens * 4) {
+      var id = String(i % 10000); while (id.length < 4) id = "0" + id;
+      var line = "Vendor listing: tide gauge, model TG-" + id + ", price on request, see page footer. ";
+      out.push(line); len += line.length; i++;
+    }
+    return "Scraped page dump, everything on the site:\n" + out.join("");
+  }
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -55,6 +67,12 @@
     return call("POST", "/v1/spend", body, ctx.key).then(function (res) { return spendResult(must(res, "Purchase request")); });
   }
 
+  // The leash lines the data-dump step leans on, so the judge sees them up front.
+  function leashLine(plain) {
+    var l = plain.filter(function (x) { return /prompts over|AI call/i.test(x); });
+    return l.length ? " Leash: " + l.join(" ") : "";
+  }
+
   var STEPS = [
     { title: "The owner writes the spending rules in plain English.",
       tried: "“" + RULES_TEXT + "”",
@@ -75,7 +93,7 @@
           return call("POST", "/api/agents/" + ctx.agent.id + "/rules", { rules: comp.rules }).then(function (r2) {
             must(r2, "Saving the rules");
             return { verdict: "RULES SAVED", tone: "ok",
-              why: "Lowtides turned that into " + ctx.plain.length + " enforced rules: " + ctx.plain.slice(0, 3).join(" ") };
+              why: "Lowtides turned that into " + ctx.plain.length + " enforced rules: " + ctx.plain.slice(0, 3).join(" ") + leashLine(ctx.plain) };
           });
         });
       } },
@@ -117,6 +135,17 @@
       tried: "An industry contact dataset from Acme Data, for more leads.",
       run: function (ctx) {
         return spend(ctx, { amount: 45.00, merchant: "Acme Data", item: "Industry contact dataset", category: "data", reason: "More leads" });
+      } },
+    { title: "It tries to stuff an 80,000-token data dump into one call.",
+      tried: "A whole scraped vendor site pasted into a single prompt, about 160 pages of text.",
+      run: function (ctx) {
+        var content = "Summarize every vendor on this page.\n\n" + dataDump(80000);
+        return call("POST", "/v1/chat/completions", { model: "sim-large", messages: [{ role: "user", content: content }] }, ctx.key)
+          .then(function (res) {
+            if (res.status === 200) return { verdict: "NOT BLOCKED", tone: "bad", why: "The leash let the dump through." };
+            var e = res.body && res.body.error;
+            return { verdict: "BLOCKED BY THE LEASH", tone: "bad", why: (e && e.message) || e || ("HTTP " + res.status) };
+          });
       } },
     { title: "2:14 am: the agent gets stuck in a loop, retrying the same request.",
       tried: "Each retry resends a longer history, so every call costs more than the last.",
@@ -297,7 +326,7 @@
     D.title.textContent = "One runaway night, stopped at every turn.";
     var k = ctx.kill || {};
     D.tried.textContent = "The $12 data purchase was approved by the rules. The injected $19 and the $45 waited for a person, " +
-      "the $480 was blocked and the loop was cut off. Then KILL denied " + n(k.denied || 0, "waiting purchase") +
+      "the $480 was blocked, the leash refused the data dump and the loop was cut off. Then KILL denied " + n(k.denied || 0, "waiting purchase") +
       (k.payouts_cancelled ? " and pulled back " + n(k.payouts_cancelled, "payout") + " PayPal hadn't delivered yet, including the $12" : "") + ".";
     D.ticker.textContent = "";
     D.verdict.textContent = "Now look at the dashboard";

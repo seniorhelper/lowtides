@@ -71,7 +71,23 @@ class TestPublicDemo(unittest.TestCase):
         agents = self.app.store.agents()
         self.assertEqual(len(agents), 1)
         self.assertEqual(agents[0]["status"], "paused")  # the loop guard caught it
+        # the seeded outcomes: $12 paid, $19 and $45 held, $480 blocked
+        by_amt = {round(r["amount"]): r["decision"] for r in reqs}
+        self.assertEqual(by_amt, {12: "approved", 19: "needs_approval", 480: "denied", 45: "needs_approval"})
+        # the leash refused the 80k-token data dump with a readable reason
+        leash = [e for e in self.app.store.events(200) if e["kind"] == "leash"]
+        self.assertEqual(len(leash), 1)
+        self.assertIn("blocked a 80", leash[0]["message"])
         self.assertTrue(self.app.store.audit_verify()["ok"])
+
+    def test_story_rules_include_the_leash(self):
+        from lowtides.scenario import RULES_TEXT, data_dump
+        from lowtides.spend import parse_rules_offline
+        rules, _ = parse_rules_offline(RULES_TEXT)
+        self.assertEqual(rules["max_input_tokens"], 25000)
+        self.assertAlmostEqual(rules["max_cost_per_call"], 0.25)
+        self.assertTrue(rules["max_reply_tokens"])
+        self.assertGreater(len(data_dump()) / 4, 79000)
 
 
 class TestDemoResetGuard(unittest.TestCase):

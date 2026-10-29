@@ -11,6 +11,7 @@ import collections
 import datetime
 import hmac
 import json
+import math
 import mimetypes
 import os
 import re
@@ -41,6 +42,37 @@ LOCAL_NAMES = ("localhost", "127.0.0.1", "::1")
 
 class LengthRequired(Exception):
     pass
+
+
+def _reject_constant(name):
+    raise ValueError("Numbers must be real numbers (%s is not allowed)." % name)
+
+
+def _finite_float(text):
+    x = float(text)
+    if not math.isfinite(x):
+        raise ValueError("Numbers must be real numbers (%s is too large)." % text[:40])
+    return x
+
+
+def _no_nonfinite(v):
+    if isinstance(v, float) and not math.isfinite(v):
+        return None
+    if isinstance(v, dict):
+        return {k: _no_nonfinite(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_no_nonfinite(x) for x in v]
+    return v
+
+
+def _dumps_strict(body):
+    """Strict JSON (no NaN/Infinity, which browsers cannot parse). Should a non-finite
+    number ever slip into state, send it as null instead of breaking the page for everyone."""
+    try:
+        return json.dumps(body, allow_nan=False)
+    except ValueError:
+        sys.stderr.write("Lowtides: a response held a non-finite number; sent as null.\n")
+        return json.dumps(_no_nonfinite(body), allow_nan=False)
 
 
 def safe_equal(a, b):
@@ -211,11 +243,13 @@ def make_handler(app):
             raw = self._body()
             if not raw:
                 return {}
-            return json.loads(raw.decode("utf-8"))
+            # Python's json accepts NaN/Infinity and turns 1e999 into inf; refuse both so no
+            # non-finite number can reach saved state (it would break JSON.parse in every browser).
+            return json.loads(raw.decode("utf-8"), parse_constant=_reject_constant, parse_float=_finite_float)
 
         def _send(self, status, body, headers=None, ctype="application/json"):
             data = body if isinstance(body, (bytes, bytearray)) else (
-                json.dumps(body).encode("utf-8") if ctype == "application/json" else str(body).encode("utf-8"))
+                _dumps_strict(body).encode("utf-8") if ctype == "application/json" else str(body).encode("utf-8"))
             if not getattr(self, "_consumed", True) and not self.headers.get("Transfer-Encoding"):
                 # Read a small unread body before answering. Closing a socket with unread data makes
                 # Windows send a reset, and the client can lose this response (e.g. a 403) entirely.
@@ -763,7 +797,16 @@ def make_handler(app):
             if action == "simulate":
                 if not app.public_demo:
                     return self._send(403, {"error": "The runaway simulation only runs in the public demo."})
-                return self._send(200, g.simulate_runaway(min(500.0, max(1.0, float(d.get("amount") or 25)))))
+                amount = d.get("amount") or 25
+                if isinstance(amount, bool) or not isinstance(amount, (int, float, str)):
+                    raise ValueError("The simulated amount must be a number.")
+                try:
+                    amount = float(amount)
+                except ValueError:
+                    raise ValueError("The simulated amount must be a number.")
+                if not math.isfinite(amount):
+                    raise ValueError("The simulated amount must be a real number.")
+                return self._send(200, g.simulate_runaway(min(500.0, max(1.0, amount))))
             return self._send(404, {"error": "Unknown endpoint"})
 
         def _delete(self):

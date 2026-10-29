@@ -32,9 +32,19 @@ DEFAULT_RULES = {
     "new_merchant_needs_approval": True,
     "hours": None,
     "max_purchases_per_hour": 10,
+    # The Leash: limits on how much data one agent may push through a single AI call.
+    "max_reply_tokens": None,       # per-agent reply cap; None = only the global policy applies
+    "max_input_tokens": None,       # largest prompt the agent may send (estimated tokens)
+    "max_cost_per_call": None,      # dollars; refuse a call whose pre-flight estimate is above this
+    "dump_alert_multiple": 5.0,     # flag input this many times the agent's usual size; 0/None = off
 }
 
 MONEY_FIELDS = ("max_per_purchase", "daily_purchase_limit", "approval_over", "daily_total_limit")
+TOKEN_FIELDS = ("max_reply_tokens", "max_input_tokens")
+MAX_TOKENS = 2_000_000
+TOKENS_PER_WORD = 1.33
+TOKENS_PER_PAGE = 500
+SHORT_REPLY_TOKENS = 400
 LIST_FIELDS = ("allowed_categories", "blocked_categories", "blocked_merchants")
 
 # Text in a purchase that reads like orders aimed at the agent itself. Agents that
@@ -100,7 +110,59 @@ def validate_rules(raw):
                 out[k] = {"start": int(v["start"]), "end": int(v["end"])}
             else:
                 raise SpendError("'hours' must be null or {\"start\": 9, \"end\": 18}.")
+        elif k in TOKEN_FIELDS:
+            if v is None:
+                out[k] = None
+                continue
+            try:
+                if isinstance(v, bool):
+                    raise ValueError
+                f = float(v)
+                if f != int(f):
+                    raise ValueError
+                n = int(f)
+            except (TypeError, ValueError, OverflowError):
+                raise SpendError("'%s' must be a whole number of tokens, or null for no cap." % k)
+            if n < 1 or n > MAX_TOKENS:
+                raise SpendError("'%s' must be between 1 and 2,000,000 tokens." % k)
+            out[k] = n
+        elif k == "max_cost_per_call":
+            if v is None:
+                out[k] = None
+                continue
+            try:
+                if isinstance(v, bool):
+                    raise ValueError
+                f = float(v)
+            except (TypeError, ValueError):
+                raise SpendError("'max_cost_per_call' must be a dollar amount, or null for no cap.")
+            if not 0.0001 <= f <= 10_000:
+                raise SpendError("'max_cost_per_call' must be between $0.0001 and $10,000.")
+            out[k] = round(f, 4)
+        elif k == "dump_alert_multiple":
+            if v is None:
+                out[k] = None
+                continue
+            try:
+                if isinstance(v, bool):
+                    raise ValueError
+                f = float(v)
+            except (TypeError, ValueError):
+                raise SpendError("'dump_alert_multiple' must be a number like 5 (for 5x usual), or 0 to turn it off.")
+            if f != 0 and not 1.5 <= f <= 1000:
+                raise SpendError("'dump_alert_multiple' must be 0 (off) or between 1.5 and 1,000.")
+            out[k] = round(f, 2)
     return out
+
+
+def _cost(x):
+    """Dollars, with extra places for sub-cent amounts."""
+    x = float(x)
+    return money(x) if x >= 0.01 and round(x, 2) == x else ("$%.4f" % x).rstrip("0")
+
+
+def _num(x):
+    return ("%.2f" % x).rstrip("0").rstrip(".")
 
 
 def agent_rules(agent):
@@ -133,6 +195,19 @@ def describe_rules(r):
         lines.append("Only between %d:00 and %d:00." % (r["hours"]["start"], r["hours"]["end"]))
     if r["max_purchases_per_hour"]:
         lines.append("At most %d purchases an hour." % r["max_purchases_per_hour"])
+    # .get(): callers may hand in an older, partial rules dict.
+    if r.get("max_reply_tokens"):
+        n = r["max_reply_tokens"]
+        lines.append("Replies are capped at about {:,} tokens (~{:,} words).".format(n, int(round(n * 0.75))))
+    if r.get("max_input_tokens"):
+        n = r["max_input_tokens"]
+        pages = n / TOKENS_PER_PAGE
+        lines.append("Prompts over about {} page{} (~{:,} tokens) are blocked.".format(
+            _num(pages) if pages < 10 else "{:,}".format(int(round(pages))), "" if pages == 1 else "s", n))
+    if r.get("max_cost_per_call"):
+        lines.append("No single AI call over %s." % _cost(r["max_cost_per_call"]))
+    if r.get("dump_alert_multiple"):
+        lines.append("Calls %sx bigger than usual are flagged." % _num(r["dump_alert_multiple"]))
     return lines
 
 
@@ -203,9 +278,55 @@ def parse_rules_offline(text):
     if re.search(r"(?:any|anything|new|unknown)\s+(?:new\s+)?(?:merchant|vendor|store|seller|site)s?", t):
         rules["new_merchant_needs_approval"] = True
         notes.append("New merchants need approval.")
+    _parse_leash(t, rules, notes)
     if not notes:
-        notes.append("Nothing recognized. Try phrases like \"max $50 a day\", \"ask me over $20\", \"never buy gift cards\".")
+        notes.append("Nothing recognized. Try phrases like \"max $50 a day\", \"ask me over $20\", \"never buy gift cards\", "
+                     "\"keep replies short\", \"never send more than 50 pages\".")
     return rules, notes
+
+
+_TOK = r"(\d+(?:,\d{3})*(?:\.\d+)?)\s*(k\b)?\s*"
+_CENTS = r"(?:\$\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:cents?|¢))"
+_CALL = r"(?:ai\s+|model\s+|api\s+)?(?:call|request)"
+
+
+def _tokens(num, k, unit):
+    """'20', 'k', 'pages' -> estimated tokens."""
+    n = _amount(num) * (1000 if k else 1)
+    unit = unit or "tokens"
+    if unit.startswith("word"):
+        n *= TOKENS_PER_WORD
+    elif unit.startswith("page"):
+        n *= TOKENS_PER_PAGE
+    return int(round(n))
+
+
+def _parse_leash(t, rules, notes):
+    """The Leash: reply size, prompt size, cost per call, dump alerts."""
+    m = re.search(r"(?:repl(?:y|ies)|answers?|responses?|outputs?)\b[^.\d$]*?" + _TOK + r"(tokens?|words?)\b", t)
+    if m:
+        rules["max_reply_tokens"] = _tokens(m.group(1), m.group(2), m.group(3))
+    elif re.search(r"(?:keep|make)\s+(?:the\s+|its\s+|your\s+|all\s+)?(?:repl(?:y|ies)|answers?|responses?)\s+(?:short|brief|concise)"
+                   r"|\b(?:short|brief|concise)\s+(?:repl(?:y|ies)|answers|responses)", t):
+        rules["max_reply_tokens"] = SHORT_REPLY_TOKENS
+    if "max_reply_tokens" in rules:
+        notes.append("Replies capped at about {:,} tokens.".format(rules["max_reply_tokens"]))
+    m = re.search(r"(?:send|prompts?|inputs?|uploads?|feed|paste)\b[^.\d$]*?" + _TOK + r"(tokens?|words?|pages?)\b", t)
+    if m:
+        rules["max_input_tokens"] = _tokens(m.group(1), m.group(2), m.group(3))
+        notes.append("Prompts over about {:,} tokens are blocked.".format(rules["max_input_tokens"]))
+    m = re.search(r"(?:single|one|each|any|every)\s+" + _CALL + r"[^.\d$]*?" + _CENTS, t) \
+        or re.search(_CENTS + r"\s*(?:per|a|each|for any|for one|for a)\s+(?:single\s+)?" + _CALL, t)
+    if m:
+        rules["max_cost_per_call"] = float(m.group(1)) if m.group(1) else float(m.group(2)) / 100
+        notes.append("No single AI call over %s." % _cost(rules["max_cost_per_call"]))
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:x|times)\s+(?:bigger|larger|more|the size|the usual|normal|usual)", t)
+    if m:
+        rules["dump_alert_multiple"] = float(m.group(1))
+        notes.append("Flag calls %sx bigger than usual." % _num(rules["dump_alert_multiple"]))
+    elif re.search(r"(?:no|don't|do not|turn off|disable|stop)\s+(?:the\s+)?(?:dump|big[- ]call|size)\s+(?:alerts?|flags?|warnings?)", t):
+        rules["dump_alert_multiple"] = 0.0
+        notes.append("Big-call alerts are off.")
 
 
 RULES_PROMPT = """You turn a business owner's plain-English spending rules for an AI agent into JSON.
@@ -213,7 +334,12 @@ Return ONLY a JSON object with any of these keys (omit keys the text doesn't men
 max_per_purchase (dollars), daily_purchase_limit (dollars), approval_over (dollars: purchases above this need a human),
 daily_total_limit (dollars: AI usage + purchases combined per day), allowed_categories (list of short lowercase words),
 blocked_categories (list), blocked_merchants (list), new_merchant_needs_approval (bool), hours ({"start": H, "end": H} 24h),
-max_purchases_per_hour (int). Add a key "notes": a list of short plain-English lines describing each rule you set and
+max_purchases_per_hour (int).
+Data limits for each AI call (the "leash"): max_reply_tokens (int: longest reply; "keep replies short" = 400;
+words x 1.33 = tokens), max_input_tokens (int: largest prompt it may send; one page = 500 tokens; "20k" = 20000),
+max_cost_per_call (dollars: refuse any single AI call estimated above this; 25 cents = 0.25),
+dump_alert_multiple (number: flag a call this many times bigger than usual, e.g. 10 for "10x"; 0 = off).
+Add a key "notes": a list of short plain-English lines describing each rule you set and
 anything you could not map. Never invent limits the text doesn't state."""
 
 
@@ -226,7 +352,7 @@ def compile_rules(text, api_key=None, model="claude-haiku-5-5", base_url="https:
     if len(text) > 2000:
         raise SpendError("Keep the rules under 2,000 characters.")
     if api_key:
-        body = {"model": model, "max_tokens": 600, "system": RULES_PROMPT,
+        body = {"model": model, "max_tokens": 800, "system": RULES_PROMPT,
                 "messages": [{"role": "user", "content": text}]}
         req = urllib.request.Request(base_url.rstrip("/") + "/v1/messages", data=json.dumps(body).encode(), method="POST")
         req.add_header("x-api-key", api_key)

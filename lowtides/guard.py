@@ -115,3 +115,78 @@ class Guard:
             if bal < estimated_cost or bal <= 0:
                 raise Blocked("Wallet is empty (balance $%.2f). Top it up with PayPal on the dashboard." % bal, "wallet_empty", 402)
         return True
+
+    # ---- the Leash: per-agent limits on data dumps ------------------------------------
+    def check_leash(self, agent, leash, input_tokens, model, call_cost):
+        """Refuse a prompt that is too big, or a single call that would cost too much.
+        `call_cost` is the pre-flight estimate on the model that will answer."""
+        aid = agent["id"]
+        cap = leash["max_input_tokens"]
+        if cap is not None and input_tokens > cap:
+            msg = ("This prompt is about %d tokens; this agent's leash allows %d. Summarize or split it first."
+                   % (input_tokens, cap))
+            self.store.event(aid, "leash", "Leash: blocked a %d-token prompt from %s (limit %d)." % (input_tokens, agent["name"], cap))
+            self.store.audit("leash.blocked", str(aid), {"rule": "max_input_tokens", "input_tokens": input_tokens, "limit": cap})
+            raise Blocked(msg, "leash_input_tokens", 413)
+        cap = leash["max_cost_per_call"]
+        if cap is not None and call_cost > cap:
+            msg = ("This call would cost about $%.4f on %s; this agent's leash allows $%.4f per call. "
+                   "Shorten the prompt or lower max_tokens first." % (call_cost, model, cap))
+            self.store.event(aid, "leash", "Leash: blocked a $%.4f call from %s (limit $%.4f per call)." % (call_cost, agent["name"], cap))
+            self.store.audit("leash.blocked", str(aid), {"rule": "max_cost_per_call", "estimated_cost": round(call_cost, 6),
+                                                         "model": model, "limit": cap})
+            raise Blocked(msg, "leash_cost_per_call", 402)
+
+    def dump_alert(self, agent, leash, input_tokens):
+        """Flag (never block) a prompt far bigger than this agent's usual. Returns a note or ''."""
+        mult = leash["dump_alert_multiple"]
+        if not mult or mult <= 0:
+            return ""
+        sizes = sorted(self.store.recent_input_sizes(agent["id"], DUMP_HISTORY))
+        if len(sizes) < DUMP_MIN_HISTORY:
+            return ""
+        n = len(sizes)
+        typical = sizes[n // 2] if n % 2 else (sizes[n // 2 - 1] + sizes[n // 2]) / 2.0
+        if typical <= 0 or input_tokens <= mult * typical:
+            return ""
+        note = "dump alert: about %d input tokens, %.0fx this agent's typical %d" % (input_tokens, input_tokens / typical, typical)
+        self.store.event(agent["id"], "leash", "Dump alert: %s sent about %d tokens, %.0fx its typical %d. Let through."
+                         % (agent["name"], input_tokens, input_tokens / typical, typical))
+        self.store.audit("leash.dump_alert", str(agent["id"]), {"input_tokens": input_tokens, "typical": typical, "multiple": mult})
+        return note
+
+
+DUMP_HISTORY = 20
+DUMP_MIN_HISTORY = 5
+LEASH_DEFAULTS = {"max_reply_tokens": None, "max_input_tokens": None, "max_cost_per_call": None, "dump_alert_multiple": 5.0}
+
+
+def _num(v, kind):
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        v = kind(v)
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
+
+
+def leash_rules(agent):
+    """The agent's leash settings. Reads them through spend.agent_rules; falls back to the
+    raw saved rules for any key that version of spend.py doesn't know yet."""
+    from .spend import agent_rules  # late import: spend imports this module
+    rules = agent_rules(agent)
+    try:
+        raw = json.loads(agent.get("rules") or "{}")
+        raw = raw if isinstance(raw, dict) else {}
+    except ValueError:
+        raw = {}
+    out = {}
+    for k, d in LEASH_DEFAULTS.items():
+        v = rules[k] if k in rules else raw.get(k, d)
+        out[k] = v
+    out["max_reply_tokens"] = _num(out["max_reply_tokens"], int)
+    out["max_input_tokens"] = _num(out["max_input_tokens"], int)
+    out["max_cost_per_call"] = _num(out["max_cost_per_call"], float)
+    out["dump_alert_multiple"] = _num(out["dump_alert_multiple"], float) or 0.0  # null or 0 turns it off
+    return out
