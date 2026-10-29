@@ -604,7 +604,9 @@ class SpendGovernor:
                         continue
                     self.paypal.cancel_payout_item(r["payout_item_id"])
             except PayPalError as e:
-                out["problems"].append("Payout %s couldn't be cancelled (it may already be claimed): %s" % (r["id"], e.summary()))
+                why = ("PayPal had a server error, so it's still unclaimed; unclaimed payouts return by themselves after 30 days"
+                       if e.retryable else "it may already be claimed")
+                out["problems"].append("Payout %s couldn't be cancelled (%s): %s" % (r["id"], why, e.summary()))
                 continue
             self.store.update_spend(r["id"], status="cancelled", payout_status="RETURNED" if not r["simulated"] else "SIMULATED-RETURNED",
                                     note="Cancelled by the kill switch")
