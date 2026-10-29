@@ -223,6 +223,32 @@ Response headers your agent receives:
 
 ---
 
+## Plug in any agent (copy and paste)
+
+Lowtides speaks the OpenAI-style API, so almost any agent connects by changing two values: the base URL and the key. Add an agent on the dashboard to get its `lt-` key. **Connect** then shows these snippets with your own URL and key filled in.
+
+**Python (OpenAI SDK)**
+```python
+from openai import OpenAI
+client = OpenAI(base_url="https://lowtides.ai/v1", api_key="lt-your-agent-key")
+print(client.chat.completions.create(model="sim-large", messages=[{"role": "user", "content": "Hello!"}]).choices[0].message.content)
+```
+
+**LangChain** (CrewAI, LlamaIndex and most agent frameworks take the same two values)
+```python
+from langchain_openai import ChatOpenAI
+llm = ChatOpenAI(base_url="https://lowtides.ai/v1", api_key="lt-your-agent-key", model="sim-large")
+print(llm.invoke("Hello!").content)
+```
+
+**Ask before buying** (approved, held for a person, or blocked, with reasons)
+```bash
+curl https://lowtides.ai/v1/spend -H "Authorization: Bearer lt-your-agent-key" -H "Content-Type: application/json" \
+  -d '{"amount": 12, "merchant": "Acme Data", "item": "1,000 lead credits", "category": "data", "reason": "Finish the lead list"}'
+```
+
+Claude, Cursor and other MCP apps: see the next section.
+
 ## Use Lowtides from any agent (MCP)
 
 `python -m lowtides.mcp` runs a stdio MCP server that gives an agent three tools: `request_spend`, `check_spend` and `get_budget`. They call the Lowtides `/v1` spend API (see `docs/SPEND-API.md`). Add it to Claude Desktop or Claude Code (run from the repo folder, or set `cwd`):

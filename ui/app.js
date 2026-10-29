@@ -366,7 +366,38 @@
     var c = {
       "py-openai": 'from openai import OpenAI\n\nclient = OpenAI(base_url="' + o + '/v1", api_key="' + key + '")\nreply = client.chat.completions.create(\n    model="sim-large",  # or any model on your Models list\n    messages=[{"role": "user", "content": "Hello!"}],\n    extra_headers={"X-Lowtides-Task": "my-job-1"},  # optional: group calls into a job\n)\nprint(reply.choices[0].message.content)',
       "py-anthropic": 'import anthropic\n\nclient = anthropic.Anthropic(base_url="' + o + '", api_key="' + key + '")\nreply = client.messages.create(\n    model="claude-opus-5-5",\n    max_tokens=1024,\n    messages=[{"role": "user", "content": "Hello!"}],\n)\nprint(reply.content[0].text)',
-      "curl": 'curl ' + o + '/v1/chat/completions \\\n  -H "Authorization: Bearer ' + key + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"sim-large","messages":[{"role":"user","content":"Hello!"}]}\''
+      "curl": 'curl ' + o + '/v1/chat/completions \\\n  -H "Authorization: Bearer ' + key + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"model":"sim-large","messages":[{"role":"user","content":"Hello!"}]}\'',
+      "langchain": [
+        "from langchain_openai import ChatOpenAI",
+        "",
+        'llm = ChatOpenAI(base_url="' + o + '/v1", api_key="' + key + '", model="sim-large")',
+        'print(llm.invoke("Hello!").content)',
+        "# CrewAI, LlamaIndex and most agent frameworks take the same base_url + api_key."
+      ].join("\n"),
+      // Pure JSON so it pastes cleanly into Claude Desktop, Claude Code, Cursor or any MCP app's config.
+      // Runs from the Lowtides repo folder; the agent gets request_spend, check_spend and get_budget.
+      "mcp": [
+        "{",
+        '  "mcpServers": {',
+        '    "lowtides": {',
+        '      "command": "python",',
+        '      "args": ["-m", "lowtides.mcp"],',
+        '      "env": { "LOWTIDES_URL": "' + o + '", "LOWTIDES_AGENT_KEY": "' + key + '" }',
+        "    }",
+        "  }",
+        "}"
+      ].join("\n"),
+      "spend": [
+        "# Ask before buying: approved, held for a person, or blocked, with reasons.",
+        "import json, urllib.request",
+        "",
+        'req = urllib.request.Request("' + o + '/v1/spend", method="POST", data=json.dumps({',
+        '    "amount": 12.00, "merchant": "Acme Data", "item": "1,000 lead credits",',
+        '    "category": "data", "reason": "Needed to finish tonight\'s lead list",',
+        '}).encode(), headers={"Authorization": "Bearer ' + key + '", "Content-Type": "application/json"})',
+        "answer = json.load(urllib.request.urlopen(req))",
+        'print(answer["decision"], answer["reasons"])  # approved / needs_approval / denied'
+      ].join("\n")
     };
     $("code-box").textContent = c[codeKind];
   }
