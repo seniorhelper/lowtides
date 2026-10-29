@@ -324,7 +324,7 @@
     }).join("");
     if (!v) {
       var anth = (S.config.providers || {}).anthropic || {};
-      var pick = names.indexOf("claude-opus-5-5") >= 0 && anth.key_set ? "claude-opus-5-5" : (names.indexOf("sim-large") >= 0 ? "sim-large" : names[0]);
+      var pick = !S.public_demo && names.indexOf("claude-opus-5-5") >= 0 && anth.key_set ? "claude-opus-5-5" : (names.indexOf("sim-large") >= 0 ? "sim-large" : names[0]);
       if (pick) tm.value = pick;
     }
   }

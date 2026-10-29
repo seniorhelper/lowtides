@@ -79,10 +79,33 @@ class Config:
         return [n for n, _ in items]
 
     def update_policy(self, changes):
+        """Only known keys, each kept to the type of its current value (a string where a
+        number belongs would break every later model call)."""
         allowed = set(self.policy.keys())
+        clean = {}
         for k, v in changes.items():
-            if k in allowed:
-                self.data["policy"][k] = v
+            if k not in allowed:
+                continue
+            cur = self.policy[k]
+            if isinstance(cur, bool):
+                if not isinstance(v, bool):
+                    raise ValueError("'%s' must be true or false." % k)
+            elif isinstance(cur, (int, float)):
+                if isinstance(v, bool):
+                    raise ValueError("'%s' must be a number." % k)
+                try:
+                    v = type(cur)(v) if isinstance(cur, int) and float(v) == int(float(v)) else float(v)
+                except (TypeError, ValueError):
+                    raise ValueError("'%s' must be a number." % k)
+                if v != v or v in (float("inf"), float("-inf")) or v < 0:
+                    raise ValueError("'%s' must be a number of 0 or more." % k)
+            elif isinstance(cur, str):
+                if not isinstance(v, str) or len(v) > 200:
+                    raise ValueError("'%s' must be a short piece of text." % k)
+            elif cur is not None and type(v) is not type(cur):
+                raise ValueError("'%s' has the wrong type." % k)
+            clean[k] = v
+        self.data["policy"].update(clean)
 
     def upsert_model(self, name, spec):
         required = {"provider", "tier", "family", "input", "output"}

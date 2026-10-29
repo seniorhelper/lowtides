@@ -10,6 +10,7 @@ Point your agent's base URL at this server and use its Lowtides key as the API k
 import collections
 import datetime
 import hmac
+import copy
 import json
 import math
 import mimetypes
@@ -37,6 +38,7 @@ from .store import Store
 
 UI_DIR = os.path.join(ROOT, "ui")
 MAX_BODY = 20 * 1024 * 1024
+DEMO_MAX_BODY = 1024 * 1024  # the public demo never needs more; keeps strangers from tying up memory
 LOCAL_NAMES = ("localhost", "127.0.0.1", "::1")
 
 
@@ -97,6 +99,8 @@ class App:
         self.spend = SpendGovernor(store, self.paypal, self.money)
         # Public demo: no password, PayPal sandbox only, simulated models only, resettable.
         self.public_demo = os.environ.get("LOWTIDES_PUBLIC_DEMO", "").lower() in ("1", "true", "yes")
+        self.engine.sim_only = self.public_demo
+        self.demo_policy = copy.deepcopy(config.data.get("policy", {})) if self.public_demo else None
         self.self_url = None
         self.claude_compiles = collections.deque()
         self.admin_token = os.environ.get("LOWTIDES_ADMIN_TOKEN", "")
@@ -129,6 +133,8 @@ class App:
                           "wallets", "wallet_tx", "topups", "shadow", "agents"):
                 self.store.db.execute("DELETE FROM " + table)
             self.store.db.commit()
+        if self.demo_policy is not None:  # undo any visitor's policy changes
+            self.config.data["policy"] = copy.deepcopy(self.demo_policy)
         old, self.outside = self.outside, OutsideGuard(self.config, self.store, stop_all=self.stop_all, demo=True)
         if old._thread:  # fresh simulated bill; keep watching
             old.stop()
@@ -233,7 +239,7 @@ def make_handler(app):
                 raise ValueError("Bad Content-Length")
             if n < 0:
                 raise ValueError("Bad Content-Length")
-            if n > MAX_BODY:
+            if n > (DEMO_MAX_BODY if app.public_demo else MAX_BODY):
                 raise ValueError("Request too large")
             raw = self.rfile.read(n) if n else b""
             self._consumed = True
@@ -698,6 +704,8 @@ def make_handler(app):
             if path.startswith("/api/outside/"):
                 return self._outside_post(parts[2] if len(parts) == 3 else "", d)
             if path == "/api/policy":
+                if app.public_demo and any(k != "mode" for k in d):
+                    return self._send(403, {"error": "Changing the governor's settings is turned off in the public demo. Run your own copy to tune them."})
                 app.config.update_policy(d)
                 if "mode" in d and d["mode"] in ("home", "business"):
                     app.config.data["mode"] = d["mode"]
@@ -770,6 +778,8 @@ def make_handler(app):
                 if not a:
                     return self._send(404, {"error": "No such agent."})
                 model = d.get("model") or next(iter(app.config.models))
+                if app.public_demo and (app.config.providers.get((app.config.model(model) or {}).get("provider"), {}) or {}).get("type") != "simulator":
+                    return self._send(403, {"error": "This public demo runs on the built-in simulated models only."})
                 body = {"model": model, "messages": [{"role": "user", "content": str(d.get("prompt", ""))[:20000]}], "max_tokens": 600}
                 spec = app.config.model(model) or {}
                 prov = app.config.providers.get(spec.get("provider"), {})
