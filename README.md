@@ -2,6 +2,8 @@
 
 # Lowtides
 
+**▶ Live demo: https://lowtides.onrender.com** (no login needed). It's a public demo: PayPal sandbox and simulated AI models, so nothing costs real money, and there's a "Reset demo" button. On the free host, the first visit after a quiet spell can take about 50 seconds to wake up.
+
 **The AI spend governor.** Keep AI spend at low tide.
 
 Lowtides puts **one budget, one STOP button and one audit trail** over everything an AI agent spends:
