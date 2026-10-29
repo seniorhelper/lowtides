@@ -248,8 +248,9 @@ class PayPal:
 
     def cancel_payout_item(self, item_id):
         """Only works while the payout is UNCLAIMED (the receiver hasn't accepted it yet).
-        The cancel operation takes no request body."""
-        return self._call("POST", "/v1/payments/payouts-item/%s/cancel" % urllib.parse.quote(item_id), raw_data=b"",
+        The spec defines no body, but the sandbox answered an empty JSON body with
+        INTERNAL_SERVICE_ERROR, so send an empty object (also what PayPal's own SDKs send)."""
+        return self._call("POST", "/v1/payments/payouts-item/%s/cancel" % urllib.parse.quote(item_id), body={},
                           request_id="cancel-" + item_id)
 
     @staticmethod
