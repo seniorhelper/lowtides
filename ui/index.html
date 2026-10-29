@@ -58,6 +58,13 @@
 <main id="main" tabindex="-1">
   <!-- HOME -->
   <section id="tab-home" class="tab">
+    <div id="out-banner" class="out-banner" role="alert" hidden>
+      <div class="out-banner-body">
+        <p id="out-banner-text"></p>
+        <ul id="out-banner-keys"></ul>
+      </div>
+      <button type="button" class="btn ghost" id="out-dismiss">Dismiss</button>
+    </div>
     <div id="appr-banner" class="appr-banner" hidden>
       <span class="appr-banner-icon" aria-hidden="true">!</span>
       <p id="appr-banner-text"></p>
@@ -155,6 +162,24 @@
         <button type="button" class="btn go" id="try-go">Send</button>
       </div>
       <div id="try-out" class="try-out" hidden></div>
+    </div>
+
+    <div class="panel" id="outside-panel">
+      <h2>Outside watch</h2>
+      <p class="muted">Watches your provider's real bill, including scripts that skip Lowtides.</p>
+      <p id="out-off" class="muted" hidden>Off — set caps and turn it on below.</p>
+      <div id="out-providers"></div>
+      <div class="row-actions">
+        <button type="button" class="btn ghost" id="out-check">Check now</button>
+        <button type="button" class="btn stop" id="out-disable">Disable keys now</button>
+        <button type="button" class="btn ghost" id="out-sim" hidden>Simulate a runaway script</button>
+      </div>
+      <ul id="out-alerts" class="events" aria-label="Recent outside-watch alerts"></ul>
+      <details id="out-settings">
+        <summary>Outside watch settings</summary>
+        <form id="out-form" class="form-grid" autocomplete="off"></form>
+        <button type="button" class="btn go" id="out-save">Save outside watch settings</button>
+      </details>
     </div>
 
     <div class="panel">

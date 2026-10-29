@@ -276,6 +276,19 @@ Lowtides can sit in front of PayPal's own Agent Toolkit. Add one line, and every
 
 ---
 
+## Outside spend guard
+
+Lowtides' budgets only see calls that go through its proxy. A script that calls Anthropic or OpenAI directly can run up a bill they never see. The outside spend guard watches your provider's own cost report instead, so it catches spend from any tool or script.
+
+- Daily and monthly caps per provider, plus combined caps, with an alert at 80% by default.
+- At the cap it switches off only the keys you list, writes an audit entry, shows a red banner and presses STOP ALL.
+- Anthropic keys are set to inactive (reversible). OpenAI keys are **deleted** (permanent).
+- Billing data lags, so it caps the damage but cannot make it zero.
+
+Off by default. It needs an org admin key set as an environment variable. See [docs/OUTSIDE-GUARD.md](docs/OUTSIDE-GUARD.md).
+
+---
+
 ## Known limits
 
 - **API only.** Lowtides governs API-billed agents. It can't sit in front of subscription chat apps, which aren't billed per call.

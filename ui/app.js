@@ -226,6 +226,7 @@
     renderAgents();
     renderTide();
     renderEvents();
+    renderOutside();
     renderSelects();
     renderTasks();
     renderWallets();
@@ -1144,6 +1145,104 @@
       if (e && e.status === 404) { FEAT.merchants = false; applyFeatures(); return; }
       fail(e);
     });
+  });
+
+  // ---------- outside watch ----------
+  var outSig = "";
+  function ago(ts) {
+    if (!ts) return "never";
+    var m = Math.max(0, Math.round((Date.now() / 1000 - ts) / 60));
+    return m < 1 ? "just now" : (m < 60 ? plural(m, "minute", "minutes") + " ago" : plural(Math.round(m / 60), "hour", "hours") + " ago");
+  }
+  function outMeter(label, spent, cap, level) {
+    if (spent == null) return "<p>" + esc(label) + ": not checked yet</p>";
+    var pct = cap ? Math.min(100, spent / cap * 100) : 0;
+    var cls = level === "over" || (cap && pct >= 100) ? "full" : (level === "warn" ? "hot" : "");
+    return "<p>" + esc(label) + ": <strong>" + esc(money(spent)) + "</strong> " + (cap ? "of " + esc(money(cap)) + " cap" : "(no cap set)") + "</p>" +
+      '<div class="bar ' + cls + '" role="img" aria-label="' + esc(label + " " + pct.toFixed(0) + " percent of cap") + '"><b style="width:' + pct.toFixed(1) + '%"></b></div>';
+  }
+  function renderOutside() {
+    var o = S && S.outside;
+    $("outside-panel").hidden = !o;
+    if (!o) { $("out-banner").hidden = true; return; }
+    var t = o.tripped;
+    $("out-banner").hidden = !t;
+    if (t) {
+      $("out-banner-text").textContent = "Outside spend cap hit: " + t.reason;
+      $("out-banner-keys").innerHTML = (t.keys || []).map(function (k) {
+        var bad = k.result === "failed";
+        return "<li>" + esc(k.provider + " key " + k.key_id + ": " + k.result) +
+          (bad ? ' — <strong>turn this key off by hand now</strong>' + (k.error ? " (" + esc(k.error) + ")" : "") : "") + "</li>";
+      }).join("");
+    }
+    $("out-off").hidden = !(!o.enabled && !o.demo);
+    $("out-sim").hidden = !o.demo;
+    var c = o.combined || {};
+    var html = (o.providers || []).map(function (p) {
+      var keys = (p.keys || []).map(function (k) { return "<code>" + esc(k.id) + "</code> (" + esc(k.state) + ")"; }).join(", ");
+      return '<div class="out-prov"><h3>' + esc(p.label || p.name) + (p.enabled ? "" : " (off)") + "</h3>" +
+        outMeter("Today", p.today, p.daily_cap, p.level) + outMeter("This month", p.month, p.monthly_cap, p.level) +
+        '<p class="muted small">Last checked ' + esc(ago(p.last_checked)) +
+        (p.lag_minutes ? ". Data may lag ~" + esc(p.lag_minutes) + " min" : "") + ".</p>" +
+        (p.stale ? '<p class="out-warn small">This data is stale.</p>' : "") +
+        (p.error ? '<p class="out-err small">' + esc(p.error) + "</p>" : "") +
+        '<p class="small">' + (o.demo ? "Simulated: no real admin key is used" : p.admin_key_set ? "Admin key: set" : "Set " + esc(p.admin_key_env) + " on the server") + "</p>" +
+        '<p class="small">Protected keys: ' + (keys || "none listed") + "</p>" +
+        (p.key_action === "delete" ? '<p class="muted small">OpenAI has no disable: listed keys are deleted at the cap.</p>' : "") + "</div>";
+    }).join("");
+    html += '<div class="out-prov"><h3>Combined</h3>' + outMeter("Today", c.today, c.daily_cap, c.level) +
+      outMeter("This month", c.month, c.monthly_cap, c.level) + "</div>";
+    $("out-providers").innerHTML = html;
+    $("out-alerts").innerHTML = (o.alerts || []).slice(0, 5).map(function (a) {  // newest first
+      return "<li><time>" + esc(when(a.ts)) + "</time><span>" + esc(a.message) + "</span></li>";
+    }).join("");
+    // Rebuild the form only when settings changed and the user is not typing in it.
+    var sig = JSON.stringify([o.enabled, o.poll_minutes, o.warn_percent, o.stop_agents, c.daily_cap, c.monthly_cap,
+      (o.providers || []).map(function (p) { return [p.name, p.enabled, p.daily_cap, p.monthly_cap, (p.keys || []).map(function (k) { return k.id; })]; })]);
+    var form = $("out-form");
+    if (sig !== outSig && !form.contains(document.activeElement)) {
+      outSig = sig;
+      var f = '<label><input type="checkbox" id="os-enabled"' + (o.enabled ? " checked" : "") + '> Outside watch on</label>' +
+        '<label><input type="checkbox" id="os-stop"' + (o.stop_agents ? " checked" : "") + '> Also stop agents when the cap is hit</label>' +
+        '<label>Check every (minutes)<input id="os-poll" type="number" min="1" step="1" value="' + esc(o.poll_minutes) + '"></label>' +
+        '<label>Warn at (%)<input id="os-warn" type="number" min="1" max="100" step="1" value="' + esc(o.warn_percent) + '"></label>' +
+        '<label>Combined daily cap ($)<input id="os-cd" type="number" min="0" step="0.01" value="' + esc(c.daily_cap) + '"></label>' +
+        '<label>Combined monthly cap ($)<input id="os-cm" type="number" min="0" step="0.01" value="' + esc(c.monthly_cap) + '"></label>';
+      (o.providers || []).forEach(function (p) {
+        var n = esc(p.name);
+        f += '<fieldset><legend>' + esc(p.label || p.name) + "</legend>" +
+          '<label><input type="checkbox" id="os-' + n + '-on"' + (p.enabled ? " checked" : "") + "> Watch " + esc(p.label || p.name) + "</label>" +
+          '<label>Daily cap ($)<input id="os-' + n + '-d" type="number" min="0" step="0.01" value="' + esc(p.daily_cap) + '"></label>' +
+          '<label>Monthly cap ($)<input id="os-' + n + '-m" type="number" min="0" step="0.01" value="' + esc(p.monthly_cap) + '"></label>' +
+          '<label class="wide">Key IDs to protect (one per line, IDs only, never key values)<textarea id="os-' + n + '-k">' +
+          esc((p.keys || []).map(function (k) { return k.id; }).join("\n")) + "</textarea></label></fieldset>";
+      });
+      form.innerHTML = f;
+    }
+  }
+  function outDo(path, body, msg) {
+    return api("POST", path, body || {}).then(function () { if (msg) flash(msg); return refresh(); }).catch(fail);
+  }
+  $("out-check").addEventListener("click", function () { outDo("/api/outside/check", {}, "Checked your provider bills."); });
+  $("out-disable").addEventListener("click", function () {
+    if (!confirm("Disable the protected API keys now? Anything using them will stop working. (OpenAI keys are deleted.)")) return;
+    outDo("/api/outside/disable", {}, "Disable request sent. Check the results above.");
+  });
+  $("out-dismiss").addEventListener("click", function () { outDo("/api/outside/clear", {}); });
+  $("out-sim").addEventListener("click", function () { outDo("/api/outside/simulate", { amount: 25 }, "Simulated a runaway script."); });
+  $("out-save").addEventListener("click", function () {
+    var o = S && S.outside;
+    if (!o) return;
+    var num = function (id) { return Number($(id).value) || 0; };
+    var provs = {};
+    (o.providers || []).forEach(function (p) {
+      provs[p.name] = { enabled: $("os-" + p.name + "-on").checked, daily_cap: num("os-" + p.name + "-d"),
+        monthly_cap: num("os-" + p.name + "-m"), protect_keys: $("os-" + p.name + "-k").value };
+    });
+    outDo("/api/outside/settings", {
+      enabled: $("os-enabled").checked, poll_minutes: num("os-poll"), warn_percent: num("os-warn"),
+      stop_agents: $("os-stop").checked, combined: { daily_cap: num("os-cd"), monthly_cap: num("os-cm") }, providers: provs
+    }, "Outside watch settings saved.").then(function () { outSig = ""; renderOutside(); });
   });
 
   // ---------- loop ----------

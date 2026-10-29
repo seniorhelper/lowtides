@@ -139,6 +139,23 @@ main { max-width: 1120px; margin: 0 auto; padding: 1.25rem 16px 3rem; }
   background: #FFF6E3; border: 2px solid var(--amber); border-radius: 12px; padding: .8rem 1rem;
 }
 .appr-banner p { margin: 0; flex: 1 1 240px; }
+.out-banner {
+  display: flex; align-items: flex-start; gap: .9rem; flex-wrap: wrap; margin-bottom: 1rem;
+  background: #FDECEA; border: 2px solid var(--stop-strong); border-radius: 12px; padding: .8rem 1rem; color: var(--stop-ink);
+}
+.out-banner-body { flex: 1 1 240px; }
+.out-banner p { margin: 0 0 .3rem; font-weight: 700; }
+.out-banner ul { margin: 0; padding-left: 1.1rem; }
+.out-prov { border-top: 1px solid var(--line); padding: .75rem 0; }
+.out-prov h3 { margin: 0 0 .3rem; font-size: 1rem; }
+.out-prov .bar { max-width: none; }
+.out-prov p { margin: .15rem 0; }
+.out-err { color: var(--stop-ink); font-weight: 600; }
+.out-warn { color: var(--amber-ink); }
+#out-settings { margin-top: 1rem; }
+#out-settings summary { cursor: pointer; font-weight: 600; }
+#out-settings textarea { width: 100%; min-height: 4rem; font: inherit; }
+#out-settings fieldset { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: var(--radius); }
 .appr-banner-icon { width: 30px; height: 30px; border-radius: 50%; background: var(--amber); color: #2B2100; font: 700 1.05rem/30px var(--font-num); text-align: center; flex: none; }
 .appr-poll { margin: 0; }
 .appr-list { display: grid; gap: .9rem; margin: 1rem 0 1.25rem; }
