@@ -351,9 +351,43 @@
     </div>
     <h3>Rules now</h3>
     <ul id="rules-now" class="rule-list"></ul>
+    <fieldset class="leash" id="leash-set">
+      <legend>Leash (data dumps)</legend>
+      <p class="muted small">Stop one runaway call from flooding your bill. Token counts are estimates.</p>
+      <div class="leash-f">
+        <label for="leash-reply">Max reply length</label>
+        <select id="leash-reply" aria-describedby="leash-reply-h">
+          <option value="">No limit</option>
+          <option value="400">Short (about 400 tokens)</option>
+          <option value="1000">Medium (about 1,000 tokens)</option>
+          <option value="4000">Long (about 4,000 tokens)</option>
+          <option value="custom">Custom tokens</option>
+        </select>
+        <input id="leash-reply-custom" type="number" min="1" step="1" inputmode="numeric" aria-label="Custom max reply length in tokens" placeholder="Tokens, like 2500" hidden>
+        <p class="muted small" id="leash-reply-h">Caps how long an answer can be, so the agent can't write a book.</p>
+      </div>
+      <div class="leash-f">
+        <label for="leash-pages">Biggest prompt allowed (pages)</label>
+        <input id="leash-pages" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-pages-h" placeholder="No limit">
+        <p class="muted small" id="leash-pages-h">1 page is about 500 tokens. Blank means no limit. Bigger prompts are blocked.</p>
+      </div>
+      <div class="leash-f">
+        <label for="leash-cost">Max cost per AI call ($)</label>
+        <input id="leash-cost" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-cost-h" placeholder="No limit">
+        <p class="muted small" id="leash-cost-h">Blocks any single call that would cost more than this. Blank means no limit.</p>
+      </div>
+      <div class="leash-f">
+        <label for="leash-alert">Alert when a call is this many times bigger than usual</label>
+        <input id="leash-alert" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-alert-h" placeholder="5">
+        <p class="muted small" id="leash-alert-h">Flags a call, without blocking it, when it is this many times its usual size. 0 turns it off.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn go" id="leash-save">Save leash</button>
+      </div>
+    </fieldset>
     <h3><label for="rules-text" class="inline-label">Write new rules</label></h3>
-    <p class="muted small" id="rules-hint">Write them the way you'd tell a person. Lowtides turns them into exact rules for you to check before anything is saved.</p>
-    <textarea id="rules-text" rows="3" aria-describedby="rules-hint" placeholder="Like: max $50 a day, ask me over $20, never buy gift cards"></textarea>
+    <p class="muted small" id="rules-hint">Write them the way you'd tell a person. Lowtides turns them into exact rules for you to check before anything is saved. Example: Keep replies short. Never send more than 50 pages. No single call over 25 cents.</p>
+    <textarea id="rules-text" rows="3" aria-describedby="rules-hint" placeholder="Like: max $50 a day, ask me over $20, never buy gift cards. Keep replies short. Never send more than 50 pages. No single call over 25 cents."></textarea>
     <div class="modal-actions">
       <button type="button" class="btn ghost" id="rules-translate">Translate</button>
     </div>

@@ -22,7 +22,7 @@ import time
 
 from . import memory as memory_mod
 from . import pricing
-from .guard import Blocked, Guard, start_of_today
+from .guard import Blocked, Guard, leash_rules, start_of_today
 from .providers import ProviderError, Providers
 from .router import Router, weak_answer
 
@@ -59,6 +59,81 @@ def add_prompt_cache(body, min_tokens):
         sysp[-1]["cache_control"] = {"type": "ephemeral"}
         added = True
     return new, added
+
+
+def cap_reply(work, api, global_cap, leash_cap, notes):
+    """Clamp the reply allowance to the smaller of the global cap and the agent's leash.
+    The global cap never touches extended thinking/reasoning requests (the output budget
+    must stay above the thinking budget). The leash is the owner's explicit rule, so it
+    always applies, and an Anthropic thinking budget is shrunk to fit under it."""
+    thinking = bool(work.get("thinking")) or bool(work.get("reasoning_effort"))
+    caps = [c for c in ((global_cap if not thinking else 0), leash_cap or 0) if c and c > 0]
+    if not caps:
+        return work
+    limit = min(caps)
+    by_leash = bool(leash_cap) and leash_cap == limit
+    label = ("reply capped at %d tokens by leash" if by_leash else "output capped at %d tokens") % limit
+    keys = [k for k in ("max_tokens", "max_completion_tokens") if isinstance(work.get(k), int)]
+    if not keys and by_leash:
+        key = "max_completion_tokens" if (api != "anthropic" and work.get("reasoning_effort")) else "max_tokens"
+        work = dict(work)
+        work[key] = limit
+        notes.append("reply limit set to %d tokens by leash" % limit)
+    for k in keys:
+        if work[k] > limit:
+            work = dict(work)
+            work[k] = limit
+            if label not in notes:
+                notes.append(label)
+    th = work.get("thinking")
+    if by_leash and isinstance(th, dict) and isinstance(th.get("budget_tokens"), int):
+        mx = work.get("max_tokens") or limit
+        if th["budget_tokens"] >= mx:
+            work = dict(work)
+            if mx > 1024:  # Anthropic's minimum thinking budget is 1024
+                work["thinking"] = dict(th, budget_tokens=mx - 1)
+                notes.append("thinking budget cut to %d to fit the reply leash" % (mx - 1))
+            else:
+                work.pop("thinking")
+                notes.append("thinking turned off to fit the reply leash")
+    return work
+
+
+MIN_REPLY_TOKENS = 16        # below this a reply is useless; refuse the call instead
+DEFAULT_REPLY_CEILING = 8192  # limit injected when the cap allows more and the request named none
+
+
+def fit_cost_cap(work, api, per_call, est_in, spec, notes):
+    """Make the request carry an explicit reply limit so the worst case
+    (est_in x input price + limit x output price) stays within the per-call cap.
+    Only ever lowers a limit (the reply leash and global cap still win when smaller).
+    Returns (work, too_pricey): too_pricey means not even a MIN_REPLY_TOKENS reply fits."""
+    out_price = float(spec.get("output", 0) or 0)
+    room = per_call * 1_000_000.0 - est_in * float(spec.get("input", 0) or 0)
+    if out_price > 0:
+        if room < MIN_REPLY_TOKENS * out_price:
+            return work, True
+        afford = int(room // out_price)
+    elif room < 0:
+        return work, True
+    else:
+        afford = None  # free output: any reply fits
+    current = [work[k] for k in ("max_tokens", "max_completion_tokens") if isinstance(work.get(k), int) and work[k] > 0]
+    if current:
+        if afford is None or min(current) <= afford:
+            return work, False
+        limit = afford
+    else:
+        ceiling = int(spec.get("max_output") or DEFAULT_REPLY_CEILING)
+        limit = ceiling if afford is None else min(afford, ceiling)
+    # Drop any non-int or non-positive limit so cap_reply sets a clean one.
+    work = {k: v for k, v in work.items()
+            if not (k in ("max_tokens", "max_completion_tokens") and not (isinstance(v, int) and v > 0))}
+    extra = []
+    work = cap_reply(work, api, 0, limit, extra)
+    notes.extend(n for n in extra if not n.startswith(("reply limit set", "reply capped")))
+    notes.append("reply limit %d tokens to fit $%.4f per-call leash" % (limit, per_call))
+    return work, False
 
 
 def blocked_body(api, reason, code):
@@ -158,16 +233,9 @@ class Engine:
         added_cache = False
         if api == "anthropic" and policy.get("auto_prompt_cache", True):
             work, added_cache = add_prompt_cache(work, policy.get("prompt_cache_min_tokens", 2048))
-        cap = int(policy.get("max_output_tokens_cap", 0) or 0)
+        leash = leash_rules(agent)
         notes = []
-        thinking = bool(work.get("thinking")) or bool(work.get("reasoning_effort"))
-        for key in ("max_tokens", "max_completion_tokens"):
-            # Never cap a request that uses extended thinking/reasoning: the output budget
-            # must stay above the thinking budget or the provider rejects the call.
-            if cap and not thinking and isinstance(work.get(key), int) and work[key] > cap:
-                work = dict(work)
-                work[key] = cap
-                notes.append("output capped at %d tokens" % cap)
+        work = cap_reply(work, api, int(policy.get("max_output_tokens_cap", 0) or 0), leash["max_reply_tokens"], notes)
 
         # 5) plan
         forced = headers.get("x-lowtides-tier")
@@ -175,8 +243,35 @@ class Engine:
 
         # 6) guard. Estimate with the priciest model the cascade could reach, so a climb
         # can't blow through a budget.
-        est_out = min(int(work.get("max_tokens") or work.get("max_completion_tokens") or 1024), 1024)
         est_in = pricing.estimate_request_tokens(work)
+        per_call = leash["max_cost_per_call"]
+        too_pricey = False
+        if per_call is not None:
+            # A per-call cap needs a hard reply limit: without one the reply can run to the
+            # model's max and the pre-flight estimate means nothing.
+            work, too_pricey = fit_cost_cap(work, api, per_call, est_in,
+                                            self.config.model(order[0]) or req_spec, notes)
+        limits = [work[k] for k in ("max_tokens", "max_completion_tokens") if isinstance(work.get(k), int) and work[k] > 0]
+        out_max = MIN_REPLY_TOKENS if too_pricey else (min(limits) if limits else 1024)
+        est_out = min(out_max, 1024)
+
+        # 6a) the leash: prompt size and per-call cost, priced on the model routing picked
+        # (the one that answers first), with the full reply allowance.
+        def call_cost(m):
+            return pricing.cost(self.config.model(m) or req_spec, input_tokens=est_in, output_tokens=out_max)
+        try:
+            self.guard.check_leash(agent, leash, est_in, order[0], call_cost(order[0]))
+        except Blocked as b:
+            self.store.record(agent_id=agent["id"], task_id=task["id"] if task else None, requested_model=requested,
+                              used_model="blocked", cost=0.0, baseline_cost=0.0, source="blocked", note=b.code)
+            return b.http, blocked_body(api, b.reason, b.code), {}
+        if per_call is not None:
+            # Don't let a verify-and-climb step land on a model that would break the per-call cap.
+            over = [m for m in order[1:] if call_cost(m) > per_call]
+            if over:
+                order = [m for m in order if m not in over]
+                notes.append("leash: won't climb to %s (over $%.4f per call)" % (", ".join(over), per_call))
+
         est = max(pricing.cost(self.config.model(m) or req_spec, input_tokens=est_in, output_tokens=est_out) for m in order)
         try:
             self.guard.check(agent, task, work, est)
@@ -184,6 +279,9 @@ class Engine:
             self.store.record(agent_id=agent["id"], task_id=task["id"] if task else None, requested_model=requested,
                               used_model="blocked", cost=0.0, baseline_cost=0.0, source="blocked", note=b.code)
             return b.http, blocked_body(api, b.reason, b.code), {}
+        dump = self.guard.dump_alert(agent, leash, est_in)
+        if dump:
+            notes.append(dump)
 
         # 7) call, verify, climb
         total_cost, escalations, attempts = 0.0, 0, []

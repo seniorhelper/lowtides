@@ -249,6 +249,16 @@ curl https://lowtides.ai/v1/spend -H "Authorization: Bearer lt-your-agent-key" -
 
 Claude, Cursor and other MCP apps: see the next section.
 
+## Leash: stop data dumps
+
+An agent can blow your budget in one call by pasting a huge file into a prompt or writing a giant reply. The leash is a per-agent limit on single calls. Open **Rules** on the dashboard and set:
+
+- **Max reply length** and **Biggest prompt allowed** (in pages)
+- **Max cost per AI call**
+- **Alert when a call is X times bigger than usual** (default 5)
+
+Or just write it: `Keep replies short. Never send more than 50 pages. No single call over 25 cents.` Calls over a limit are blocked with a message the agent can read; unusually big ones are flagged. Token counts are estimates. Details: [docs/LEASH.md](docs/LEASH.md).
+
 ## Use Lowtides from any agent (MCP)
 
 `python -m lowtides.mcp` runs a stdio MCP server that gives an agent three tools: `request_spend`, `check_spend` and `get_budget`. They call the Lowtides `/v1` spend API (see `docs/SPEND-API.md`). Add it to Claude Desktop or Claude Code (run from the repo folder, or set `cwd`):

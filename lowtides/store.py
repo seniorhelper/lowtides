@@ -270,6 +270,12 @@ class Store:
         r = self.one("SELECT COALESCE(SUM(cost),0) AS s FROM ledger WHERE task_id=?", (task_id,))
         return r["s"] if r else 0.0
 
+    def recent_input_sizes(self, agent_id, n=20):
+        """Prompt sizes (input + cached tokens) of the agent's last n answered model calls."""
+        rows = self.q("SELECT input_tokens + cache_read_tokens + cache_write_tokens AS t FROM ledger "
+                      "WHERE agent_id=? AND source='model' ORDER BY id DESC LIMIT ?", (agent_id, int(n)))
+        return [int(r["t"] or 0) for r in rows]
+
     def ledger(self, agent_id=None, limit=500, since=None):
         sql = "SELECT l.*, a.name AS agent_name FROM ledger l LEFT JOIN agents a ON a.id=l.agent_id WHERE 1=1"
         args = []

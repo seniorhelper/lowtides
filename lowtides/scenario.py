@@ -10,8 +10,8 @@ has a payee email (set LOWTIDES_DEMO_PAYEE to a sandbox personal account), other
 they are simulated and labeled that way.
 
 Story: an overnight research agent does honest work, buys data it needs, then reads a
-poisoned web page telling it to pay a stranger, tries a huge purchase, gets stuck in a
-loop, and finally the owner hits KILL. Every step shows what Lowtides decided and why.
+poisoned web page telling it to pay a stranger, tries a huge purchase, tries to push a
+giant data dump through one AI call (blocked by the leash), gets stuck in a loop, and finally the owner hits KILL. Every step shows what Lowtides decided and why.
 """
 import argparse
 import json
@@ -22,7 +22,19 @@ import urllib.error
 import urllib.request
 
 AGENT_NAME = "Night-shift research agent"
-RULES_TEXT = "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto."
+RULES_TEXT = ("Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto. "
+              "Keep replies short. Never send more than 50 pages. No single AI call over 25 cents.")
+
+
+def data_dump(tokens=80000):
+    """A giant scraped page, built in code: about `tokens` tokens of filler (4 chars each)."""
+    row = "Vendor listing: tide gauge, model TG-%04d, price on request, see page footer. "
+    out, n = [], 0
+    while n < tokens * 4:
+        line = row % (len(out) % 10000)
+        out.append(line)
+        n += len(line)
+    return "Scraped page dump, everything on the site:\n" + "".join(out)
 
 
 class Client:
@@ -128,7 +140,17 @@ def run(base, admin="", pause=True, kill=True):
                                         "category": "data", "reason": "More leads"}, key)
     show(r, pause)
 
-    say("\n7. 2:14 am: the agent gets stuck in a loop, sending the same request again and again:", pause)
+    say("\n7. It scrapes a whole vendor site and tries to stuff ~80,000 tokens into one AI call:", pause)
+    s, resp = c.call("POST", "/v1/chat/completions", {"model": "sim-large", "messages": [
+        {"role": "user", "content": "Summarize every vendor on this page.\n\n" + data_dump()}]}, key)
+    if s == 200:
+        say("    -> NOT BLOCKED (the leash let it through)", pause)
+    else:
+        err = resp.get("error")
+        msg = err.get("message") if isinstance(err, dict) else err
+        say("    -> BLOCKED by the leash (%s): %s" % (s, msg), pause)
+
+    say("\n8. 2:14 am: the agent gets stuck in a loop, sending the same request again and again:", pause)
     # A real runaway: the history grows with every retry (so each call costs more), while
     # the last two messages repeat word for word. That repeating tail is what the loop guard sees.
     history = [{"role": "user", "content": "Research the top 50 tide-gauge vendors. Results are paged; fetch every page."}]
@@ -146,7 +168,7 @@ def run(base, admin="", pause=True, kill=True):
 
     if not kill:
         return agent
-    say("\n8. The owner wakes up, sees the alert and hits KILL:", pause)
+    say("\n9. The owner wakes up, sees the alert and hits KILL:", pause)
     s, k = c.call("POST", "/api/agents/%d/kill" % agent["id"])
     say("    Stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts cancelled."
         % (k.get("denied", 0), k.get("holds_voided", 0), k.get("payouts_cancelled", 0)), pause)
@@ -156,7 +178,7 @@ def run(base, admin="", pause=True, kill=True):
     show(r, pause)
 
     s, v = c.call("GET", "/api/audit/verify")
-    say("\n9. Audit log: %d entries, hash chain %s. An evidence pack for any purchase is one click: /api/spend/%s/evidence"
+    say("\n10. Audit log: %d entries, hash chain %s. An evidence pack for any purchase is one click: /api/spend/%s/evidence"
         % (v.get("count", 0), "intact" if v.get("ok") else "BROKEN", injected.get("id", "")), pause)
     s, b = c.call("GET", "/v1/budget", key=key)
     if s == 200:

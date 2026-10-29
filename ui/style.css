@@ -414,3 +414,14 @@ table.plain td.num, table.plain th.num { text-align: right; font-variant-numeric
 .demo-banner .btn { min-height: 40px; }
 .demo-banner .demo-pitch { display: block; font-size: 1.05em; margin-bottom: .3rem; }
 @media (max-width: 1150px) { .demo-banner { margin-left: 16px; margin-right: 16px; } }
+
+/* Leash (data dumps) group in the Rules dialog */
+.leash { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .9rem .9rem; margin: .8rem 0 1.1rem; min-width: 0; }
+.leash legend { font: 700 1.05rem var(--font); color: var(--ink); padding: 0 .35rem; }
+.leash-f { margin-top: .8rem; }
+.leash-f label { display: block; font-weight: 600; color: var(--ink); margin-bottom: .25rem; }
+.leash-f select, .leash-f input { width: 100%; max-width: 100%; }
+.leash-f input[hidden] { display: none; }
+.leash-f input + p, .leash-f select + p, .leash-f input[type=number] + p { margin: .3rem 0 0; }
+.leash-f #leash-reply-custom { margin-top: .4rem; }
+.leash select:focus-visible, .leash input:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
