@@ -371,3 +371,11 @@ table.plain td.num, table.plain th.num { text-align: right; font-variant-numeric
   .t-dot.on { animation: none; }
   .t-dot, .t-lim, .t-pace, .appr, .flash { transition: none !important; animation: none !important; }
 }
+
+/* ---- public demo banner ---- */
+.demo-banner { display: flex; gap: .75rem; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  max-width: 1120px; margin: .75rem auto 0; padding: .7rem 1rem; border: 1px solid var(--amber);
+  background: #FFF6E8; color: var(--ink); border-radius: var(--radius); font-size: .95rem; }
+.demo-banner a { color: var(--sign); font-weight: 600; }
+.demo-banner .btn { min-height: 40px; }
+@media (max-width: 1150px) { .demo-banner { margin-left: 16px; margin-right: 16px; } }

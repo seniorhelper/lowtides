@@ -12,6 +12,10 @@ services:
     envVars:
       - key: HOST
         value: 0.0.0.0
+      # Public demo for judges: no password, PayPal sandbox only, simulated AI models only,
+      # a "Reset demo" button. Remove this line to run your own private, password-protected copy.
+      - key: LOWTIDES_PUBLIC_DEMO
+        value: "1"
       - key: LOWTIDES_DB
         value: /tmp/lowtides.db
       - key: LOWTIDES_CONFIG

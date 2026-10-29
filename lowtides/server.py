@@ -7,6 +7,7 @@ Agent endpoints (drop-in):
   POST /v1/spend, GET /v1/spend/{id}, GET /v1/budget   ask before buying (see docs/SPEND-API.md)
 Point your agent's base URL at this server and use its Lowtides key as the API key.
 """
+import collections
 import datetime
 import hmac
 import json
@@ -61,10 +62,32 @@ class App:
                                        env=pp_cfg.get("env", "sandbox"), currency=pp_cfg.get("currency", "USD"))
         self.money = Money(config, store, self.paypal)
         self.spend = SpendGovernor(store, self.paypal, self.money)
+        # Public demo: no password, PayPal sandbox only, simulated models only, resettable.
+        self.public_demo = os.environ.get("LOWTIDES_PUBLIC_DEMO", "").lower() in ("1", "true", "yes")
+        self.self_url = None
+        self.claude_compiles = collections.deque()
         self.admin_token = os.environ.get("LOWTIDES_ADMIN_TOKEN", "")
         self.config_path = config_path or os.environ.get("LOWTIDES_CONFIG") or os.path.join(ROOT, "config.json")
         self.save_lock = threading.Lock()
         self.loopback = True  # set by serve(); a loopback server only answers to localhost names
+
+    def reset_demo(self):
+        """Public demo only: wipe everything and replay the runaway-agent story, stopping
+        before the KILL so visitors can approve, deny or kill for themselves."""
+        if not self.public_demo:
+            raise ValueError("Reset is only available in the public demo.")
+        with self.store.lock:
+            for table in ("spend_requests", "merchants", "audit", "events", "ledger", "memory", "tasks",
+                          "wallets", "wallet_tx", "topups", "shadow", "agents"):
+                self.store.db.execute("DELETE FROM " + table)
+            self.store.db.commit()
+        if self.self_url:
+            from .scenario import seed
+            try:
+                seed(self.self_url)
+            except Exception as e:  # the demo still works empty; say why
+                self.store.event(None, "control", "Demo story could not load: %s" % e)
+        self.store.event(None, "control", "Public demo reset. The runaway-agent story is loaded: try Approvals, Rules and KILL.")
 
     def save_config(self):
         with self.save_lock:
@@ -98,7 +121,8 @@ class App:
             "tasks": self.store.tasks(limit=50),
             "shadows": self.store.shadows(20),
             "config": self.config.public(),
-            "admin_protected": bool(self.admin_token),
+            "admin_protected": bool(self.admin_token) and not self.public_demo,
+            "public_demo": self.public_demo,
             "paypal_ready": self.paypal.configured,
         }
 
@@ -170,7 +194,7 @@ def make_handler(app):
             self.end_headers()
 
         def _admin_ok(self):
-            if not app.admin_token:
+            if not app.admin_token or app.public_demo:
                 return True
             given = self.headers.get("X-Admin-Token", "")
             if not given:
@@ -445,6 +469,10 @@ def make_handler(app):
             if path in ("/v1/chat/completions", "/v1/messages", "/chat/completions", "/messages"):
                 api = "openai" if path.endswith("chat/completions") else "anthropic"
                 body = self._json_in()
+                if app.public_demo and (app.config.model(body.get("model") or "") or {}).get("provider") != "simulator":
+                    return self._send(403, {"error": {"message": "This public demo runs on the built-in simulated models only "
+                                                                 "(sim-small, sim-medium, sim-large), so nobody can spend real AI credit.",
+                                                      "type": "public_demo"}})
                 hdrs = {k: v for k, v in self.headers.items()}
                 status, resp, extra = app.engine.handle(api, body, self._agent_key(), hdrs)
                 if status == 200 and body.get("stream"):
@@ -486,6 +514,12 @@ def make_handler(app):
         def _api_post(self, path, d):
             s = app.store
             parts = path.strip("/").split("/")
+            if app.public_demo:
+                if path in ("/api/providers", "/api/models"):
+                    return self._send(403, {"error": "Changing model connections is turned off in the public demo."})
+                if path == "/api/demo/reset":
+                    app.reset_demo()
+                    return self._send(200, {"ok": True})
             if path == "/api/agents":
                 name = (d.get("name") or "").strip()
                 if not name:
@@ -504,8 +538,18 @@ def make_handler(app):
                 except SpendError as e:
                     return self._send(e.http, {"error": str(e)})
             if path == "/api/rules/compile":
+                key = os.environ.get("ANTHROPIC_API_KEY", "")
+                if key and app.public_demo:
+                    # Cap the owner's Claude spend from strangers: 30 translations an hour, then offline.
+                    now = time.time()
+                    while app.claude_compiles and app.claude_compiles[0] < now - 3600:
+                        app.claude_compiles.popleft()
+                    if len(app.claude_compiles) >= 30:
+                        key = ""
+                    else:
+                        app.claude_compiles.append(now)
                 try:
-                    return self._send(200, compile_rules(d.get("text", ""), api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+                    return self._send(200, compile_rules(d.get("text", ""), api_key=key,
                                                          model=app.config.policy.get("rules_model", "claude-haiku-5-5")))
                 except SpendError as e:
                     return self._send(e.http, {"error": str(e)})
@@ -653,6 +697,8 @@ def make_handler(app):
             return self._send(404, {"error": "Unknown endpoint"})
 
         def _delete(self):
+            if app.public_demo and self._path()[0].startswith("/api/models/"):
+                return self._send(403, {"error": "Changing models is turned off in the public demo."})
             path, _ = self._path()
             if not path.startswith("/api/"):
                 return self._send(404, {"error": "Unknown endpoint"})
@@ -686,13 +732,21 @@ def serve(host=None, port=None):
     host = host or os.environ.get("HOST", "127.0.0.1")
     port = int(port or os.environ.get("PORT", 8787))
     app.loopback = host in LOCAL_NAMES
-    if not app.loopback and not app.admin_token and not os.environ.get("LOWTIDES_ALLOW_NO_PASSWORD"):
+    if app.public_demo and app.config.paypal.get("env", "sandbox") != "sandbox":
+        print("Refusing to start: LOWTIDES_PUBLIC_DEMO only runs with PayPal in sandbox mode (no real money).")
+        sys.exit(2)
+    if not app.loopback and not app.admin_token and not app.public_demo and not os.environ.get("LOWTIDES_ALLOW_NO_PASSWORD"):
         print("Refusing to start: HOST=%s makes the dashboard reachable from other machines, and "
               "LOWTIDES_ADMIN_TOKEN is not set. Set a password with LOWTIDES_ADMIN_TOKEN, or use HOST=127.0.0.1." % host)
         sys.exit(2)
     httpd = ThreadingHTTPServer((host, port), make_handler(app))
     httpd.daemon_threads = True
     print("%s %s running at http://%s:%d  (dashboard + agent API)" % (APP_NAME, __version__, host, port))
+    if app.public_demo:
+        app.self_url = "http://127.0.0.1:%d" % port
+        print("PUBLIC DEMO: no password, PayPal sandbox only, simulated models only. Loading the demo story...")
+        if not app.store.agents():
+            threading.Thread(target=app.reset_demo, daemon=True).start()
     if not app.admin_token:
         print("Tip: set LOWTIDES_ADMIN_TOKEN to password-protect the dashboard before putting it online.")
     try:
