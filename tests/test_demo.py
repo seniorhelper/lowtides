@@ -81,9 +81,15 @@ class TestPublicDemo(unittest.TestCase):
         self.assertNotEqual(self.app.config.policy.get("loop_max_repeats"), 999)
         req = urllib.request.Request(self.url + "/api/agents", data=b"{" + b" " * (1200 * 1024) + b"}", method="POST",
                                      headers={"Content-Type": "application/json"})
-        with self.assertRaises(urllib.error.HTTPError) as cm:
+        # The server refuses before the body is all sent, so the client sees either the
+        # error status or a closed connection; both mean the oversized body was turned away.
+        try:
             urllib.request.urlopen(req, timeout=10)
-        self.assertIn(cm.exception.code, (400, 413))
+            self.fail("an oversized body was accepted")
+        except urllib.error.HTTPError as e:
+            self.assertIn(e.code, (400, 413))
+        except (urllib.error.URLError, ConnectionError):
+            pass
 
     def test_connections_locked(self):
         s, _, _ = http("POST", self.url + "/api/providers", {"name": "x", "base_url": "https://evil.example", "api_key_env": "X_API_KEY"})
