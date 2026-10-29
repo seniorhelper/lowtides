@@ -2,6 +2,7 @@
 import http.client as httpclient
 import json
 import os
+import time
 import unittest
 
 import fakes
@@ -341,7 +342,7 @@ class TestServerFixes(ServerCase):
         cid = r["client"]["id"]
         s, r, _ = self.api("POST", "/api/agents", {"name": "Shop bot", "client_id": cid})
         self.app.store.record(agent_id=r["agent"]["id"], requested_model="sim-large", used_model="sim-small",
-                              cost=5.0, baseline_cost=9.0, source="model")
+                              cost=5.0, baseline_cost=9.0, source="model", ts=time.time() - 1)  # Windows clock tick
         s, r, _ = self.api("POST", "/api/clients/%d/invoice" % cid, {"days": 30})
         self.assertEqual(s, 200)
         s, p, _ = self.api("POST", "/api/clients/%d/invoice" % cid, {"preview": True, "days": 30})

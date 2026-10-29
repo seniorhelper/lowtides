@@ -173,6 +173,26 @@ class PayPal:
         return self._call("POST", "/v2/payments/captures/%s/refund" % urllib.parse.quote(capture_id), body,
                           request_id="refund-%s-%s" % (capture_id, cents(amount)))
 
+    # ---- payouts (agent purchases) --------------------------------------------------
+    def create_payout(self, receiver_email, amount, note, item_id):
+        """Pay a merchant from the owner's PayPal balance. The request ID is the spend
+        request's ID, so a retry can never pay the same purchase twice."""
+        body = {
+            "sender_batch_header": {"sender_batch_id": str(item_id)[:30], "email_subject": "Payment from an AI agent (Lowtides)",
+                                    "email_message": note[:255]},
+            "items": [{"recipient_type": "EMAIL", "receiver": receiver_email, "note": note[:255], "sender_item_id": str(item_id)[:30],
+                       "amount": {"currency": self.currency, "value": cents(amount)}}],
+        }
+        return self._call("POST", "/v1/payments/payouts", body, request_id="payout-" + str(item_id))
+
+    def get_payout_batch(self, batch_id):
+        return self._call("GET", "/v1/payments/payouts/" + urllib.parse.quote(batch_id))
+
+    def cancel_payout_item(self, item_id):
+        """Only works while the payout is UNCLAIMED (the receiver hasn't accepted it yet)."""
+        return self._call("POST", "/v1/payments/payouts-item/%s/cancel" % urllib.parse.quote(item_id), {},
+                          request_id="cancel-" + item_id)
+
     # ---- invoices ----------------------------------------------------------------
     def create_invoice(self, recipient_email, items, note, memo="", request_id=None):
         body = {
