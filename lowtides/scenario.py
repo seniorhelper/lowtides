@@ -87,7 +87,7 @@ def run(base, admin="", pause=True, kill=True):
     payee = os.environ.get("LOWTIDES_DEMO_PAYEE", "merchant-demo@example.com")
     c.call("POST", "/api/merchants", {"name": "Acme Data", "paypal_email": payee, "category": "data"})
     c.call("POST", "/api/merchants", {"name": "CloudGPU Inc", "paypal_email": payee, "category": "compute"})
-    s, r = c.call("POST", "/api/agents", {"name": "%s %s" % (AGENT_NAME, time.strftime("%H:%M:%S")), "daily_budget": 2.0})
+    s, r = c.call("POST", "/api/agents", {"name": AGENT_NAME, "daily_budget": 2.0})
     agent = r["agent"]
     key = agent["key"]
     say("1. The owner sets a budget and writes the rules in plain English:", pause)

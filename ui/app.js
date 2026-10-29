@@ -156,8 +156,10 @@
       b.id = "demo-banner";
       b.className = "demo-banner";
       b.setAttribute("role", "note");
-      b.innerHTML = '<span><strong>Public demo.</strong> PayPal <strong>sandbox</strong> (test money) and simulated AI models, so nothing here costs ' +
-        'real money. Anyone can press the buttons. A runaway agent is already loaded: check <a href="#approvals">Approvals</a>, open an ' +
+      b.innerHTML = '<span><strong class="demo-pitch">Lowtides puts one budget, your rules and a kill switch between AI agents and your money: ' +
+        'their AI bills and what they buy through PayPal.</strong> ' +
+        '<strong>Public demo:</strong> PayPal <strong>sandbox</strong> (test money) and simulated AI models, so nothing here costs ' +
+        'real money. A runaway agent is already loaded: check <a href="#approvals">Approvals</a>, open an ' +
         "agent's <strong>Rules</strong>, or hit <strong>KILL</strong>.</span>" +
         '<button type="button" class="btn ghost" id="demo-reset">Reset demo</button>';
       var top = document.querySelector("header.top");
@@ -233,8 +235,8 @@
 
   function renderAgents() {
     var box = $("agents");
-    if (!S.agents.length) { box.innerHTML = '<div class="empty">No agents yet. Use the three steps above to add your first one.</div>'; return; }
-    box.innerHTML = S.agents.map(function (a) {
+    if (!S.agents.length) { box.innerHTML = '<div class="empty">No agents yet. Use the three steps above to add your first one.</div>'; box.dataset.html = ""; return; }
+    var html = S.agents.map(function (a) {
       var pct = a.daily_budget ? Math.min(100, a.spent_today / a.daily_budget * 100) : 100;
       var cls = pct >= 100 ? "full" : (pct >= 80 ? "hot" : "");
       var status = a.status === "on" ? "Running" : (a.status === "paused" ? "Paused by the loop guard" : "Stopped");
@@ -259,6 +261,16 @@
         '<button class="btn ghost sm" data-act="wallet" data-id="' + a.id + '">' + (a.use_wallet ? "Wallet off" : "Pay from wallet") + "</button>" +
         "</div></div>";
     }).join("");
+    // The dashboard refreshes every few seconds: leave unchanged markup alone, and put
+    // keyboard focus back on the same button when it does change.
+    if (box.dataset.html === html) return;
+    var f = document.activeElement, keep = f && box.contains(f) && f.dataset.act ? [f.dataset.act, f.dataset.id] : null;
+    box.innerHTML = html;
+    box.dataset.html = html;
+    if (keep) {
+      var again = box.querySelector('button[data-act="' + keep[0] + '"][data-id="' + keep[1] + '"]');
+      if (again) again.focus();
+    }
   }
 
   $("agents").addEventListener("click", function (ev) {
