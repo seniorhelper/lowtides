@@ -42,7 +42,7 @@ INJECTION = re.compile(
     r"ignore (all |any |the )?(previous|prior|above|earlier) (instructions|rules)|disregard (your|the|all) (rules|instructions)"
     r"|system prompt|you are now|new instructions|developer mode|jailbreak"
     r"|(send|wire|transfer) (the )?(money|funds|payment|it) to|pay (this|the following) (account|address|email) instead"
-    r"|act as (an? )?(admin|administrator|owner)|override (the )?(budget|limit|rules)", re.I)
+    r"|act as (an? |the )?(admin|administrator|owner)|override (the )?(budget|limit|rules)", re.I)
 
 DUP_WINDOW = 600          # seconds: same agent, merchant and amount = possible double charge
 UNUSUAL_MULTIPLE = 3.0    # times the agent's typical purchase
@@ -492,9 +492,14 @@ class SpendGovernor:
             r = agent_rules(a)
             tokens = self.store.spend_since(a["id"], today)
             bought = self.store.purchases_since(a["id"], today)
-            spent = tokens + bought
-            limit = r["daily_total_limit"] if r["daily_total_limit"] is not None else float(a["daily_budget"]) + r["daily_purchase_limit"]
-            last_hour = self.store.spend_since(a["id"], now - 3600) + self.store.purchases_since(a["id"], now - 3600)
+            tok_hour = self.store.spend_since(a["id"], now - 3600)
+            buy_hour = self.store.purchases_since(a["id"], now - 3600)
+            # Show the limit the agent is closest to: AI usage, purchases, or the combined cap.
+            sides = [("ai_usage", tokens, float(a["daily_budget"]), tok_hour),
+                     ("purchases", bought, r["daily_purchase_limit"], buy_hour)]
+            if r["daily_total_limit"] is not None:
+                sides.append(("combined", tokens + bought, r["daily_total_limit"], tok_hour + buy_hour))
+            kind, spent, limit, last_hour = max(sides, key=lambda x: (x[1] / x[2]) if x[2] else float("inf"))
             rate = last_hour / 60.0  # dollars per minute at the last hour's pace
             projected = spent + rate * mins_left
             to_limit = None
@@ -502,6 +507,7 @@ class SpendGovernor:
                 to_limit = round((limit - spent) / rate, 1)
             rows.append({"id": a["id"], "name": a["name"], "status": a["status"], "tokens_today": round(tokens, 4),
                          "purchases_today": round(bought, 2), "spent_today": round(spent, 4), "limit": round(limit, 2),
+                         "limit_kind": kind,
                          "rate_per_hour": round(last_hour, 4), "projected_today": round(projected, 2),
                          "minutes_to_limit": to_limit if to_limit is not None and to_limit <= mins_left else None})
         return {"agents": rows, "generated": now}

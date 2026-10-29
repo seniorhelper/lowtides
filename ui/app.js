@@ -52,13 +52,48 @@
     if (body !== undefined) opts.body = JSON.stringify(body);
     return fetch(path, opts).then(function (r) {
       if (r.status === 401 && path.indexOf("/api/") === 0) { showLogin(); throw new Error("Password required"); }
-      return r.json().then(function (j) {
-        if (!r.ok) throw new Error(j.error || ("Request failed (" + r.status + ")"));
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) {
+          var err = new Error(j.error || ("Request failed (" + r.status + ")"));
+          err.status = r.status;
+          throw err;
+        }
         return j;
       });
     });
   }
   function fail(e) { if (e && e.message !== "Password required") flash(e.message || String(e), true); }
+
+  // Features that depend on newer backend endpoints. A 404 turns the feature off
+  // and hides its UI quietly instead of showing an error.
+  var FEAT = { spend: true, forecast: true, audit: true, merchants: true, rules: true };
+  function soft(name, quiet) {
+    return function (e) {
+      if (e && (e.status === 404 || e.status === 405 || e.status === 501)) { FEAT[name] = false; applyFeatures(); return null; }
+      if (!quiet) fail(e);
+      return null;
+    };
+  }
+  var RM = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function clock(d) {
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?AM$/i, " am").replace(/\s?PM$/i, " pm");
+  }
+  // Count a money figure up or down to its new value.
+  function tweenMoney(el, to, fmt) {
+    fmt = fmt || money;
+    var from = Number(el.dataset.v);
+    el.dataset.v = to;
+    if (RM.matches || isNaN(from) || from === to) { el.textContent = fmt(to); return; }
+    var t0 = null, dur = 700;
+    function step(t) {
+      if (t0 === null) t0 = t;
+      var k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(from + (to - from) * e);
+      if (k < 1 && Number(el.dataset.v) === to) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
 
   // ---------- login ----------
   function showLogin() { $("login").hidden = false; $("login-pw").focus(); }
@@ -77,7 +112,8 @@
   // ---------- tabs ----------
   function currentTab() {
     var h = (location.hash || "#home").slice(1).split("?")[0];
-    return ["home", "tasks", "wallet", "clients", "ledger", "settings"].indexOf(h) >= 0 ? h : "home";
+    if (h === "approvals" && !FEAT.spend) return "home";
+    return ["home", "approvals", "tasks", "wallet", "clients", "ledger", "settings"].indexOf(h) >= 0 ? h : "home";
   }
   function showTab() {
     var t = currentTab();
@@ -94,6 +130,8 @@
     var m = q.match(/msg=([^&]+)/);
     if (m) flash(decodeURIComponent(m[1]), true);
     if (t === "ledger") loadLedger();
+    if (t === "approvals") { loadPending(); loadLog(); }
+    if (t === "settings") loadMerchants();
   }
   window.addEventListener("hashchange", showTab);
 
@@ -106,8 +144,7 @@
 
   // ---------- STOP ALL ----------
   $("stop-all").addEventListener("click", function () {
-    if (!confirm("Stop every agent right now? They will refuse all calls until you press Start.")) return;
-    api("POST", "/api/stop-all").then(function () { flash("Every agent is stopped."); refresh(); }).catch(fail);
+    askKill(null);
   });
 
   // ---------- render ----------
@@ -122,7 +159,7 @@
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
     var t = S.today.totals;
-    $("saved-today").textContent = money(t.saved);
+    tweenMoney($("saved-today"), Number(t.saved || 0));
     $("saved-sub").textContent = "Would have cost " + money(t.baseline) + ". You paid " + money(t.cost) + "." +
       (t.baseline > 0 ? " That's " + S.today.percent_saved + "% less." : "");
     var lines = t.calls ? S.today.lines : ["No calls yet today. Connect an agent or press Watch it work."];
@@ -136,6 +173,7 @@
 
     $("setup").hidden = S.agents.length > 0;
     renderAgents();
+    renderTide();
     renderEvents();
     renderSelects();
     renderTasks();
@@ -157,12 +195,16 @@
           ? '<button class="btn warn sm" data-act="resume" data-id="' + a.id + '">Resume</button>'
           : '<button class="btn go sm" data-act="start" data-id="' + a.id + '">Start</button>');
       var wallet = a.use_wallet ? " Wallet " + money(a.balance) + "." : "";
+      var nm = esc(a.name);
+      var kill = a.status === "stopped" ? "" :
+        '<button class="btn kill sm" data-act="kill" data-id="' + a.id + '" aria-label="Kill ' + nm + '">KILL</button>';
+      var rules = FEAT.rules ? '<button class="btn ghost sm" data-act="rules" data-id="' + a.id + '" aria-label="Rules for ' + nm + '">Rules</button>' : "";
       return '<div class="agent">' +
         '<div class="light ' + a.light + '" role="img" aria-label="' + esc(a.light) + ' light"><i></i><i></i><i></i></div>' +
         '<div><div class="agent-name">' + esc(a.name) + (a.simulated ? '<span class="tag">demo</span>' : "") + '</div>' +
         '<div class="agent-meta">' + esc(status) + ". Spent " + money4(a.spent_today) + " of " + money(a.daily_budget) + " today." + esc(wallet) + "</div>" +
         '<div class="bar ' + cls + '"><b style="width:' + pct.toFixed(1) + '%"></b></div></div>' +
-        '<div class="agent-actions">' + btn +
+        '<div class="agent-actions">' + btn + kill + rules +
         '<button class="btn ghost sm" data-act="key" data-id="' + a.id + '">Connect</button>' +
         '<button class="btn ghost sm" data-act="edit" data-id="' + a.id + '">Allowance</button>' +
         '<button class="btn ghost sm" data-act="wallet" data-id="' + a.id + '">' + (a.use_wallet ? "Wallet off" : "Pay from wallet") + "</button>" +
@@ -189,6 +231,10 @@
         .then(function () { flash("Allowance saved."); refresh(); }).catch(fail);
     } else if (act === "wallet") {
       api("POST", "/api/agents/" + id + "/update", { use_wallet: !a.use_wallet }).then(refresh).catch(fail);
+    } else if (act === "kill") {
+      askKill(a, b);
+    } else if (act === "rules") {
+      openRules(a, b);
     }
   });
 
@@ -543,11 +589,493 @@
     api("POST", "/api/memory/clear", {}).then(function () { flash("All remembered answers are forgotten."); }).catch(fail);
   });
 
+  // ---------- feature visibility ----------
+  function applyFeatures() {
+    $("approvals-link").hidden = !FEAT.spend;
+    if (!FEAT.spend) { $("appr-banner").hidden = true; if ((location.hash || "").indexOf("#approvals") === 0) location.hash = "#home"; }
+    $("merchants-panel").hidden = !FEAT.merchants;
+    if (!FEAT.audit) $("audit-line").hidden = true;
+    if (!FEAT.forecast) FC = {};
+    if (S) { renderAgents(); renderTide(); }
+  }
+
+  // ---------- tide chart ----------
+  // Each agent gets a dot field: 12 columns, 8 rows of "water" under one amber
+  // limit row. Lit sea-glass dots rise from the bottom as the day's spend grows.
+  var FC = {};               // forecast by agent id
+  var COLS = 12, ROWS = 8, STEP = 20;
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  function tideCard(id) {
+    var card = document.createElement("article");
+    card.className = "tcard";
+    card.dataset.id = id;
+    var svg = '<svg class="tsvg" viewBox="0 0 240 184" aria-hidden="true" focusable="false">' +
+      '<line class="t-limit-line" x1="2" y1="10" x2="238" y2="10"></line>';
+    for (var c = 0; c < COLS; c++) svg += '<circle class="t-lim" cx="' + (c * STEP + 10) + '" cy="10" r="5.5"></circle>';
+    for (var r = 0; r < ROWS; r++) {
+      for (var c2 = 0; c2 < COLS; c2++) {
+        svg += '<circle class="t-dot" data-r="' + r + '" data-c="' + c2 + '" style="--c:' + c2 + '" cx="' + (c2 * STEP + 10) + '" cy="' + (170 - r * STEP) + '" r="5.5"></circle>';
+      }
+    }
+    svg += '<g class="t-pace" hidden><line x1="0" y1="0" x2="240" y2="0"></line></g></svg>';
+    card.innerHTML =
+      '<header class="tcard-head"><h3 class="tcard-name"></h3><span class="tstat"></span></header>' +
+      '<div class="tfield">' + svg + "</div>" +
+      '<p class="tnums"><span class="tspent" data-v="">$0.00</span> <span class="tof"></span></p>' +
+      '<p class="tpace"></p>';
+    return card;
+  }
+
+  function tideState(a) {
+    var f = FC[a.id];
+    var spent = f ? Number(f.spent_today || 0) : Number(a.spent_today || 0);
+    var limit = f && f.limit ? Number(f.limit) : Number(a.daily_budget || 0);
+    var pct = limit > 0 ? spent / limit : (spent > 0 ? 1 : 0);
+    var paceText = "", pace = null;
+    if (f) {
+      var proj = Number(f.projected_today || 0);
+      pace = limit > 0 ? proj / limit : null;
+      if (pct >= 1) paceText = "At the limit. New spend is refused until tomorrow.";
+      else if (a.status !== "on") paceText = "Not spending while it's " + (a.status === "paused" ? "paused." : "stopped.");
+      else if (f.minutes_to_limit != null && f.minutes_to_limit >= 0) {
+        var at = new Date(Date.now() + f.minutes_to_limit * 60000);
+        paceText = at.toDateString() === new Date().toDateString()
+          ? "At this pace it hits the limit at " + clock(at) + "."
+          : "At this pace it stays under the limit today.";
+      } else if (spent === 0 && proj === 0) paceText = "No spend yet today.";
+      else paceText = "At this pace it ends the day near " + money(proj) + ", under the limit.";
+    }
+    return { spent: spent, limit: limit, pct: pct, pace: pace, paceText: paceText };
+  }
+
+  function renderTide() {
+    var box = $("tide-grid");
+    if (!S.agents.length) {
+      box.innerHTML = '<p class="tide-empty">No agents yet. Add one below and its tide shows up here.</p>';
+      return;
+    }
+    var empty = box.querySelector(".tide-empty");
+    if (empty) empty.remove();
+    var keep = {};
+    S.agents.forEach(function (a, i) {
+      keep[a.id] = true;
+      var card = box.querySelector('.tcard[data-id="' + a.id + '"]');
+      if (!card) { card = tideCard(a.id); }
+      if (box.children[i] !== card) box.insertBefore(card, box.children[i] || null);
+      updateTideCard(card, a, tideState(a));
+    });
+    Array.prototype.slice.call(box.querySelectorAll(".tcard")).forEach(function (c) { if (!keep[c.dataset.id]) c.remove(); });
+  }
+
+  function updateTideCard(card, a, t) {
+    card.querySelector(".tcard-name").textContent = a.name;
+    var st = card.querySelector(".tstat");
+    var label = a.status === "on" ? "Running" : (a.status === "paused" ? "Paused" : "Stopped");
+    st.textContent = label;
+    st.className = "tstat " + a.status;
+    var over = t.pct >= 1, warn = t.pct >= 0.8;
+    card.classList.toggle("warn", warn && !over);
+    card.classList.toggle("over", over);
+    tweenMoney(card.querySelector(".tspent"), t.spent, money4);
+    card.querySelector(".tof").textContent = "of " + money(t.limit) + " limit · " + Math.round(Math.min(t.pct, 9.99) * 100) + "%";
+    var pt = card.querySelector(".tpace");
+    pt.textContent = t.paceText;
+    pt.hidden = !t.paceText;
+
+    // Fill the field: whole rows from the bottom, then the partial top row left to right.
+    var level = Math.max(0, Math.min(1, t.pct)) * ROWS;
+    var full = Math.floor(level), part = Math.round((level - full) * COLS);
+    if (t.spent > 0 && full === 0 && part === 0) part = 1; // any spend shows at least one dot
+    var dots = card.querySelectorAll(".t-dot"), changed = [];
+    for (var i = 0; i < dots.length; i++) {
+      var d = dots[i], r = Number(d.dataset.r), c = Number(d.dataset.c);
+      var on = r < full || (r === full && c < part);
+      if (d.classList.contains("on") !== on) changed.push({ d: d, on: on, k: r * COLS + c });
+      d.classList.toggle("hi", r >= ROWS - 2);
+    }
+    var rising = changed.length && changed[0].on;
+    changed.sort(function (x, y) { return rising ? x.k - y.k : y.k - x.k; });
+    var stepMs = changed.length ? Math.min(25, 900 / changed.length) : 0;
+    changed.forEach(function (x, n) {
+      x.d.style.transitionDelay = RM.matches ? "0ms" : Math.round(n * stepMs) + "ms";
+      x.d.classList.toggle("on", x.on);
+    });
+
+    var pace = card.querySelector(".t-pace");
+    if (t.pace == null || t.pct >= 1) { pace.setAttribute("hidden", ""); }
+    else {
+      pace.removeAttribute("hidden");
+      var y = 180 - Math.max(0, Math.min(1, t.pace)) * 160;
+      pace.style.transform = "translateY(" + Math.max(20, y).toFixed(1) + "px)";
+      pace.classList.toggle("past", t.pace >= 1);
+    }
+  }
+
+  function loadForecast() {
+    if (!FEAT.forecast) return Promise.resolve();
+    return api("GET", "/api/forecast").then(function (r) {
+      var m = {};
+      ((r && r.agents) || []).forEach(function (f) { m[f.id] = f; });
+      FC = m;
+    }).catch(soft("forecast", true));
+  }
+
+  // ---------- approvals ----------
+  var PEND = [], pendSig = null, lastCount = -1;
+  var FLAGS = {
+    new_merchant: ["New merchant", "warn", "?"],
+    possible_injection: ["Possible prompt injection", "bad", "!"],
+    duplicate: ["Looks like a duplicate", "warn", "="],
+    unusual_amount: ["Unusual amount", "warn", "~"]
+  };
+  function flagChip(f) {
+    var m = FLAGS[f] || [String(f).replace(/_/g, " "), "warn", "!"];
+    return '<li class="chip ' + m[1] + '"><span class="chip-ic" aria-hidden="true">' + esc(m[2]) + "</span>" + esc(m[0]) + "</li>";
+  }
+  function flagList(flags) {
+    return flags && flags.length ? '<ul class="chips" aria-label="Flags">' + flags.map(flagChip).join("") + "</ul>" : "";
+  }
+  function reasonList(reasons) {
+    return reasons && reasons.length ? '<ul class="reasons">' + reasons.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" : "";
+  }
+
+  // The contract nests payout info; the store row has it flat. Accept both.
+  function payoutOf(x) {
+    var p = x.payout || {};
+    return { simulated: !!(p.simulated || x.simulated), status: p.status || x.payout_status || "" };
+  }
+  function loadPending() {
+    if (!FEAT.spend) return Promise.resolve();
+    return api("GET", "/api/spend?status=pending&limit=100").then(function (r) {
+      if (r) renderPending(r.requests || []);
+    }).catch(soft("spend", true));
+  }
+
+  function renderPending(list) {
+    PEND = list;
+    var n = list.length;
+    var badge = $("appr-badge");
+    badge.hidden = !n;
+    badge.innerHTML = n ? esc(n) + '<span class="sr"> waiting</span>' : "";
+    if (n !== lastCount) {
+      lastCount = n;
+      $("appr-banner").hidden = !n;
+      $("appr-banner-text").innerHTML = n
+        ? "<strong>" + esc(plural(n, "purchase is", "purchases are")) + " waiting for your approval.</strong> " +
+          esc(list[0].agent_name || "An agent") + " wants to pay " + esc(money(list[0].amount)) + " to " + esc(list[0].merchant || "a merchant") + (n > 1 ? ", and more." : ".")
+        : "";
+    }
+    var sig = list.map(function (x) { return x.id + ":" + x.status; }).join(",");
+    if (sig === pendSig) return;
+    pendSig = sig;
+    var box = $("appr-list");
+    var focusId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.spend : null;
+    var focusAct = focusId ? document.activeElement.dataset.do : null;
+    if (!n) {
+      box.innerHTML = '<div class="appr-empty"><span class="ok-ic" aria-hidden="true">&#10003;</span><div><strong>Nothing is waiting.</strong><br><span class="muted">New requests show up here within a few seconds.</span></div></div>';
+      return;
+    }
+    box.innerHTML = list.map(function (x) {
+      var inj = (x.flags || []).indexOf("possible_injection") >= 0;
+      return '<article class="appr' + (inj ? " risky" : "") + '" aria-labelledby="ap-h-' + esc(x.id) + '">' +
+        '<div class="appr-main">' +
+          '<p class="appr-who"><strong>' + esc(x.agent_name || "Agent") + "</strong> wants to buy" + (x.ts ? ' <time class="muted">' + esc(when(x.ts)) + "</time>" : "") + "</p>" +
+          '<h3 class="appr-amt" id="ap-h-' + esc(x.id) + '">' + esc(money(x.amount)) + ' <span class="appr-to">to ' + esc(x.merchant || "unknown merchant") + "</span></h3>" +
+          (x.item ? '<p class="appr-item">' + esc(x.item) + (x.category ? ' <span class="muted">(' + esc(x.category) + ")</span>" : "") + "</p>" : "") +
+          (x.reason ? '<p class="appr-why"><span class="k">Agent\'s reason:</span> ' + esc(x.reason) + "</p>" : "") +
+          flagList(x.flags) +
+          (x.reasons && x.reasons.length ? '<div class="appr-reasons"><span class="k">Why Lowtides asked you:</span>' + reasonList(x.reasons) + "</div>" : "") +
+        "</div>" +
+        '<div class="appr-btns">' +
+          '<button type="button" class="btn go big" data-spend="' + esc(x.id) + '" data-do="approve">Approve <span class="sr">' + esc(money(x.amount)) + " to " + esc(x.merchant) + "</span></button>" +
+          '<button type="button" class="btn deny big" data-spend="' + esc(x.id) + '" data-do="deny">Deny <span class="sr">' + esc(money(x.amount)) + " to " + esc(x.merchant) + "</span></button>" +
+        "</div></article>";
+    }).join("");
+    if (focusId) {
+      var again = box.querySelector('button[data-spend="' + focusId + '"][data-do="' + focusAct + '"]');
+      if (again) again.focus();
+    }
+  }
+
+  $("appr-list").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-spend]");
+    if (!b) return;
+    var id = b.dataset.spend, act = b.dataset.do;
+    var x = PEND.find(function (p) { return String(p.id) === id; }) || {};
+    var card = b.closest(".appr");
+    card.querySelectorAll("button").forEach(function (btn) { btn.disabled = true; });
+    var body = act === "deny" ? { note: "Denied from the dashboard." } : {};
+    api("POST", "/api/spend/" + encodeURIComponent(id) + "/" + act, body).then(function (r) {
+      r = r || {};
+      var amt = money(r.amount != null ? r.amount : x.amount), to = r.merchant || x.merchant || "the merchant";
+      if (act === "approve") {
+        var p = payoutOf(r);
+        flash("Approved. " + (r.status === "paid" ? "Paid " : "Paying ") + amt + " to " + to +
+          (p.simulated ? " (simulated payout: no PayPal keys set)." : " through PayPal."));
+      } else {
+        flash("Denied. " + amt + " to " + to + " will not be paid.");
+      }
+      card.classList.add("gone");
+      setTimeout(function () {
+        pendSig = null;
+        loadPending().then(function () {
+          // Keep keyboard users in the list: move focus to the next request, or the list itself.
+          var list = $("appr-list"), f = list.querySelector("button[data-do='approve']");
+          if (f) { f.focus(); return; }
+          list.setAttribute("tabindex", "-1");
+          list.focus();
+        });
+        loadLog();
+      }, RM.matches ? 0 : 250);
+    }).catch(function (e) {
+      card.querySelectorAll("button").forEach(function (btn) { btn.disabled = false; });
+      if (e && e.message === "Password required") return;
+      // Show why it couldn't go through right on the card (for example a merchant with no PayPal email).
+      var msg = card.querySelector(".appr-err");
+      if (!msg) { msg = document.createElement("p"); msg.className = "appr-err"; msg.setAttribute("role", "alert"); card.querySelector(".appr-main").appendChild(msg); }
+      msg.textContent = (act === "approve" ? "Couldn't approve: " : "Couldn't deny: ") + (e && e.message ? e.message : "please try again.");
+    });
+  });
+
+  var STATUS = {
+    paid: ["Paid", "ok", "&#10003;"], approved: ["Approved", "ok", "&#10003;"], pending: ["Waiting for you", "warn", "&#8230;"],
+    denied: ["Denied", "bad", "&#10005;"], cancelled: ["Cancelled", "neutral", "&#8211;"], failed: ["Payment failed", "bad", "!"]
+  };
+  function decidedBy(x) {
+    if (!x.decided_by) return "";
+    var d = String(x.decided_by).toLowerCase();
+    if (d === "rules") return "Decided by your rules.";
+    if (d.indexOf("kill") >= 0 || d.indexOf("stop") >= 0) return "Ended by the kill switch.";
+    if (/dashboard|person|admin|owner|human|you/.test(d)) return "Decided by you on the dashboard.";
+    return "Decided by: " + x.decided_by + ".";
+  }
+  var DECISION = { approved: "Lowtides approved it under your rules", needs_approval: "Lowtides asked you", denied: "Lowtides denied it" };
+  var logSig = null;
+  function loadLog() {
+    if (!FEAT.spend) return Promise.resolve();
+    loadAudit();
+    return api("GET", "/api/spend?status=all&limit=50").then(function (r) {
+      if (!r) return;
+      var list = r.requests || [];
+      var sig = list.map(function (x) { return x.id + ":" + x.status; }).join(",");
+      if (sig === logSig) return;
+      logSig = sig;
+      $("decision-log").innerHTML = list.length ? list.map(function (x) {
+        var s = STATUS[x.status] || [x.status, "neutral", "&#8226;"];
+        var p = payoutOf(x);
+        return '<li class="dl"><div class="dl-top">' +
+          '<span class="pill ' + s[1] + '"><span aria-hidden="true">' + s[2] + "</span> " + esc(s[0]) + "</span>" +
+          '<span class="dl-amt">' + esc(money(x.amount)) + "</span>" +
+          '<span class="dl-what"><strong>' + esc(x.agent_name || "Agent") + "</strong> to " + esc(x.merchant || "unknown") + (x.item ? ": " + esc(x.item) : "") + "</span>" +
+          (x.ts ? '<time class="muted small">' + esc(when(x.ts)) + "</time>" : "") +
+          "</div>" +
+          '<p class="dl-dec small">' + esc(DECISION[x.decision] || "") + (DECISION[x.decision] ? ". " : "") + esc(decidedBy(x)) +
+          (p.simulated ? ' <span class="tag">simulated payout</span>' : "") +
+          ' <a class="dl-ev" href="/api/spend/' + encodeURIComponent(x.id) + '/evidence" download="lowtides-evidence-' + esc(x.id) + '.json">Download evidence<span class="sr"> for ' + esc(money(x.amount)) + " to " + esc(x.merchant) + "</span></a></p>" +
+          flagList(x.flags) + reasonList(x.reasons) + "</li>";
+      }).join("") : '<li class="dl none muted">No purchase requests yet. When an agent calls <code>POST /v1/spend</code>, the decision shows up here.</li>';
+    }).catch(soft("spend", true));
+  }
+  function loadAudit() {
+    if (!FEAT.audit) return;
+    api("GET", "/api/audit/verify").then(function (r) {
+      if (!r) return;
+      var el = $("audit-line");
+      el.hidden = false;
+      if (r.ok) {
+        el.className = "audit-line ok";
+        el.innerHTML = '<span aria-hidden="true">&#10003;</span> Audit log verified (' + esc(plural(Number(r.count || 0), "entry", "entries")) + ")";
+      } else {
+        el.className = "audit-line bad";
+        el.innerHTML = '<span aria-hidden="true">&#10005;</span> Audit log check failed' + (r.broken_at != null ? " at entry " + esc(r.broken_at) : "") + ". Something was changed after it was written.";
+      }
+    }).catch(soft("audit", true));
+  }
+
+  // ---------- kill switch ----------
+  var killTarget = null, killReturn = null;
+  function askKill(a, from) {
+    killTarget = a;
+    killReturn = from || $("stop-all");
+    $("kill-h").textContent = a ? "Kill " + a.name + "?" : "Stop every agent?";
+    $("kill-text").textContent = (a ? "This stops " + a.name + " right now. " : "This stops all your agents right now. ") +
+      "Lowtides denies " + (a ? "its" : "their") + " waiting purchases, voids open PayPal holds and cancels payouts nobody has claimed yet. You can start " + (a ? "it" : "them") + " again later.";
+    $("kill-yes").textContent = a ? "Kill it now" : "Stop all now";
+    var dlg = $("kill-dlg");
+    if (dlg.showModal) { dlg.showModal(); $("kill-yes").focus(); }
+    else if (confirm($("kill-h").textContent + " " + $("kill-text").textContent)) doKill();
+  }
+  $("kill-dlg").addEventListener("close", function () { if (killReturn && document.body.contains(killReturn)) killReturn.focus(); });
+  $("kill-yes").addEventListener("click", doKill);
+  function killSummary(r) {
+    var bits = [];
+    if (r.denied) bits.push("denied " + plural(r.denied, "pending purchase", "pending purchases"));
+    if (r.holds_voided) bits.push("voided " + plural(r.holds_voided, "PayPal hold", "PayPal holds"));
+    if (r.payouts_cancelled) bits.push("cancelled " + plural(r.payouts_cancelled, "payout", "payouts"));
+    if (!bits.length) return "Nothing else was waiting.";
+    var s = bits.length > 1 ? bits.slice(0, -1).join(", ") + " and " + bits[bits.length - 1] : bits[0];
+    return s.charAt(0).toUpperCase() + s.slice(1) + ".";
+  }
+  function doKill() {
+    var a = killTarget, dlg = $("kill-dlg");
+    $("kill-yes").disabled = true;
+    var p = a
+      ? api("POST", "/api/agents/" + a.id + "/kill").catch(function (e) {
+          if (e && e.status === 404) return api("POST", "/api/agents/" + a.id + "/stop").then(function () { return { stopped: true, fallback: true }; });
+          throw e;
+        })
+      : api("POST", "/api/stop-all");
+    p.then(function (r) {
+      r = r || {};
+      var head = a ? "Stopped " + a.name + "." : "Every agent is stopped.";
+      var probs = (r.problems || []).filter(Boolean);
+      flash(head + (r.fallback ? "" : (r.denied != null || r.holds_voided != null || r.payouts_cancelled != null ? " " + killSummary(r) : "")) +
+        (probs.length ? " Needs a look: " + probs.join(" ") : ""), probs.length > 0);
+      if (dlg.open) dlg.close();
+      pendSig = null; logSig = null;
+      return refresh();
+    }).catch(fail).then(function () { $("kill-yes").disabled = false; });
+  }
+
+  // ---------- rules in plain English ----------
+  var rulesAgent = null, draftRules = null, rulesReturn = null;
+  function moneyRule(v) { return money(Number(v)); }
+  function hour(h) { h = Number(h); var ap = h >= 12 && h < 24 ? "pm" : "am"; var x = h % 12 || 12; return x + " " + ap; }
+  function humanRules(r) {
+    r = r || {};
+    var out = [], done = {};
+    function add(k, text) { done[k] = true; if (text) out.push(text); }
+    if (r.daily_purchase_limit != null) add("daily_purchase_limit", "Spends at most " + moneyRule(r.daily_purchase_limit) + " a day on purchases.");
+    if (r.max_per_purchase != null) add("max_per_purchase", "No single purchase over " + moneyRule(r.max_per_purchase) + ".");
+    if (r.approval_over != null) add("approval_over", Number(r.approval_over) <= 0 ? "Asks you before every purchase." : "Asks you before any purchase over " + moneyRule(r.approval_over) + ".");
+    if (r.allowed_categories && r.allowed_categories.length) add("allowed_categories", "Only buys: " + r.allowed_categories.join(", ") + ".");
+    else done.allowed_categories = true;
+    if (r.blocked_categories && r.blocked_categories.length) add("blocked_categories", "Never buys: " + r.blocked_categories.join(", ") + ".");
+    else done.blocked_categories = true;
+    if (r.blocked_merchants && r.blocked_merchants.length) add("blocked_merchants", "Never pays: " + r.blocked_merchants.join(", ") + ".");
+    else done.blocked_merchants = true;
+    if (r.new_merchant_needs_approval != null) add("new_merchant_needs_approval", r.new_merchant_needs_approval
+      ? "Asks you before paying a merchant that isn't on your list."
+      : "May pay merchants that aren't on your list without asking (riskier).");
+    if (r.hours && r.hours.start != null) add("hours", "Only buys between " + hour(r.hours.start) + " and " + hour(r.hours.end) + ".");
+    else done.hours = true;
+    if (r.max_purchases_per_hour != null) add("max_purchases_per_hour", "At most " + plural(Number(r.max_purchases_per_hour), "purchase", "purchases") + " an hour.");
+    Object.keys(r).forEach(function (k) {
+      if (!done[k] && r[k] != null && r[k] !== "") out.push(k.replace(/_/g, " ") + ": " + (typeof r[k] === "object" ? JSON.stringify(r[k]) : r[k]));
+    });
+    return out;
+  }
+  function ruleItems(r, plain) {
+    var h = plain && plain.length ? plain : humanRules(r);
+    return h.length ? h.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") : '<li class="muted">No purchase rules set yet.</li>';
+  }
+  function openRules(a, from) {
+    rulesAgent = a; draftRules = null; rulesReturn = from || null;
+    $("rules-h").textContent = "Rules for " + a.name;
+    $("rules-preview").hidden = true;
+    $("rules-text").value = "";
+    $("rules-now").innerHTML = '<li class="muted">Loading…</li>';
+    var dlg = $("rules-dlg");
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+    $("rules-text").focus();
+    api("GET", "/api/agents/" + a.id + "/rules").then(function (r) {
+      $("rules-now").innerHTML = ruleItems((r && r.rules) || {}, r && r.plain);
+    }).catch(function (e) {
+      if (e && e.status === 404) {
+        FEAT.rules = false; if (dlg.open) dlg.close(); applyFeatures();
+        return;
+      }
+      $("rules-now").innerHTML = '<li class="muted">Couldn\'t load the current rules.</li>';
+    });
+  }
+  $("rules-close").addEventListener("click", function () { $("rules-dlg").close(); });
+  $("rules-dlg").addEventListener("close", function () { if (rulesReturn && document.body.contains(rulesReturn)) rulesReturn.focus(); });
+  $("rules-translate").addEventListener("click", function () {
+    var text = $("rules-text").value.trim();
+    if (!text) { flash("Type your rules first, like: max $50 a day, ask me over $20.", true); $("rules-text").focus(); return; }
+    var b = this; b.disabled = true; b.textContent = "Translating…";
+    api("POST", "/api/rules/compile", { text: text }).then(function (r) {
+      r = r || {};
+      draftRules = r.rules || {};
+      $("rules-new").innerHTML = ruleItems(draftRules, r.plain);
+      var src = $("rules-source");
+      if (r.source === "claude") { src.className = "rules-source claude"; src.textContent = "Translated by Claude. Claude only writes the rules: every purchase is checked by plain code, never by the AI."; }
+      else { src.className = "rules-source offline"; src.textContent = "Translated by the built-in offline parser (no Claude key set). Check each line."; }
+      $("rules-notes").innerHTML = (r.notes || []).map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("");
+      $("rules-preview").hidden = false;
+      $("rules-preview").querySelector("h3").setAttribute("tabindex", "-1");
+      $("rules-preview").querySelector("h3").focus();
+    }).catch(function (e) {
+      if (e && e.status === 404) flash("Plain-English rules aren't available on this server yet.");
+      else fail(e);
+    }).then(function () { b.disabled = false; b.textContent = "Translate"; });
+  });
+  $("rules-save").addEventListener("click", function () {
+    if (!rulesAgent || !draftRules) return;
+    var b = this; b.disabled = true;
+    api("POST", "/api/agents/" + rulesAgent.id + "/rules", { rules: draftRules }).then(function (r) {
+      $("rules-now").innerHTML = ruleItems((r && r.rules) || draftRules, r && r.plain);
+      $("rules-preview").hidden = true;
+      $("rules-text").value = "";
+      flash("Rules saved for " + rulesAgent.name + ".");
+      $("rules-dlg").close();
+    }).catch(fail).then(function () { b.disabled = false; });
+  });
+
+  // ---------- merchants ----------
+  function loadMerchants() {
+    if (!FEAT.merchants) return;
+    api("GET", "/api/merchants").then(function (r) {
+      if (!r) return;
+      var list = Array.isArray(r) ? r : (r.merchants || []);
+      var hasTrust = list.some(function (m) { return m.trusted != null; });
+      $("merchant-list").innerHTML = list.length
+        ? '<div class="table-wrap"><table class="plain mtable"><thead><tr><th>Merchant</th><th>Paid to (PayPal)</th><th>Category</th>' + (hasTrust ? "<th>Trusted</th>" : "") + "</tr></thead><tbody>" +
+          list.map(function (m) {
+            return '<tr><td data-k="Merchant">' + esc(m.name) + '</td><td data-k="Paid to"><code>' + esc(m.paypal_email || "not set") + '</code></td><td data-k="Category">' + esc(m.category || "any") +
+              "</td>" + (hasTrust ? '<td data-k="Trusted">' + (m.trusted ? "Yes" : "No") + "</td>" : "") + "</tr>";
+          }).join("") + "</tbody></table></div>"
+        : '<div class="empty">No merchants yet. Until you add some, every purchase needs your approval.</div>';
+    }).catch(soft("merchants", true));
+  }
+  $("merchant-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var name = $("mc-name").value.trim(), email = $("mc-email").value.trim(), cat = $("mc-cat").value.trim();
+    if (!name) { flash("Give the merchant a name.", true); $("mc-name").focus(); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { flash("Add the PayPal email that should get paid, like payments@acme.example.", true); $("mc-email").focus(); return; }
+    api("POST", "/api/merchants", { name: name, paypal_email: email, category: cat }).then(function () {
+      flash(name + " is on your merchant list.");
+      $("mc-name").value = ""; $("mc-email").value = ""; $("mc-cat").value = "";
+      loadMerchants();
+    }).catch(function (e) {
+      if (e && e.status === 404) { FEAT.merchants = false; applyFeatures(); return; }
+      fail(e);
+    });
+  });
+
   // ---------- loop ----------
+  var rulesProbed = false;
   function refresh() {
-    return api("GET", "/api/state").then(function (s) { S = s; render(); }).catch(fail);
+    return Promise.all([
+      api("GET", "/api/state"),
+      loadForecast()
+    ]).then(function (res) {
+      S = res[0]; render();
+      if (!rulesProbed && FEAT.rules && S.agents.length) {
+        rulesProbed = true;
+        api("GET", "/api/agents/" + S.agents[0].id + "/rules").catch(soft("rules", true));
+      }
+    }).catch(fail);
   }
   showTab();
   refresh();
+  loadPending();
   setInterval(function () { if (!document.hidden && currentTab() === "home") refresh(); }, 5000);
+  setInterval(function () {
+    if (document.hidden) return;
+    loadPending();
+    if (currentTab() === "approvals") loadLog();
+  }, 3000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) loadPending(); });
 })();

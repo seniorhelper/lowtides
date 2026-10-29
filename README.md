@@ -2,9 +2,29 @@
 
 # Lowtides
 
-**The AI spend governor.** Keep AI spend at low tide. Lowtides sits between your agents and the AI models they call. It trims wasted context, answers repeat questions for free, sends easy steps to cheaper models, checks the answers, enforces hard budgets, stops runaway loops and shows every cent it saved. PayPal handles prepaid wallets, quote-and-hold jobs and client invoices.
+**The AI spend governor.** Keep AI spend at low tide.
 
-Your agents don't change. You point them at Lowtides instead of the model provider, and Lowtides does the rest.
+Lowtides puts **one budget, one STOP button and one audit trail** over everything an AI agent spends:
+- **What it costs to think:** model calls. Lowtides trims wasted context, answers repeats for free, routes easy steps to cheaper models, enforces hard budgets and stops runaway loops.
+- **What it buys:** an agent asks Lowtides before every purchase. Your rules approve it, deny it or send it to you. Approved buys are paid to the merchant through **PayPal Payouts**, and the kill switch pulls back money that hasn't landed yet.
+
+Your agents don't change. You point them at Lowtides instead of the model provider, or connect it as an MCP server, and Lowtides does the rest.
+
+### What makes it different
+| Problem (sourced in `docs/`) | What Lowtides does |
+|---|---|
+| Runaway loops run up overnight bills, and dashboards only report after the money is gone | Enforcement sits **in the request path**: daily allowances, per-job budgets, a loop guard, a combined AI-plus-purchases cap |
+| A prompt-injected agent can be talked into paying a stranger | Unknown payees and instruction-like text are **held for a person**. Payees must be on your merchant list. |
+| "I didn't buy that, my AI did": disputes need proof | A **hash-chained audit log** and a one-click **evidence pack** per purchase (request, reason, rules in force, who approved, payout) |
+| Approval fatigue | Small, known, in-budget buys go through automatically. Only the risky ones wait, with the reason spelled out. |
+| Rules are hard to set | Type them in **plain English**. Claude turns them into strict rules you review before saving. **The AI never decides a payment.** |
+| Money already sent when something goes wrong | **KILL** stops the agent, denies pending buys, **voids PayPal holds** and **cancels unclaimed PayPal payouts** |
+
+### Built on PayPal
+- **Orders v2:** prepaid agent wallets (checkout top-ups), and quote-and-hold jobs (authorize, then capture only the real cost; void or refund the rest).
+- **Payouts:** pay merchants for approved agent purchases; cancel unclaimed payouts from the kill switch.
+- **Invoicing v2:** bill clients for their agents' usage, with the savings receipt in the memo.
+- **Webhooks:** with signature verification, so top-ups and reversals are credited exactly once.
 
 > **Renamed.** Lowtides v1.0 shipped under an earlier working name. Everything since Oct 1, 2026 is listed in the changelog.
 
@@ -12,8 +32,8 @@ Your agents don't change. You point them at Lowtides instead of the model provid
 
 ## Why this exists
 
-- AI agents use far more tokens than chat. A 2026 Stanford Digital Economy Lab study found agentic coding tasks use about 1,000x more tokens than code chat, mostly because the agent keeps re-reading its own growing history.
-- The same study found agents can't predict their own costs.
+- AI agents use far more tokens than chat. A 2026 Stanford Digital Economy Lab study found agentic coding tasks use about 1,000x more tokens than code reasoning and code chat, mostly because the agent keeps re-reading its own growing history ([Stanford DEL](https://digitaleconomy.stanford.edu/publication/how-do-ai-agents-spend-your-money-analyzing-and-predicting-token-consumption-in-agentic-coding-tasks/), [arXiv 2604.22750](https://arxiv.org/abs/2604.22750)).
+- The same study found that runs of the same task can differ by up to 30x in tokens, and that predicting the cost of a single run remains hard. Budgets have to be enforced while the agent runs, not estimated beforehand.
 - Existing gateways are built for engineers. Almost nothing gives a business owner a simple allowance, a STOP button, a price before the work starts and a receipt in plain dollars.
 
 ---
@@ -32,6 +52,31 @@ Then open **http://localhost:8787**.
 3. Copy the base URL and key into your agent.
 
 Press **Watch it work (demo)** to see the whole pipeline run against a built-in simulated model, with no keys needed. Demo rows are labeled as simulated everywhere.
+
+### Watch a runaway agent get caught (one command, about 1 minute)
+With Lowtides running, open a second terminal and run:
+```bash
+python -m lowtides.scenario
+```
+Use `--fast` to skip the pauses. The script drives the real HTTP API the way an agent and its owner would:
+1. Plain-English rules are saved.
+2. The agent does honest work.
+3. A $12 data purchase is auto-approved and paid.
+4. A poisoned web page tries to redirect a payment. It's held as a new payee and possible prompt injection.
+5. A $480 GPU rental is blocked.
+6. A $45 dataset waits for you.
+7. A growing retry loop is stopped by the loop guard on its 4th call.
+8. **KILL** denies the pending buys and cancels the payout that hasn't landed yet.
+9. The audit chain verifies.
+
+Then open the **Approvals** tab to see every decision and download an evidence pack.
+
+### Ask before buying (agents)
+```bash
+curl -X POST http://localhost:8787/v1/spend -H "Authorization: Bearer YOUR_LOWTIDES_KEY" -H "Content-Type: application/json" \
+  -d '{"amount": 12.50, "merchant": "Acme Data", "item": "1,000 credits", "category": "data", "reason": "finish the lead list"}'
+```
+The answer is `approved`, `needs_approval` or `denied`, with reasons. The full API is in [docs/SPEND-API.md](docs/SPEND-API.md). Payouts go through PayPal when sandbox keys are set and the merchant has a PayPal email on your Merchants list. Otherwise they are **simulated and labeled as simulated**.
 
 ### Use real models
 
@@ -205,18 +250,23 @@ The same config works for any MCP client that can launch a stdio server.
 - **One API family per ladder.** It routes within one family: Claude models via the Anthropic API, or models on OpenAI-compatible servers. It does not translate requests between the two formats.
 - **The grader is a heuristic.** It's free and instant, which is the point. The verify-and-climb step catches its misses, and you can turn routing off for any agent's workload that needs the top model every time.
 - **Single server.** It uses SQLite and in-memory loop tracking, so run one instance.
+- **Purchases are only as governed as the agent is honest about using them.** Lowtides governs purchases that go through `/v1/spend` (or the MCP tool) and pays them itself. An agent holding its own card or wallet can go around it. That's why payouts come from your PayPal account, not the agent's.
+- **Injection detection is a tripwire, not a guarantee.** It holds requests whose text reads like instructions. The real protection is that new payees always need a person.
+- **Payout cancel only works before the receiver claims the money.** After that, use a PayPal refund or dispute, which the evidence pack is built for.
 
 ---
 
 ## Tests
 
 ```bash
-cd tests && python -m unittest test_core test_http
+cd tests && python -m unittest test_core test_http test_fixes test_mcp test_spend
 ```
 
-The 72 tests run with no internet and no money. Local fake servers speak the real PayPal, Anthropic and OpenAI wire formats, so Lowtides's real HTTP clients are exercised end to end. They cover routing, escalation, memory safety (wrong-answer cases included), trimming, budgets, the loop guard, wallets (including pending and reversed payments), holds (partial capture, the capture-then-refund fallback, failed refunds and void), invoices (no double billing), webhook verification and retries, streaming, cross-site protection, the admin lock and path safety.
+The 125 tests run with no internet and no money. Local fake servers speak the real PayPal, Anthropic and OpenAI wire formats, so Lowtides's real HTTP clients are exercised end to end. They cover routing, escalation, memory safety (wrong-answer cases included), trimming, budgets, the loop guard, wallets (including pending and reversed payments), holds (partial capture, the capture-then-refund fallback, failed refunds and void), invoices (no double billing), webhook verification and retries, streaming, cross-site protection, the admin lock and path safety.
 
-`test_fixes.py` holds a regression test for every issue found in an independent code review before release.
+`test_fixes.py` holds a regression test for every issue found in an independent code review before release. `test_spend.py` covers every purchase rule, PayPal payouts and payout cancel, approvals, the kill switch, audit-chain tamper detection, evidence packs, forecasts and the plain-English rule parser. `test_mcp.py` covers the MCP server.
+
+The dashboard's "Every call" table uses [AG Grid](https://www.ag-grid.com/) Community.
 
 ---
 
