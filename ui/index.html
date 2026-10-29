@@ -3,8 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lowtides: the AI spend governor</title>
-<meta name="description" content="Lowtides keeps your AI agents on budget: cheaper models for easy steps, free repeats, hard limits, a STOP button and a savings receipt in dollars.">
+<title>Lowtides: AI Agent Spending Limits &amp; Kill Switch | AI Cost Governor</title>
+<meta name="description" content="One budget and one STOP button for AI agents: cap what they cost to run and what they buy. Plain-English rules, approvals, runaway-loop protection, PayPal settlement. Live demo.">
+<link rel="canonical" href="https://lowtides.ai/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#0A1B1E">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/">
+<meta property="og:title" content="Lowtides: one budget and a STOP button for AI agents">
+<meta property="og:description" content="Caps what AI agents cost to run and what they buy. Plain-English rules, one-tap approvals, a kill switch, and purchases settled through PayPal. Try the live demo.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="lowtides.ai: Keep AI spend at low tide. Budgets, spend limits, kill switch, PayPal settlement.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Lowtides: one budget and a STOP button for AI agents">
+<meta name="twitter:description" content="Cap what AI agents cost to run and what they buy. Approvals, a kill switch, PayPal settlement.">
+<meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
+<link rel="alternate" type="text/plain" href="/llms.txt" title="LLM-readable summary">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"WebSite","@id":"https://lowtides.ai/#site","url":"https://lowtides.ai/","name":"Lowtides","description":"The AI spend governor: one budget and a STOP button for AI agents."},
+ {"@type":"SoftwareApplication","@id":"https://lowtides.ai/#app","name":"Lowtides","alternateName":"Lowtides AI spend governor","url":"https://lowtides.ai/","applicationCategory":"FinanceApplication","applicationSubCategory":"AI agent spend control","operatingSystem":"Web, Windows, macOS, Linux","softwareVersion":"1.1.0","license":"https://www.gnu.org/licenses/agpl-3.0.html","codeRepository":"https://github.com/seniorhelper/lowtides","image":"https://lowtides.ai/brand/og.png","description":"Lowtides puts one budget, plain-English rules, one-tap approvals and a kill switch between AI agents and your money: what they cost to run (model calls) and what they buy (purchases settled through PayPal).","featureList":["One combined daily budget for AI model costs and agent purchases","Plain-English spending rules compiled into strict, validated rules","Approval queue for purchases over a threshold, new payees and suspected prompt injection","STOP ALL kill switch that voids PayPal holds and cancels unclaimed payouts","Runaway-loop detection and per-call cost caps","Hash-chained audit log and per-purchase dispute evidence pack","MCP server and OpenAI/Anthropic-compatible proxy","PayPal Orders, Payouts, Invoicing and Webhooks"],"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"Open source (AGPL-3.0). Free live demo."},"isAccessibleForFree":true}
+]}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -26,11 +49,78 @@
     .prot-saved { justify-content: flex-start; }
   }
 </style>
+<style>
+  /* Startup screen: about 2 seconds, once per visit, skippable, never delays the app (it loads underneath). */
+  #lt-splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; cursor: pointer;
+    background: radial-gradient(120% 90% at 80% 10%, #123A3D 0%, #0A1B1E 62%); color: #E6F4F1;
+    transition: opacity .38s ease, visibility .38s; }
+  #lt-splash.out { opacity: 0; visibility: hidden; }
+  .lt-s-in { width: min(520px, 86vw); }
+  .lt-s-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .lt-s-word { font: 600 clamp(2rem, 7vw, 2.9rem)/1 "Sora", system-ui, sans-serif; letter-spacing: -.045em; }
+  .lt-s-word b { color: #3FD6B5; font-weight: 600; }
+  .lt-s-grid { display: grid; grid-template-columns: repeat(6, 9px); gap: 5px; }
+  .lt-s-grid i { width: 9px; height: 9px; border-radius: 50%; background: #24434A; animation: ltS 1.5s ease-in-out both; }
+  .lt-s-grid i.top { background: #E39A2D; animation: none; }
+  @keyframes ltS { 0% { background: #24434A; transform: scale(.6); } 45% { background: #3FD6B5; transform: scale(1); } 100% { background: #3FD6B5; } }
+  .lt-s-grid i.ebb { animation-name: ltE; }
+  @keyframes ltE { 0% { background: #24434A; transform: scale(.6); } 40% { background: #3FD6B5; transform: scale(1); } 100% { background: #24434A; transform: scale(.75); } }
+  .lt-s-log { list-style: none; margin: 0; padding: 0; font: 500 .92rem/1.9 "JetBrains Mono", ui-monospace, monospace; color: #9DB5B1; min-height: 7.6em; }
+  .lt-s-log li { opacity: 0; transform: translateY(4px); animation: ltL .22s ease forwards; }
+  .lt-s-log li b { color: #3FD6B5; font-weight: 500; }
+  .lt-s-log li.last { color: #E6F4F1; }
+  @keyframes ltL { to { opacity: 1; transform: none; } }
+  .lt-s-bar { height: 3px; margin-top: 14px; background: #24434A; border-radius: 3px; overflow: hidden; }
+  .lt-s-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3FD6B5, #E39A2D); animation: ltB 1.75s cubic-bezier(.3,.7,.2,1) forwards; }
+  @keyframes ltB { to { width: 100%; } }
+  .lt-s-skip { position: absolute; right: 18px; bottom: 16px; font: 500 .8rem "JetBrains Mono", monospace; color: #9DB5B1; background: none; border: 1px solid #24434A; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  @media (prefers-reduced-motion: reduce) { #lt-splash *, #lt-splash { animation: none !important; transition: none !important; } .lt-s-log li { opacity: 1; transform: none; } .lt-s-bar i { width: 100%; } }
+</style>
 <link rel="icon" href="/brand/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
 <link rel="apple-touch-icon" href="/brand/favicon-180.png">
 </head>
 <body>
+<div id="lt-splash" aria-hidden="true" hidden>
+  <div class="lt-s-in">
+    <div class="lt-s-brand"><div class="lt-s-grid" id="lt-s-grid"></div><div class="lt-s-word">low<b>tides</b></div></div>
+    <ol class="lt-s-log" id="lt-s-log"></ol>
+    <div class="lt-s-bar"><i></i></div>
+  </div>
+  <button type="button" class="lt-s-skip" tabindex="-1">skip ▸</button>
+</div>
+<script>
+(function () {
+  var KEY = "lt_splash_seen", el = document.getElementById("lt-splash");
+  try { if (sessionStorage.getItem(KEY)) { el.remove(); return; } sessionStorage.setItem(KEY, "1"); } catch (e) { el.remove(); return; }
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.documentElement.classList.add("lt-splashing");
+  el.hidden = false;
+  var g = document.getElementById("lt-s-grid"), r, c, d;
+  for (r = 0; r < 6; r++) for (c = 0; c < 6; c++) {
+    d = document.createElement("i");
+    if (r === 0) d.className = "top"; else { d.className = r < 4 ? "ebb" : ""; d.style.animationDelay = ((5 - r) * 90 + c * 25) + "ms"; }
+    g.appendChild(d);
+  }
+  var lines = ["Reading your budget rules", "Arming the STOP ALL switch", "Connecting PayPal sandbox", "Watching every AI call"],
+      log = document.getElementById("lt-s-log"), done = false;
+  lines.forEach(function (t, i) {
+    var li = document.createElement("li");
+    li.innerHTML = "<b>&#10003;</b> " + t; li.style.animationDelay = (reduce ? 0 : 180 + i * 330) + "ms"; log.appendChild(li);
+  });
+  var last = document.createElement("li"); last.className = "last";
+  last.textContent = "Tide is low. You're in."; last.style.animationDelay = (reduce ? 0 : 1450) + "ms"; log.appendChild(last);
+  function close() {
+    if (done) return; done = true;
+    el.classList.add("out");
+    document.documentElement.classList.remove("lt-splashing");
+    setTimeout(function () { el.remove(); }, 420);
+  }
+  el.addEventListener("click", close);
+  document.addEventListener("keydown", function k(e) { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") { close(); document.removeEventListener("keydown", k); } });
+  setTimeout(close, reduce ? 700 : 2100);
+})();
+</script>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="top-in">
@@ -324,6 +414,7 @@
 
 <footer class="foot">
   <p class="muted small" id="foot-line"></p>
+  <p class="muted small foot-links"><a href="/why/">Why Lowtides</a> &middot; <a href="https://github.com/seniorhelper/lowtides">Open-source code</a> &middot; <a href="/llms.txt">llms.txt</a></p>
   <div class="heart-line" id="heart-line">
     <span class="heart" aria-hidden="true">&#10084;</span>
     <a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a>

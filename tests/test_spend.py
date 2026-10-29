@@ -121,6 +121,26 @@ class TestDecisions(unittest.TestCase):
         self.assertEqual(self.g.request(a, buy(40))["status"], "pending")
         self.assertEqual(self.g.request(a, buy(30, item="other"))["decision"], "denied")
 
+    def test_simultaneous_burst_cannot_overspend(self):
+        # 20 purchases fired at the same instant must never add up past the daily limit.
+        import threading
+        self.s.update_agent(self.a["id"], rules=json.dumps({"daily_purchase_limit": 100, "approval_over": 10,
+                                                            "max_purchases_per_hour": 0}))
+        a = self.s.agent(self.a["id"])
+        go, rows = threading.Barrier(20), []
+
+        def fire(i):
+            go.wait()
+            rows.append(self.g.request(a, buy(15, item="burst %d" % i)))
+        ts = [threading.Thread(target=fire, args=(i,)) for i in range(20)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        committed = sum(r["amount"] for r in rows if r["status"] in ("paid", "approved", "pending"))
+        self.assertLessEqual(committed, 100)
+        self.assertEqual(sum(1 for r in rows if r["decision"] != "denied"), 6)
+
     def test_new_merchant_needs_approval(self):
         r = self.g.request(self.a, buy(5, merchant="Totally Legit LLC"))
         self.assertEqual(r["decision"], "needs_approval")

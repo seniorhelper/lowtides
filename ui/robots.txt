@@ -1,0 +1,27 @@
+# Lowtides: the AI spend governor. Everyone is welcome, including AI crawlers and agents.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /v1/
+Disallow: /paypal/
+
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-User
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://lowtides.ai/sitemap.xml

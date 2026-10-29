@@ -6,5 +6,5 @@ models, enforces hard budgets, stops runaway loops and shows every cent
 it saved, with PayPal wallets, task holds and client invoices built in.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 APP_NAME = "Lowtides"

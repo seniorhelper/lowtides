@@ -224,6 +224,24 @@ class TestServer(ServerCase):
         s, raw, h = http("GET", self.url + "/../lowtides/server.py")
         self.assertEqual(s, 404)
 
+    def test_product_page_and_crawler_files(self):
+        s, raw, h = http("GET", self.url + "/why/")
+        self.assertEqual(s, 200)
+        self.assertIn("AI cost governor", raw)
+        self.assertIn("FAQPage", raw)
+        for path, needle in (("/robots.txt", "Sitemap:"), ("/sitemap.xml", "/why/"), ("/llms.txt", "# Lowtides")):
+            s, raw, h = http("GET", self.url + path)
+            self.assertEqual(s, 200, path)
+            self.assertIn(needle, raw)
+        req = urllib.request.Request(self.url + "/why")
+        opener = urllib.request.build_opener(type("NoRedirect", (urllib.request.HTTPRedirectHandler,),
+                                                  {"redirect_request": lambda *a, **k: None}))
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            opener.open(req, timeout=10)
+        self.assertEqual((cm.exception.code, cm.exception.headers["Location"]), (302, "/why/"))
+        s, raw, h = http("GET", self.url + "/brand/../../lowtides/server.py")
+        self.assertEqual(s, 404)
+
 
 class TestAdminLock(ServerCase):
     admin = "pw-123"

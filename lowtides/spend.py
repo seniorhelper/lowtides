@@ -385,6 +385,7 @@ class SpendGovernor:
         self.store = store
         self.paypal = paypal
         self.money = money
+        self._decide_lock = threading.Lock()
 
     # -- request ------------------------------------------------------------------------
     def request(self, agent, d):
@@ -402,95 +403,98 @@ class SpendGovernor:
         reason = str(d.get("reason") or "").strip()[:1000]
         task_id = str(d.get("task_id") or "").strip()[:80] or None
 
-        rules = agent_rules(agent)
-        denied, ask, ok, flags = [], [], [], []
-        known = self.store.merchant(merchant)
-        if not category and known:
-            category = known["category"]
-        aid = agent["id"]
-        today = start_of_today()
+        # Decide and record under one lock, so a burst of simultaneous requests can't each
+        # read the same "spent so far" total and all squeeze under a limit (reserve-then-commit).
+        with self._decide_lock:
+            rules = agent_rules(agent)
+            denied, ask, ok, flags = [], [], [], []
+            known = self.store.merchant(merchant)
+            if not category and known:
+                category = known["category"]
+            aid = agent["id"]
+            today = start_of_today()
 
-        # Hard stops (denied).
-        if agent["status"] == "stopped":
-            denied.append("This agent is stopped. Nothing can be bought until a person starts it again.")
-        elif agent["status"] == "paused":
-            denied.append("This agent is paused by the loop guard. Review it, then press Resume.")
-        if merchant.lower() in rules["blocked_merchants"]:
-            denied.append("%s is on this agent's blocked list." % merchant)
-        if category and category in rules["blocked_categories"]:
-            denied.append("'%s' is a blocked category for this agent." % category)
-        if rules["allowed_categories"] and category not in rules["allowed_categories"]:
-            denied.append("This agent may only buy: %s. '%s' isn't one of them."
-                          % (", ".join(rules["allowed_categories"]), category or "no category"))
-        if rules["hours"]:
-            h = datetime.datetime.now().hour
-            if not (rules["hours"]["start"] <= h < rules["hours"]["end"]):
-                denied.append("Purchases are only allowed between %d:00 and %d:00." % (rules["hours"]["start"], rules["hours"]["end"]))
-        per_hour = rules["max_purchases_per_hour"]
-        if per_hour and self.store.purchase_count_since(aid, time.time() - 3600) >= per_hour:
-            denied.append("Too many purchase requests: the limit is %d an hour. That pace looks like a runaway agent." % per_hour)
-            flags.append("velocity")
-        if amount > rules["max_per_purchase"]:
-            denied.append("%s is over the %s per-purchase limit." % (money(amount), money(rules["max_per_purchase"])))
-        bought = self.store.purchases_since(aid, today)
-        if bought + amount > rules["daily_purchase_limit"]:
-            denied.append("That would make %s of purchases today, over the %s daily limit."
-                          % (money(bought + amount), money(rules["daily_purchase_limit"])))
-        if rules["daily_total_limit"] is not None:
-            tokens = self.store.spend_since(aid, today)
-            if tokens + bought + amount > rules["daily_total_limit"]:
-                denied.append("AI usage (%s) plus purchases (%s) plus this would pass the %s combined daily limit."
-                              % (money(tokens), money(bought), money(rules["daily_total_limit"])))
-        if agent["use_wallet"]:
-            bal = self.store.balance(aid)
-            if bal < amount:
-                denied.append("The agent's PayPal-funded wallet has %s, not enough for %s." % (money(bal), money(amount)))
+            # Hard stops (denied).
+            if agent["status"] == "stopped":
+                denied.append("This agent is stopped. Nothing can be bought until a person starts it again.")
+            elif agent["status"] == "paused":
+                denied.append("This agent is paused by the loop guard. Review it, then press Resume.")
+            if merchant.lower() in rules["blocked_merchants"]:
+                denied.append("%s is on this agent's blocked list." % merchant)
+            if category and category in rules["blocked_categories"]:
+                denied.append("'%s' is a blocked category for this agent." % category)
+            if rules["allowed_categories"] and category not in rules["allowed_categories"]:
+                denied.append("This agent may only buy: %s. '%s' isn't one of them."
+                              % (", ".join(rules["allowed_categories"]), category or "no category"))
+            if rules["hours"]:
+                h = datetime.datetime.now().hour
+                if not (rules["hours"]["start"] <= h < rules["hours"]["end"]):
+                    denied.append("Purchases are only allowed between %d:00 and %d:00." % (rules["hours"]["start"], rules["hours"]["end"]))
+            per_hour = rules["max_purchases_per_hour"]
+            if per_hour and self.store.purchase_count_since(aid, time.time() - 3600) >= per_hour:
+                denied.append("Too many purchase requests: the limit is %d an hour. That pace looks like a runaway agent." % per_hour)
+                flags.append("velocity")
+            if amount > rules["max_per_purchase"]:
+                denied.append("%s is over the %s per-purchase limit." % (money(amount), money(rules["max_per_purchase"])))
+            bought = self.store.purchases_since(aid, today)
+            if bought + amount > rules["daily_purchase_limit"]:
+                denied.append("That would make %s of purchases today, over the %s daily limit."
+                              % (money(bought + amount), money(rules["daily_purchase_limit"])))
+            if rules["daily_total_limit"] is not None:
+                tokens = self.store.spend_since(aid, today)
+                if tokens + bought + amount > rules["daily_total_limit"]:
+                    denied.append("AI usage (%s) plus purchases (%s) plus this would pass the %s combined daily limit."
+                                  % (money(tokens), money(bought), money(rules["daily_total_limit"])))
+            if agent["use_wallet"]:
+                bal = self.store.balance(aid)
+                if bal < amount:
+                    denied.append("The agent's PayPal-funded wallet has %s, not enough for %s." % (money(bal), money(amount)))
 
-        # Soft stops (a person decides).
-        if not denied:
-            if amount > rules["approval_over"]:
-                ask.append("%s is over the %s auto-approve limit." % (money(amount), money(rules["approval_over"])))
-            if not known and rules["new_merchant_needs_approval"]:
-                ask.append("%s isn't on your merchant list yet. New payees need a person's OK." % merchant)
-                flags.append("new_merchant")
-            if known and not known["paypal_email"] and self.paypal.configured:
-                ask.append("%s has no PayPal payee on file, so it can't be paid automatically." % merchant)
-            text = " ".join([merchant, item, reason])
-            if INJECTION.search(text):
-                ask.append("The request contains text that reads like instructions to the agent, a common sign of prompt injection.")
-                flags.append("possible_injection")
-            dup = self.store.one("SELECT id FROM spend_requests WHERE agent_id=? AND merchant=? COLLATE NOCASE AND amount=? "
-                                 "AND ts>=? AND status IN ('paid','approved','pending') LIMIT 1",
-                                 (aid, merchant, amount, time.time() - DUP_WINDOW))
-            if dup:
-                ask.append("The same purchase (%s at %s) was requested in the last 10 minutes. It may be a double charge."
-                           % (money(amount), merchant))
-                flags.append("duplicate")
-            past = [r["amount"] for r in self.store.q("SELECT amount FROM spend_requests WHERE agent_id=? AND status='paid' "
-                                                      "ORDER BY ts DESC LIMIT 50", (aid,))]
-            if len(past) >= UNUSUAL_MIN_HISTORY:
-                typical = statistics.median(past)
-                if typical > 0 and amount > typical * UNUSUAL_MULTIPLE:
-                    ask.append("%s is more than %dx this agent's typical purchase (%s)." % (money(amount), int(UNUSUAL_MULTIPLE), money(typical)))
-                    flags.append("unusual_amount")
-            if not ask:
-                ok.append("Within the %s auto-approve limit and today's %s budget." % (money(rules["approval_over"]),
-                                                                                     money(rules["daily_purchase_limit"])))
-                if known:
-                    ok.append("%s is a known merchant." % merchant)
+            # Soft stops (a person decides).
+            if not denied:
+                if amount > rules["approval_over"]:
+                    ask.append("%s is over the %s auto-approve limit." % (money(amount), money(rules["approval_over"])))
+                if not known and rules["new_merchant_needs_approval"]:
+                    ask.append("%s isn't on your merchant list yet. New payees need a person's OK." % merchant)
+                    flags.append("new_merchant")
+                if known and not known["paypal_email"] and self.paypal.configured:
+                    ask.append("%s has no PayPal payee on file, so it can't be paid automatically." % merchant)
+                text = " ".join([merchant, item, reason])
+                if INJECTION.search(text):
+                    ask.append("The request contains text that reads like instructions to the agent, a common sign of prompt injection.")
+                    flags.append("possible_injection")
+                dup = self.store.one("SELECT id FROM spend_requests WHERE agent_id=? AND merchant=? COLLATE NOCASE AND amount=? "
+                                     "AND ts>=? AND status IN ('paid','approved','pending') LIMIT 1",
+                                     (aid, merchant, amount, time.time() - DUP_WINDOW))
+                if dup:
+                    ask.append("The same purchase (%s at %s) was requested in the last 10 minutes. It may be a double charge."
+                               % (money(amount), merchant))
+                    flags.append("duplicate")
+                past = [r["amount"] for r in self.store.q("SELECT amount FROM spend_requests WHERE agent_id=? AND status='paid' "
+                                                          "ORDER BY ts DESC LIMIT 50", (aid,))]
+                if len(past) >= UNUSUAL_MIN_HISTORY:
+                    typical = statistics.median(past)
+                    if typical > 0 and amount > typical * UNUSUAL_MULTIPLE:
+                        ask.append("%s is more than %dx this agent's typical purchase (%s)." % (money(amount), int(UNUSUAL_MULTIPLE), money(typical)))
+                        flags.append("unusual_amount")
+                if not ask:
+                    ok.append("Within the %s auto-approve limit and today's %s budget." % (money(rules["approval_over"]),
+                                                                                         money(rules["daily_purchase_limit"])))
+                    if known:
+                        ok.append("%s is a known merchant." % merchant)
 
-        decision = "denied" if denied else ("needs_approval" if ask else "approved")
-        if str(d.get("settle") or "").lower() == "external":
-            # The caller (e.g. PayPal's Agent Toolkit) moves the money itself; Lowtides only decides and records.
-            flags.append(EXTERNAL)
-        sid = "sp_" + secrets.token_hex(8)
-        row = self.store.add_spend(id=sid, agent_id=aid, task_id=task_id, amount=amount, merchant=merchant, item=item,
-                                   category=category, reason=reason, decision=decision,
-                                   status={"denied": "denied", "needs_approval": "pending", "approved": "approved"}[decision],
-                                   reasons=denied or ask or ok, flags=flags, payee=(known or {}).get("paypal_email", ""))
-        self.store.audit("spend.request", sid, {"agent_id": aid, "agent": agent["name"], "amount": amount, "merchant": merchant,
-                                                "item": item, "category": category, "reason": reason, "task_id": task_id,
-                                                "decision": decision, "reasons": row["reasons"], "flags": flags, "rules": rules})
+            decision = "denied" if denied else ("needs_approval" if ask else "approved")
+            if str(d.get("settle") or "").lower() == "external":
+                # The caller (e.g. PayPal's Agent Toolkit) moves the money itself; Lowtides only decides and records.
+                flags.append(EXTERNAL)
+            sid = "sp_" + secrets.token_hex(8)
+            row = self.store.add_spend(id=sid, agent_id=aid, task_id=task_id, amount=amount, merchant=merchant, item=item,
+                                       category=category, reason=reason, decision=decision,
+                                       status={"denied": "denied", "needs_approval": "pending", "approved": "approved"}[decision],
+                                       reasons=denied or ask or ok, flags=flags, payee=(known or {}).get("paypal_email", ""))
+            self.store.audit("spend.request", sid, {"agent_id": aid, "agent": agent["name"], "amount": amount, "merchant": merchant,
+                                                    "item": item, "category": category, "reason": reason, "task_id": task_id,
+                                                    "decision": decision, "reasons": row["reasons"], "flags": flags, "rules": rules})
         if decision == "denied":
             self.store.event(aid, "spend", "Blocked %s at %s: %s" % (money(amount), merchant, denied[0]))
         elif decision == "needs_approval":

@@ -411,9 +411,10 @@
   function hidePill() { if (pill) { pill.remove(); pill = null; } }
   function offer() {
     if (seen() || pill) return;
+    if (document.documentElement.classList.contains("lt-splashing")) return void setTimeout(offer, 400);
     pill = el("div", "tour-pill");
     pill.setAttribute("role", "status");
-    var go = el("button", "tour-pill-go", "▶ New here? Watch the 40-second replay");
+    var go = el("button", "tour-pill-go", "▶ New here? Watch the 1-minute replay");
     go.type = "button";
     var x = el("button", "tour-pill-x", "×");
     x.type = "button";
