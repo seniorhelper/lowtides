@@ -281,6 +281,125 @@ class TestAuditAndKill(unittest.TestCase):
         self.assertEqual((f["limit_kind"], f["limit"]), ("ai_usage", 5.0))  # $4 of the $5 AI allowance
 
 
+class TestPayoutErrors(unittest.TestCase):
+    """Real PayPal client against the fake: what happens when PayPal says no or is slow."""
+
+    def setUp(self):
+        self.pp, url = fakes.start(fakes.FakePayPalHandler, fakes.paypal_state())
+        self.addCleanup(self.pp.shutdown)
+        self.g, self.s = gov(PayPal("client", "secret", base_url=url))
+        self.g.poll_delays = (0, 0, 0)
+        self.g.background_poll = ()
+        self.a = agent(self.s, "Buyer")
+        self.s.add_merchant("Acme Data", "merchant-demo@example.com", "data")
+
+    def test_external_settlement_never_pays_twice(self):
+        # PayPal's Agent Toolkit captures the order itself; Lowtides must decide but not also pay out.
+        r = self.g.request(self.a, buy(5, settle="external"))
+        self.assertEqual((r["decision"], r["status"], r["payout_status"]), ("approved", "paid", "PAID_BY_CALLER"))
+        self.assertFalse([x for x in self.pp.state["requests"] if x[0] == "/v1/payments/payouts"])
+        held = self.g.request(self.a, buy(45, settle="external"))
+        self.g.approve(held["id"])
+        self.assertFalse([x for x in self.pp.state["requests"] if x[0] == "/v1/payments/payouts"])
+        self.assertEqual(self.g.refresh_payout(r["id"])["status"], "paid")
+
+    def test_happy_path_carries_sandbox_proof(self):
+        r = self.g.request(self.a, buy(5))
+        self.assertEqual((r["status"], r["payout_status"], r["payout_env"]), ("paid", "UNCLAIMED", "sandbox"))
+        self.assertTrue(r["payout_batch_id"].startswith("BATCH") and r["payout_item_id"].startswith("ITEM"))
+        self.assertIn("PayPal sandbox payout batch " + r["payout_batch_id"], r["payout_proof"])
+        self.assertIn("RECEIVER_UNREGISTERED", r["note"])
+        sent = [x for x in self.pp.state["requests"] if x[0] == "/v1/payments/payouts"][0][2]
+        self.assertEqual(sent["items"][0]["amount"], {"currency": "USD", "value": "5.00"})
+        self.assertEqual(sent["items"][0]["recipient_type"], "EMAIL")
+        pack = self.g.evidence(r["id"])
+        self.assertEqual(pack["paypal_payout"]["payout_batch_id"], r["payout_batch_id"])
+        self.assertEqual(pack["paypal_payout"]["environment"], "sandbox")
+        self.assertTrue(self.g.paypal.payouts_enabled())
+
+    def test_payouts_not_enabled_is_recorded_not_paid(self):
+        self.pp.state["payout_error"] = (403, {"name": "AUTHORIZATION_ERROR", "message": "Authorization error occurred."})
+        r = self.g.request(self.a, buy(5))
+        self.assertEqual((r["status"], r["payout_status"]), ("failed", "ERROR"))
+        self.assertTrue(r["note"].startswith("PayPal refused the payout: AUTHORIZATION_ERROR: Authorization error occurred."), r["note"])
+        self.assertIn("Turn on Payouts", r["note"])
+        self.assertIn("debug_id", r["note"])
+        self.assertEqual(self.s.purchases_since(self.a["id"], 0), 0)  # a failed payout doesn't use up the budget
+        self.assertIn("spend.payout_failed", [e["kind"] for e in self.s.audit_entries(ref=r["id"])])
+
+    def test_insufficient_funds(self):
+        self.pp.state["payout_error"] = (422, {"name": "INSUFFICIENT_FUNDS", "message": "Sender has insufficient funds."})
+        r = self.g.request(self.a, buy(5))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("INSUFFICIENT_FUNDS", r["note"])
+
+    def test_failed_payout_on_approval_and_wallet_untouched(self):
+        self.s.update_agent(self.a["id"], use_wallet=1)
+        self.s.wallet_move(self.a["id"], 100, "topup", ref="t1")
+        r = self.g.request(self.a, buy(30))
+        self.assertEqual(r["status"], "pending")
+        self.pp.state["payout_error"] = (403, {"name": "AUTHORIZATION_ERROR", "message": "Authorization error occurred."})
+        out = self.g.approve(r["id"])
+        self.assertEqual(out["status"], "failed")
+        self.assertEqual(self.s.balance(self.a["id"]), 100)
+
+    def test_server_error_is_retried_once_with_same_ids(self):
+        self.pp.state["payout_error"] = (503, {"name": "SERVICE_UNAVAILABLE", "message": "try later"})
+        self.pp.state["payout_error_times"] = 1
+        r = self.g.request(self.a, buy(5))
+        self.assertEqual(r["status"], "paid")
+        sent = [x for x in self.pp.state["requests"] if x[0] == "/v1/payments/payouts"]
+        self.assertEqual(len(sent), 2)
+        rids = {{k.lower(): v for k, v in x[1].items()}["paypal-request-id"] for x in sent}
+        self.assertEqual(len(rids), 1)
+        self.assertEqual(len({x[2]["sender_batch_header"]["sender_batch_id"] for x in sent}), 1)
+
+    def test_item_failed_at_paypal_is_not_paid(self):
+        self.pp.state["payout_status"] = "FAILED"
+        r = self.g.request(self.a, buy(5))
+        self.assertEqual((r["status"], r["payout_status"]), ("failed", "FAILED"))
+        self.assertIn("RECEIVER_ACCOUNT_LOCKED", r["note"])
+
+    def test_slow_batch_is_filled_in_later_and_kill_still_cancels(self):
+        self.pp.state["pending_polls"] = 10  # PayPal still processing during the first look
+        r = self.g.request(self.a, buy(5))
+        self.assertEqual((r["status"], r["payout_item_id"], r["payout_status"]), ("paid", None, "PENDING"))
+        for po in self.pp.state["payouts"].values():
+            po["pending_polls"] = 0
+        out = self.g.kill(self.a["id"])
+        self.assertEqual(out["payouts_cancelled"], 1, out)
+        self.assertEqual(list(self.pp.state["payouts"].values())[0]["status"], "RETURNED")
+        cancel = [x for x in self.pp.state["requests"] if x[0].endswith("/cancel")][0]
+        self.assertEqual(cancel[2], {})  # no request body
+
+    def test_kill_reports_payout_that_cannot_be_cancelled(self):
+        self.pp.state["pending_polls"] = 1000
+        r = self.g.request(self.a, buy(5))
+        out = self.g.kill(self.a["id"])
+        self.assertEqual(out["payouts_cancelled"], 0)
+        self.assertTrue(any("can't be cancelled" in p for p in out["problems"]), out)
+        self.assertEqual(self.s.spend(r["id"])["status"], "paid")
+
+    def test_refresh_turns_returned_payout_into_failed_and_refunds_wallet(self):
+        self.s.update_agent(self.a["id"], use_wallet=1)
+        self.s.wallet_move(self.a["id"], 50, "topup", ref="t1")
+        r = self.g.request(self.s.agent(self.a["id"]), buy(5))
+        self.assertEqual(self.s.balance(self.a["id"]), 45)
+        list(self.pp.state["payouts"].values())[0]["status"] = "RETURNED"  # unclaimed for 30 days
+        out = self.g.refresh_payout(r["id"])
+        self.assertEqual((out["status"], out["payout_status"]), ("failed", "RETURNED"))
+        self.assertEqual(self.s.balance(self.a["id"]), 50)
+
+    def test_bad_credentials_are_explained(self):
+        g, s = gov(PayPal("client", "secret", base_url="http://127.0.0.1:9"))  # nothing listens here
+        g.poll_delays, g.background_poll = (0,), ()
+        a = agent(s, "B")
+        s.add_merchant("Acme Data", "m@example.com", "data")
+        r = g.request(a, buy(5))
+        self.assertEqual(r["status"], "failed")
+        self.assertIn("Could not reach PayPal", r["note"])
+
+
 class TestSpendHTTP(ServerCase):
     def setUp(self):
         self.pp.state.update(fakes.paypal_state())

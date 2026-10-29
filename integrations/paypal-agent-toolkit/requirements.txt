@@ -1,0 +1,3 @@
+# Only needed for live mode. lowtides_guard.py itself is standard library only.
+# Latest on PyPI as of 2026-10-28 (released 2026-09-01). Needs Python 3.11+.
+paypal-agent-toolkit==1.11.0

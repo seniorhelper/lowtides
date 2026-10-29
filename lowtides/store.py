@@ -185,6 +185,9 @@ class Store:
         acols = {r[1] for r in self.db.execute("PRAGMA table_info(agents)").fetchall()}
         if "rules" not in acols:
             self.db.execute("ALTER TABLE agents ADD COLUMN rules TEXT DEFAULT ''")
+        scols = {r[1] for r in self.db.execute("PRAGMA table_info(spend_requests)").fetchall()}
+        if "payout_env" not in scols:  # 'sandbox' or 'live': which PayPal the payout went to
+            self.db.execute("ALTER TABLE spend_requests ADD COLUMN payout_env TEXT DEFAULT ''")
         self.db.commit()
 
     # ---- helpers ---------------------------------------------------------
@@ -431,7 +434,23 @@ class Store:
             r["reasons"] = json.loads(r.get("reasons") or "[]")
             r["flags"] = json.loads(r.get("flags") or "[]")
             r["simulated"] = bool(r.get("simulated"))
+            r["payout_proof"] = Store.payout_proof(r)
         return r
+
+    @staticmethod
+    def payout_proof(r):
+        """One line a judge or auditor can check against PayPal, e.g.
+        'PayPal sandbox payout batch 5UXD2E8A7EBQJ, item 8AELMXH8UB2P8 (UNCLAIMED)'."""
+        if r.get("simulated"):
+            return "Simulated payout (no PayPal keys set): nothing was sent to PayPal."
+        if not r.get("payout_batch_id"):
+            return ""
+        s = "PayPal %spayout batch %s" % ((r.get("payout_env") + " ") if r.get("payout_env") else "", r["payout_batch_id"])
+        if r.get("payout_item_id"):
+            s += ", item %s" % r["payout_item_id"]
+        if r.get("payout_status"):
+            s += " (%s)" % r["payout_status"]
+        return s
 
     def add_spend(self, **row):
         row = dict(row, reasons=json.dumps(row.get("reasons", [])), flags=json.dumps(row.get("flags", [])))

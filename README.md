@@ -244,6 +244,10 @@ Response headers your agent receives:
 
 The same config works for any MCP client that can launch a stdio server.
 
+### Guard PayPal's own Agent Toolkit
+
+Lowtides can sit in front of PayPal's own Agent Toolkit. Add one line, and every capture, subscription or dispute payout an agent attempts needs Lowtides' OK first. The same rules, approvals, kill switch and tamper-evident audit log apply, and the agent needs no rewrite. See [integrations/paypal-agent-toolkit](integrations/paypal-agent-toolkit/) and [docs/PAYPAL-AGENT-TOOLKIT.md](docs/PAYPAL-AGENT-TOOLKIT.md).
+
 ---
 
 ## Known limits
