@@ -395,4 +395,5 @@ table.plain td.num, table.plain th.num { text-align: right; font-variant-numeric
   background: #FFF6E8; color: var(--ink); border-radius: var(--radius); font-size: .95rem; }
 .demo-banner a { color: var(--sign); font-weight: 600; }
 .demo-banner .btn { min-height: 40px; }
+.demo-banner .demo-pitch { display: block; font-size: 1.05em; margin-bottom: .3rem; }
 @media (max-width: 1150px) { .demo-banner { margin-left: 16px; margin-right: 16px; } }

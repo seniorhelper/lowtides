@@ -71,9 +71,10 @@ class App:
         self.save_lock = threading.Lock()
         self.loopback = True  # set by serve(); a loopback server only answers to localhost names
 
-    def reset_demo(self):
+    def reset_demo(self, seed_story=True):
         """Public demo only: wipe everything and replay the runaway-agent story, stopping
-        before the KILL so visitors can approve, deny or kill for themselves."""
+        before the KILL so visitors can approve, deny or kill for themselves. The in-page
+        replay passes seed_story=False: it tells the story itself on a clean slate."""
         if not self.public_demo:
             raise ValueError("Reset is only available in the public demo.")
         with self.store.lock:
@@ -81,7 +82,7 @@ class App:
                           "wallets", "wallet_tx", "topups", "shadow", "agents"):
                 self.store.db.execute("DELETE FROM " + table)
             self.store.db.commit()
-        if self.self_url:
+        if self.self_url and seed_story:
             from .scenario import seed
             try:
                 seed(self.self_url)
@@ -551,7 +552,7 @@ def make_handler(app):
                 if path in ("/api/providers", "/api/models"):
                     return self._send(403, {"error": "Changing model connections is turned off in the public demo."})
                 if path == "/api/demo/reset":
-                    app.reset_demo()
+                    app.reset_demo(seed_story=not d.get("empty"))
                     return self._send(200, {"ok": True})
             if path == "/api/agents":
                 name = (d.get("name") or "").strip()

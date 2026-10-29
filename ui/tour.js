@@ -5,7 +5,7 @@
 
   var RULES_TEXT = "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto.";
   var SEEN_KEY = "lt_tour_seen";
-  var STEP_MS = 2600;
+  var STEP_MS = 5000;
   var TOTAL = 9;
 
   function $(id) { return document.getElementById(id); }
@@ -59,16 +59,12 @@
     { title: "The owner writes the spending rules in plain English.",
       tried: "“" + RULES_TEXT + "”",
       run: function (ctx) {
-        // Many replays pile up agents on the shared demo; start clean once it gets crowded.
-        return call("GET", "/api/state").then(function (res) {
-          var agents = (res.body && res.body.agents) || [];
-          if (agents.length >= 4) return call("POST", "/api/demo/reset", {});
-        }).then(function () { return Promise.all([
+        // Start from a clean slate so the dashboard afterwards shows exactly this one story.
+        return call("POST", "/api/demo/reset", { empty: true }).then(function () { return Promise.all([
           call("POST", "/api/merchants", { name: "Acme Data", paypal_email: "merchant-demo@example.com", category: "data" }),
           call("POST", "/api/merchants", { name: "CloudGPU Inc", paypal_email: "merchant-demo@example.com", category: "compute" })
         ]); }).then(function () {
-          var t = new Date().toTimeString().slice(0, 8);
-          return call("POST", "/api/agents", { name: "Night-shift research agent " + t, daily_budget: 2.0 });
+          return call("POST", "/api/agents", { name: "Night-shift research agent", daily_budget: 2.0 });
         }).then(function (res) {
           var a = must(res, "Creating the agent").agent;
           ctx.agent = a; ctx.key = a.key;
@@ -148,7 +144,7 @@
       tried: "One button: stop the agent, deny what's waiting, cancel what can still be cancelled.",
       run: function (ctx) {
         return call("POST", "/api/agents/" + ctx.agent.id + "/kill").then(function (res) {
-          var k = must(res, "KILL");
+          var k = ctx.kill = must(res, "KILL");
           return call("POST", "/v1/spend", { amount: 5.00, merchant: "Acme Data", item: "one more thing", category: "data", reason: "please" }, ctx.key)
             .then(function (r2) {
               var after = spendResult(r2.body || {});
@@ -225,20 +221,23 @@
     skip.addEventListener("click", function () { if (run && run.wake) run.wake(); });
     close.addEventListener("click", function () { closeTour(); });
     ov.addEventListener("mousedown", function (ev) { if (ev.target === ov) ev.preventDefault(); });
-    dlg.addEventListener("keydown", onKey);
+    // On document, not the dialog: a click on plain text inside it drops focus to <body>.
+    document.addEventListener("keydown", onKey);
 
     D = { ov: ov, dlg: dlg, dots: dots, count: count, title: title, tried: tried, ticker: ticker,
           verdict: verdict, why: why, live: live, log: log, pause: pause, skip: skip, close: close };
   }
 
   function onKey(ev) {
+    if (!run || D.ov.hidden) return;
     if (ev.key === "Escape") { ev.preventDefault(); closeTour(); return; }
     if (ev.key !== "Tab") return;
     var f = Array.prototype.filter.call(D.dlg.querySelectorAll("button, [href], [tabindex]:not([tabindex='-1'])"),
       function (x) { return !x.disabled && x.offsetParent !== null; });
     if (!f.length) return;
     var first = f[0], last = f[f.length - 1];
-    if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+    if (!D.dlg.contains(document.activeElement)) { ev.preventDefault(); (ev.shiftKey ? last : first).focus(); }
+    else if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
     else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
   }
 
@@ -296,7 +295,10 @@
     for (var k = 0; k < lis.length; k++) lis[k].className = "done";
     D.count.textContent = "Done";
     D.title.textContent = "One runaway night, stopped at every turn.";
-    D.tried.textContent = "$12 of honest spending went through. The injected $19 and the $45 waited for a person, the $480 was blocked, the loop was cut off on call 4, and KILL denied everything still waiting.";
+    var k = ctx.kill || {};
+    D.tried.textContent = "The $12 data purchase was approved by the rules. The injected $19 and the $45 waited for a person, " +
+      "the $480 was blocked and the loop was cut off. Then KILL denied " + n(k.denied || 0, "waiting purchase") +
+      (k.payouts_cancelled ? " and pulled back " + n(k.payouts_cancelled, "payout") + " PayPal hadn't delivered yet, including the $12" : "") + ".";
     D.ticker.textContent = "";
     D.verdict.textContent = "Now look at the dashboard";
     D.verdict.className = "tour-verdict ok";
