@@ -26,8 +26,8 @@
 - MCP server: python -m lowtides.mcp (tools: request_spend, check_spend, get_budget).
 - Python standard library only; runs with ./run.sh or run.bat.
 
-## Links
-- Live demo (no login, PayPal sandbox, simulated AI models): https://lowtides.ai/
-- Why Lowtides (overview and FAQ): https://lowtides.ai/why/
-- Source code: https://github.com/seniorhelper/lowtides
-- Spend API: https://github.com/seniorhelper/lowtides/blob/main/docs/SPEND-API.md
+## Docs
+- [Live demo](https://lowtides.ai/): no login, PayPal sandbox, simulated AI models
+- [Why Lowtides](https://lowtides.ai/why/): overview and FAQ
+- [Source code](https://github.com/seniorhelper/lowtides): AGPL-3.0
+- [Spend API](https://github.com/seniorhelper/lowtides/blob/main/docs/SPEND-API.md): ask-before-buying API for agents
