@@ -1,4 +1,5 @@
 """SQLite storage. One file, no server, safe across request threads."""
+import hashlib
 import json
 import os
 import secrets
@@ -126,6 +127,46 @@ CREATE TABLE IF NOT EXISTS webhooks_seen (
   id TEXT PRIMARY KEY,
   ts REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS spend_requests (
+  id TEXT PRIMARY KEY,
+  ts REAL NOT NULL,
+  agent_id INTEGER NOT NULL,
+  task_id TEXT,
+  amount REAL NOT NULL,
+  merchant TEXT NOT NULL,
+  item TEXT DEFAULT '',
+  category TEXT DEFAULT '',
+  reason TEXT DEFAULT '',
+  decision TEXT NOT NULL,
+  status TEXT NOT NULL,
+  reasons TEXT DEFAULT '[]',
+  flags TEXT DEFAULT '[]',
+  payee TEXT DEFAULT '',
+  payout_batch_id TEXT,
+  payout_item_id TEXT,
+  payout_status TEXT DEFAULT '',
+  simulated INTEGER DEFAULT 0,
+  decided_by TEXT DEFAULT 'rules',
+  decided_ts REAL,
+  note TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS spend_agent_ts ON spend_requests(agent_id, ts);
+CREATE TABLE IF NOT EXISTS merchants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  paypal_email TEXT DEFAULT '',
+  category TEXT DEFAULT '',
+  created REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  kind TEXT NOT NULL,
+  ref TEXT,
+  data TEXT NOT NULL,
+  prev_hash TEXT NOT NULL,
+  hash TEXT NOT NULL
+);
 """
 
 
@@ -141,6 +182,9 @@ class Store:
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(ledger)").fetchall()}
         if "client_id" not in cols:  # databases made by earlier builds
             self.db.execute("ALTER TABLE ledger ADD COLUMN client_id INTEGER")
+        acols = {r[1] for r in self.db.execute("PRAGMA table_info(agents)").fetchall()}
+        if "rules" not in acols:
+            self.db.execute("ALTER TABLE agents ADD COLUMN rules TEXT DEFAULT ''")
         self.db.commit()
 
     # ---- helpers ---------------------------------------------------------
@@ -190,7 +234,7 @@ class Store:
         return self.one("SELECT * FROM agents WHERE key=?", (key,))
 
     def update_agent(self, aid, **fields):
-        allowed = {"name", "daily_budget", "task_budget", "status", "client_id", "use_wallet"}
+        allowed = {"name", "daily_budget", "task_budget", "status", "client_id", "use_wallet", "rules"}
         sets, args = [], []
         for k, v in fields.items():
             if k in allowed:
@@ -379,3 +423,99 @@ class Store:
 
     def last_invoice(self, client_id):
         return self.one("SELECT * FROM invoices WHERE client_id=? AND status<>'failed' ORDER BY period_end DESC LIMIT 1", (client_id,))
+
+    # ---- spend requests (agent purchases) ------------------------------------------------
+    @staticmethod
+    def _spend_row(r):
+        if r:
+            r["reasons"] = json.loads(r.get("reasons") or "[]")
+            r["flags"] = json.loads(r.get("flags") or "[]")
+            r["simulated"] = bool(r.get("simulated"))
+        return r
+
+    def add_spend(self, **row):
+        row = dict(row, reasons=json.dumps(row.get("reasons", [])), flags=json.dumps(row.get("flags", [])))
+        row.setdefault("ts", time.time())
+        cols = ",".join(row.keys())
+        self.run("INSERT INTO spend_requests(" + cols + ") VALUES(" + ",".join("?" for _ in row) + ")", tuple(row.values()))
+        return self.spend(row["id"])
+
+    def update_spend(self, sid, **fields):
+        for k in ("reasons", "flags"):
+            if k in fields:
+                fields[k] = json.dumps(fields[k])
+        sets = ",".join(k + "=?" for k in fields)
+        self.run("UPDATE spend_requests SET " + sets + " WHERE id=?", tuple(fields.values()) + (sid,))
+        return self.spend(sid)
+
+    def spend(self, sid):
+        return self._spend_row(self.one("SELECT s.*, a.name AS agent_name FROM spend_requests s LEFT JOIN agents a ON a.id=s.agent_id "
+                                        "WHERE s.id=?", (sid,)))
+
+    def spends(self, status=None, agent_id=None, limit=100):
+        sql, args = "SELECT s.*, a.name AS agent_name FROM spend_requests s LEFT JOIN agents a ON a.id=s.agent_id WHERE 1=1", []
+        if status:
+            sql += " AND s.status=?"
+            args.append(status)
+        if agent_id:
+            sql += " AND s.agent_id=?"
+            args.append(agent_id)
+        sql += " ORDER BY s.ts DESC LIMIT ?"
+        args.append(int(limit))
+        return [self._spend_row(r) for r in self.q(sql, args)]
+
+    def purchases_since(self, agent_id, since):
+        """Money committed to purchases: paid, approved, or waiting on a person (so a
+        burst of requests can't each squeeze under the limit while others wait)."""
+        r = self.one("SELECT COALESCE(SUM(amount),0) AS s FROM spend_requests WHERE agent_id=? AND ts>=? "
+                     "AND status IN ('paid','approved','pending')", (agent_id, since))
+        return float(r["s"])
+
+    def purchase_count_since(self, agent_id, since):
+        return int(self.one("SELECT COUNT(*) AS n FROM spend_requests WHERE agent_id=? AND ts>=?", (agent_id, since))["n"])
+
+    # ---- merchants ------------------------------------------------------------------------
+    def merchants(self):
+        return self.q("SELECT * FROM merchants ORDER BY name")
+
+    def merchant(self, name):
+        return self.one("SELECT * FROM merchants WHERE name=? COLLATE NOCASE", ((name or "").strip(),))
+
+    def add_merchant(self, name, paypal_email="", category=""):
+        self.run("INSERT INTO merchants(name,paypal_email,category,created) VALUES(?,?,?,?) "
+                 "ON CONFLICT(name) DO UPDATE SET paypal_email=excluded.paypal_email, category=excluded.category",
+                 (name.strip(), paypal_email.strip(), category.strip().lower(), time.time()))
+        return self.merchant(name)
+
+    # ---- tamper-evident audit log ----------------------------------------------------------
+    @staticmethod
+    def _audit_hash(prev, ts, kind, ref, data):
+        raw = json.dumps([prev, round(ts, 6), kind, ref, data], sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def audit(self, kind, ref, data):
+        """Append-only, hash-chained: each entry includes the previous entry's hash, so
+        editing or deleting any past entry breaks every hash after it."""
+        with self.lock:
+            last = self.db.execute("SELECT hash FROM audit ORDER BY id DESC LIMIT 1").fetchone()
+            prev = last[0] if last else "0" * 64
+            ts = round(time.time(), 6)
+            body = json.dumps(data, sort_keys=True, default=str)
+            h = self._audit_hash(prev, ts, kind, ref, body)
+            self.db.execute("INSERT INTO audit(ts,kind,ref,data,prev_hash,hash) VALUES(?,?,?,?,?,?)", (ts, kind, ref, body, prev, h))
+            self.db.commit()
+            return h
+
+    def audit_entries(self, ref=None, limit=1000):
+        if ref:
+            return self.q("SELECT * FROM audit WHERE ref=? ORDER BY id", (ref,))
+        return self.q("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (int(limit),))
+
+    def audit_verify(self):
+        prev, n = "0" * 64, 0
+        for r in self.q("SELECT * FROM audit ORDER BY id"):
+            n += 1
+            if r["prev_hash"] != prev or self._audit_hash(prev, r["ts"], r["kind"], r["ref"], r["data"]) != r["hash"]:
+                return {"ok": False, "count": n, "broken_at": r["id"]}
+            prev = r["hash"]
+        return {"ok": True, "count": n, "broken_at": None}

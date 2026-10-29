@@ -93,6 +93,15 @@ class Guard:
             raise Blocked("Daily allowance reached ($%.2f). It resets at midnight, or raise it on the dashboard." % agent["daily_budget"],
                           "daily_budget", 402)
 
+        from .spend import agent_rules  # late import: spend imports this module
+        total_cap = agent_rules(agent)["daily_total_limit"]
+        if total_cap is not None:
+            bought = self.store.purchases_since(aid, start_of_today())
+            if spent_today + bought + estimated_cost > total_cap:
+                self.store.event(aid, "budget", "%s hit its combined AI + purchases limit of $%.2f." % (agent["name"], total_cap))
+                raise Blocked("Combined daily limit reached: AI usage plus purchases can't pass $%.2f today." % total_cap,
+                              "daily_total_limit", 402)
+
         if task:
             spent = self.store.task_spend(task["id"])
             if task["status"] != "open":

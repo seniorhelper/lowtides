@@ -135,6 +135,22 @@ class FakePayPalHandler(_Base):
                 return self._send(404, {"name": "RESOURCE_NOT_FOUND"})
             st["sent"].append(iid)
             return remember(200, {"href": "https://www.sandbox.paypal.com/invoice/p/#" + iid})
+        if p == "/v1/payments/payouts":
+            bid = "BATCH" + uuid.uuid4().hex[:10].upper()
+            it = body["items"][0]
+            item_id = "ITEM" + uuid.uuid4().hex[:10].upper()
+            st["payouts"][bid] = {"item_id": item_id, "receiver": it["receiver"], "amount": float(it["amount"]["value"]),
+                                  "status": st.get("payout_status", "UNCLAIMED")}
+            return remember(201, {"batch_header": {"payout_batch_id": bid, "batch_status": "PENDING"}})
+        if p.startswith("/v1/payments/payouts-item/") and p.endswith("/cancel"):
+            item_id = p.split("/")[4]
+            for po in st["payouts"].values():
+                if po["item_id"] == item_id:
+                    if po["status"] != "UNCLAIMED":
+                        return self._send(422, {"name": "ITEM_CANCELLATION_FAILED"})
+                    po["status"] = "RETURNED"
+                    return remember(200, {"payout_item_id": item_id, "transaction_status": "RETURNED"})
+            return self._send(404, {"name": "RESOURCE_NOT_FOUND"})
         if p == "/v1/notifications/verify-webhook-signature":
             ok = body.get("transmission_sig") == "good-signature"
             return self._send(200, {"verification_status": "SUCCESS" if ok else "FAILURE"})
@@ -142,6 +158,12 @@ class FakePayPalHandler(_Base):
 
     def do_GET(self):
         st = self.server.state
+        if self.path.startswith("/v1/payments/payouts/"):
+            po = st["payouts"].get(self.path.split("/")[4])
+            if not po:
+                return self._send(404, {"name": "RESOURCE_NOT_FOUND"})
+            return self._send(200, {"batch_header": {"batch_status": "SUCCESS"}, "items": [
+                {"payout_item_id": po["item_id"], "transaction_status": po["status"]}]})
         if self.path.startswith("/v2/checkout/orders/"):
             oid = self.path.split("/")[4]
             o = st["orders"].get(oid)
@@ -152,7 +174,8 @@ class FakePayPalHandler(_Base):
 
 
 def paypal_state():
-    return {"requests": [], "idem": {}, "orders": {}, "auths": {}, "captures": {}, "invoices": {}, "sent": [], "partial_capture": True}
+    return {"requests": [], "idem": {}, "orders": {}, "auths": {}, "captures": {}, "invoices": {}, "sent": [], "partial_capture": True,
+            "payouts": {}, "payout_status": "UNCLAIMED"}
 
 
 def approve(state, order_id):
@@ -176,6 +199,8 @@ class FakeLLMHandler(_Base):
             return self._send(400, {"error": {"message": "this model does not support that parameter"}})
         weak = st.get("weak_models", set())
         text = "I'm not sure." if model in weak else "Answer from %s." % model
+        if st.get("reply"):
+            text = st["reply"]
         if self.path == "/v1/messages":
             if not self.headers.get("x-api-key"):
                 return self._send(401, {"type": "error", "error": {"type": "authentication_error"}})

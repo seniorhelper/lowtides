@@ -176,6 +176,29 @@ Response headers your agent receives:
 
 ---
 
+## Use Lowtides from any agent (MCP)
+
+`python -m lowtides.mcp` runs a stdio MCP server that gives an agent three tools: `request_spend`, `check_spend` and `get_budget`. They call the Lowtides `/v1` spend API (see `docs/SPEND-API.md`). Add it to Claude Desktop or Claude Code (run from the repo folder, or set `cwd`):
+
+```json
+{
+  "mcpServers": {
+    "lowtides": {
+      "command": "python",
+      "args": ["-m", "lowtides.mcp"],
+      "env": {
+        "LOWTIDES_URL": "http://localhost:8787",
+        "LOWTIDES_AGENT_KEY": "lt-your-agent-key"
+      }
+    }
+  }
+}
+```
+
+The same config works for any MCP client that can launch a stdio server.
+
+---
+
 ## Known limits
 
 - **API only.** Lowtides governs API-billed agents. It can't sit in front of subscription chat apps, which aren't billed per call.

@@ -4,6 +4,7 @@ Agent endpoints (drop-in):
   POST /v1/chat/completions   OpenAI-compatible
   POST /v1/messages           Anthropic-compatible
   GET  /v1/models
+  POST /v1/spend, GET /v1/spend/{id}, GET /v1/budget   ask before buying (see docs/SPEND-API.md)
 Point your agent's base URL at this server and use its Lowtides key as the API key.
 """
 import datetime
@@ -11,6 +12,7 @@ import hmac
 import json
 import mimetypes
 import os
+import re
 import sys
 import threading
 import time
@@ -25,7 +27,9 @@ from .money import Money, MoneyError
 from .paypal import PayPal, PayPalError
 from .pricing import money
 from .quote import quote as make_quote
+from .guard import start_of_today
 from .receipts import ledger_csv, receipt
+from .spend import SpendError, SpendGovernor, agent_rules, compile_rules, describe_rules, validate_rules
 from .store import Store
 
 UI_DIR = os.path.join(ROOT, "ui")
@@ -56,6 +60,7 @@ class App:
         self.paypal = paypal or PayPal(config.secret(pp_cfg.get("client_id_env")), config.secret(pp_cfg.get("client_secret_env")),
                                        env=pp_cfg.get("env", "sandbox"), currency=pp_cfg.get("currency", "USD"))
         self.money = Money(config, store, self.paypal)
+        self.spend = SpendGovernor(store, self.paypal, self.money)
         self.admin_token = os.environ.get("LOWTIDES_ADMIN_TOKEN", "")
         self.config_path = config_path or os.environ.get("LOWTIDES_CONFIG") or os.path.join(ROOT, "config.json")
         self.save_lock = threading.Lock()
@@ -303,6 +308,8 @@ def make_handler(app):
             if path == "/v1/models":
                 data = [{"id": n, "object": "model", "owned_by": m.get("provider")} for n, m in app.config.models.items()]
                 return self._send(200, {"object": "list", "data": data})
+            if path == "/v1/budget" or path.startswith("/v1/spend/"):
+                return self._spend_api("GET", path)
             if path == "/paypal/return":
                 order_id = qs.get("token", "")
                 kind = qs.get("kind", "")
@@ -359,10 +366,70 @@ def make_handler(app):
                 q = make_quote(app.store, app.config, int(qs.get("agent", 0)), label=qs.get("label", ""),
                                description=qs.get("description", ""), model=qs.get("model"))
                 return self._send(200, q)
+            if path == "/api/spend":
+                status = qs.get("status", "all")
+                return self._send(200, {"requests": app.store.spends(status=None if status == "all" else status,
+                                                                      limit=min(int(qs.get("limit", 100)), 1000))})
+            if path.startswith("/api/spend/") and path.endswith("/evidence"):
+                try:
+                    pack = app.spend.evidence(path.split("/")[3])
+                except SpendError as e:
+                    return self._send(e.http, {"error": str(e)})
+                data = json.dumps(pack, indent=2).encode("utf-8")
+                return self._send(200, data, {"Content-Disposition": "attachment; filename=lowtides-evidence-%s.json" % pack["request"]["id"]})
+            if path == "/api/merchants":
+                return self._send(200, {"merchants": app.store.merchants()})
+            if path == "/api/forecast":
+                return self._send(200, app.spend.forecast())
+            if path == "/api/audit/verify":
+                return self._send(200, app.store.audit_verify())
+            if path.startswith("/api/agents/") and path.endswith("/rules"):
+                a = app.store.agent(int(path.split("/")[3]))
+                if not a:
+                    return self._send(404, {"error": "No such agent."})
+                r = agent_rules(a)
+                return self._send(200, {"rules": r, "plain": describe_rules(r)})
+            return self._send(404, {"error": "Unknown endpoint"})
+
+        def _agent_or_401(self):
+            agent = app.store.agent_by_key(self._agent_key()) if self._agent_key() else None
+            if not agent:
+                self._send(401, {"error": "Unknown or missing Lowtides agent key."})
+            return agent
+
+        def _spend_api(self, method, path):
+            """Agent-facing purchase API: /v1/spend, /v1/spend/{id}, /v1/budget."""
+            agent = self._agent_or_401()
+            if not agent:
+                return
+            try:
+                if method == "POST" and path == "/v1/spend":
+                    return self._send(200, app.spend.request(agent, self._json_in()))
+                if method == "GET" and path.startswith("/v1/spend/"):
+                    row = app.store.spend(path.rsplit("/", 1)[1])
+                    if not row or row["agent_id"] != agent["id"]:
+                        return self._send(404, {"error": "No such spend request for this agent."})
+                    return self._send(200, row)
+                if method == "GET" and path == "/v1/budget":
+                    r = agent_rules(agent)
+                    today = start_of_today()
+                    bought = app.store.purchases_since(agent["id"], today)
+                    return self._send(200, {
+                        "agent": agent["name"], "status": agent["status"],
+                        "tokens": {"daily_budget": agent["daily_budget"], "spent_today": round(app.store.spend_since(agent["id"], today), 6)},
+                        "purchases": {"daily_limit": r["daily_purchase_limit"], "spent_today": round(bought, 2),
+                                      "remaining_today": round(max(0.0, r["daily_purchase_limit"] - bought), 2),
+                                      "auto_approve_up_to": r["approval_over"], "max_per_purchase": r["max_per_purchase"]},
+                        "wallet_balance": round(app.store.balance(agent["id"]), 2) if agent["use_wallet"] else None,
+                        "rules": r, "rules_in_plain_english": describe_rules(r)})
+            except SpendError as e:
+                return self._send(e.http, {"error": str(e)})
             return self._send(404, {"error": "Unknown endpoint"})
 
         def _post(self):
             path, qs = self._path()
+            if path == "/v1/spend":
+                return self._spend_api("POST", path)
             if path in ("/v1/chat/completions", "/v1/messages", "/chat/completions", "/messages"):
                 api = "openai" if path.endswith("chat/completions") else "anthropic"
                 body = self._json_in()
@@ -417,6 +484,43 @@ def make_handler(app):
                     raise ValueError("Budgets must be more than $0.")
                 aid = s.add_agent(name, daily, task, client_id=d.get("client_id") or None, use_wallet=bool(d.get("use_wallet")))
                 return self._send(200, {"agent": s.agent(aid)})
+            if len(parts) == 4 and parts[1] == "spend" and parts[3] in ("approve", "deny"):
+                try:
+                    if parts[3] == "approve":
+                        return self._send(200, app.spend.approve(parts[2]))
+                    return self._send(200, app.spend.deny(parts[2], note=str(d.get("note", ""))))
+                except SpendError as e:
+                    return self._send(e.http, {"error": str(e)})
+            if path == "/api/rules/compile":
+                try:
+                    return self._send(200, compile_rules(d.get("text", ""), api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+                                                         model=app.config.policy.get("rules_model", "claude-haiku-5-5")))
+                except SpendError as e:
+                    return self._send(e.http, {"error": str(e)})
+            if path == "/api/merchants":
+                name = (d.get("name") or "").strip()
+                email = (d.get("paypal_email") or "").strip()
+                if not name:
+                    raise ValueError("Give the merchant a name.")
+                if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+                    raise ValueError("That PayPal email doesn't look right.")
+                m = s.add_merchant(name[:120], email[:200], (d.get("category") or "")[:60])
+                s.audit("merchant.saved", name[:120], {"paypal_email": email, "category": m["category"]})
+                return self._send(200, {"merchant": m})
+            if len(parts) == 4 and parts[1] == "agents" and parts[3] in ("rules", "kill"):
+                aid = int(parts[2])
+                if not s.agent(aid):
+                    return self._send(404, {"error": "No such agent."})
+                try:
+                    if parts[3] == "kill":
+                        return self._send(200, app.spend.kill(aid))
+                    rules = validate_rules(d.get("rules") if isinstance(d.get("rules"), dict) else {})
+                except SpendError as e:
+                    return self._send(e.http, {"error": str(e)})
+                s.update_agent(aid, rules=json.dumps(rules))
+                s.audit("rules.saved", str(aid), {"rules": rules})
+                s.event(aid, "control", "Spending rules updated: " + " ".join(describe_rules(rules)))
+                return self._send(200, {"rules": rules, "plain": describe_rules(rules)})
             if len(parts) == 4 and parts[1] == "agents":
                 aid = int(parts[2])
                 action = parts[3]
@@ -440,10 +544,15 @@ def make_handler(app):
                     return self._send(404, {"error": "Unknown action"})
                 return self._send(200, {"agent": s.agent(aid)})
             if path == "/api/stop-all":
+                totals = {"denied": 0, "holds_voided": 0, "payouts_cancelled": 0}
                 for a in s.agents():
-                    s.update_agent(a["id"], status="stopped")
-                s.event(None, "control", "STOP ALL pressed. Every agent is stopped.")
-                return self._send(200, {"ok": True})
+                    r = app.spend.kill(a["id"], by="STOP ALL")
+                    for k in totals:
+                        totals[k] += r[k]
+                s.event(None, "control", "STOP ALL pressed. Every agent is stopped, %d pending purchases denied, "
+                                         "%d holds voided, %d payouts cancelled." % (totals["denied"], totals["holds_voided"],
+                                                                                     totals["payouts_cancelled"]))
+                return self._send(200, dict(totals, ok=True))
             if path == "/api/policy":
                 app.config.update_policy(d)
                 if "mode" in d and d["mode"] in ("home", "business"):
