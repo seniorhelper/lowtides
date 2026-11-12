@@ -332,7 +332,7 @@ python -m pytest -q
 
 ## License
 
-Copyright (c) 2026 Eye To Ad Media. AGPL-3.0, see `LICENSE`. If you run a modified version as a network service, the AGPL requires you to offer your users its source.
+Copyright (c) 2026 Zachary Wennstedt. AGPL-3.0, see `LICENSE`. If you run a modified version as a network service, the AGPL requires you to offer your users its source.
 
 ---
 
