@@ -1,6 +1,6 @@
 # Changelog
 
-Everything changed during the PayPal AI Hackathon (submission period started Oct 1, 2026). The untouched v1.0 is the first commit; the entries below list each change made on top of it.
+Everything here was built during the PayPal AI Hackathon submission period (opened Oct 1, 2026). The first version, CostCop v1.0, is the first commit (Oct 28, 2026); the entries below list each change made on top of it.
 
 ## Nov 12, 2026: Action Muzzle
 

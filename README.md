@@ -278,9 +278,11 @@ Many projects offer a signed spending mandate and a stop switch. Lowtides adds:
 
 ## What was built during the hackathon (Oct 1 to Nov 12, 2026)
 
-**Before Oct 1:** CostCop v1.0, a cost-saving proxy for AI model calls (answer memory, trimming, routing, budgets, loop guard) with PayPal Orders v2 wallets and quote-and-hold, Invoicing and webhook verification. It is the first commit in `git log`, untouched (this repository's first commit is dated Oct 28, 2026). `CHANGELOG.md` lists what was built on top of it during the hackathon.
+Everything in this repository was built during the hackathon submission period, which opened Oct 1, 2026. Nothing existed before it.
 
-**New since Oct 1:**
+**First version (Oct 28):** CostCop v1.0, a cost-saving proxy for AI model calls (answer memory, trimming, routing, budgets, loop guard) with PayPal Orders v2 wallets and quote-and-hold, Invoicing and webhook verification. It is the first commit in `git log`. `CHANGELOG.md` lists what was built on top of it.
+
+**Built on top of it (Oct 28 to Nov 12):**
 - The purchase governor: spend API, rules engine, plain-English rules, approvals, PayPal Payouts, Stop all with payout cancellation, hash-chained audit log, evidence packs, MCP server, runaway-agent replay.
 - PayPal Vault v3 revocation, a private demo per visitor, signed outbound webhooks, OpenAPI 3.1 and the Postman collection, burst-proof limits, outside spend guard, leash.
 - The Lowtides Pass (Ed25519, AP2-aligned) and the merchant check for PayPal captures.
