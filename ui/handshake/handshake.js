@@ -55,11 +55,14 @@
   function itemById(id) { return catalog.filter(function (x) { return x.id === id; })[0] || null; }
 
   // ---------- the live dot: on while any real tour call is in flight ----------
-  var inFlight = 0, liveOff = null;
+  var inFlight = 0, liveOff = null, workOn = null;
+  function working(on) { var w = $("tv-working"); if (w) w.hidden = !on; }
   function live(p) {
     inFlight++; clearTimeout(liveOff); $("tv-live").hidden = false;
+    // a call that takes more than a moment (a real PayPal sandbox payout does) says so, so a pause never looks stuck
+    if (inFlight === 1) { clearTimeout(workOn); workOn = setTimeout(function () { if (inFlight) working(true); }, 700); }
     // stays lit a moment after a fast answer, so the eye can catch that a real call happened
-    var done = function () { inFlight = Math.max(0, inFlight - 1); if (!inFlight) liveOff = setTimeout(function () { if (!inFlight) $("tv-live").hidden = true; }, 600); };
+    var done = function () { inFlight = Math.max(0, inFlight - 1); if (!inFlight) { clearTimeout(workOn); working(false); liveOff = setTimeout(function () { if (!inFlight) $("tv-live").hidden = true; }, 600); } };
     p.then(done, done);
     return p;
   }

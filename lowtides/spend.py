@@ -590,7 +590,7 @@ class SpendGovernor:
     # item ID and status. PayPal processes batches asynchronously; the stop switch needs
     # the item ID to cancel an UNCLAIMED payout. Whatever is still PENDING after this is
     # followed up in a background thread (background_poll) and by refresh_payout().
-    poll_delays = (0.25, 0.5, 0.75, 1.0, 1.25)
+    poll_delays = (0.25, 0.5, 0.75)        # a short wait for PayPal to name the payout; the background poll below picks up the rest
     background_poll = (2, 3, 5, 10, 20, 30)
 
     demo_fallback = False       # the public demo turns this on (server.App)
