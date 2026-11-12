@@ -169,7 +169,7 @@ class LeashE2E(unittest.TestCase):
 
 
 class LeashE2EPublicDemo(LeashE2E):
-    """Scenario 7: the same behaviour in public demo mode (simulated models only)."""
+    """Scenario 7: the same behavior in public demo mode (simulated models only)."""
     public = True
 
     def test_7_demo_mode_flag_and_real_models_refused(self):

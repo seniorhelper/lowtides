@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Advanced: AI bills and agent controls | Lowtides</title>
+<meta name="description" content="The advanced Lowtides view: daily budgets for AI agents, one-tap approvals, a STOP ALL button and PayPal sandbox settlement. Live demo.">
+<link rel="canonical" href="https://lowtides.ai/app/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#FFFFFF">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/app/">
+<meta property="og:title" content="Lowtides: agent bills and controls">
+<meta property="og:description" content="Budgets, approvals and a STOP ALL button for AI agents, with purchases settled through the PayPal sandbox in this demo.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="lowtides.ai">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" type="text/plain" href="/llms.txt" title="LLM-readable summary">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/tour.css">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="top-in">
+    <a class="lt-logo" href="/" aria-label="Lowtides home">
+      <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+      <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+    </a>
+    <div class="app-title">
+      <span class="app-kicker">Advanced</span>
+      <span class="app-name">Agent bills &amp; controls<span class="sr"> for <span id="app-name">lowtides</span></span></span>
+    </div>
+    <div class="mode" role="group" aria-label="Who is this for">
+      <button type="button" data-mode="home" class="mode-btn">Home</button>
+      <button type="button" data-mode="business" class="mode-btn">Business</button>
+    </div>
+    <button type="button" id="stop-all" class="estop estop--sm" title="Stop every agent right now" aria-label="STOP ALL: stop every agent right now"><span class="estop-cap" aria-hidden="true">STOP<br>ALL</span></button>
+  </div>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#home" data-tab="home">Home</a>
+    <a href="#approvals" data-tab="approvals" id="approvals-link">Approvals<span class="badge" id="appr-badge" hidden></span></a>
+    <a href="#tasks" data-tab="tasks">Quotes &amp; holds</a>
+    <a href="#wallet" data-tab="wallet">Wallet</a>
+    <a href="#clients" data-tab="clients" class="biz-only">Clients</a>
+    <a href="#ledger" data-tab="ledger">Every call</a>
+    <a href="#settings" data-tab="settings">Settings</a>
+  </nav>
+</header>
+
+<main id="main" tabindex="-1">
+  <!-- HOME -->
+  <section id="tab-home" class="tab">
+    <div id="out-banner" class="out-banner" role="alert" hidden>
+      <div class="out-banner-body">
+        <p id="out-banner-text"></p>
+        <ul id="out-banner-keys"></ul>
+      </div>
+      <button type="button" class="btn ghost" id="out-dismiss">Dismiss</button>
+    </div>
+    <div id="appr-banner" class="appr-banner" hidden>
+      <span class="appr-banner-icon" aria-hidden="true">!</span>
+      <p id="appr-banner-text"></p>
+      <a class="btn warn" href="#approvals">Review now</a>
+    </div>
+
+    <section class="tide" aria-labelledby="tide-h">
+      <div class="tide-head">
+        <div class="tide-intro">
+          <p class="tide-eyebrow">Tide chart</p>
+          <h1 id="tide-h">Advanced: AI bills and agent controls</h1>
+          <ul class="tide-legend" aria-label="How to read the chart">
+            <li><span class="lg-dot lg-tide" aria-hidden="true"></span>Spent today</li>
+            <li><span class="lg-dot lg-limit" aria-hidden="true"></span>Daily limit (top row)</li>
+            <li><span class="lg-dash" aria-hidden="true"></span>Where today's pace ends up</li>
+          </ul>
+        </div>
+        <div class="tide-saved">
+          <div class="tide-saved-k">Protected today</div>
+          <div class="tide-saved-v prot-v" id="prot-today">$0.00</div>
+          <div class="prot-label" id="prot-label">nothing needed stopping today</div>
+          <ul class="prot-chips" id="prot-chips" aria-label="What Lowtides stopped today"></ul>
+          <div class="prot-saved" id="prot-saved">
+            <span class="prot-saved-k">Saved on AI calls</span>
+            <span class="prot-saved-v" id="saved-today">$0.00</span>
+          </div>
+          <div class="tide-saved-sub" id="saved-sub">Would have cost $0.00. You paid $0.00.</div>
+        </div>
+      </div>
+      <div id="tide-grid" class="tide-grid"></div>
+    </section>
+
+    <div class="panel receipt">
+      <h2>Today in plain English</h2>
+      <ul id="receipt-lines" class="lines"></ul>
+      <p class="muted small" id="week-line"></p>
+    </div>
+
+    <div id="setup" class="panel setup" hidden>
+      <h2>Set up your first agent</h2>
+      <p class="muted">Three steps. Takes about a minute.</p>
+      <ol class="steps">
+        <li>
+          <label for="setup-name">Name your agent</label>
+          <input id="setup-name" placeholder="Like: Support bot" autocomplete="off">
+        </li>
+        <li>
+          <label for="setup-budget">Daily allowance: <strong id="setup-budget-val">$5</strong></label>
+          <input id="setup-budget" type="range" min="1" max="50" step="1" value="5">
+          <span class="muted small">It can never spend more than this in a day.</span>
+        </li>
+        <li>
+          <button type="button" id="setup-go" class="btn go big">Turn it on</button>
+        </li>
+      </ol>
+    </div>
+
+    <div id="connect" class="panel" hidden>
+      <h2>Paste these two lines into your agent</h2>
+      <p class="muted">Your agent keeps working exactly the same. It just talks to Lowtides first.</p>
+      <div class="kv"><span>Base URL</span><code id="c-base"></code><button class="btn ghost sm" data-copy="c-base">Copy</button></div>
+      <div class="kv"><span>API key</span><code id="c-key"></code><button class="btn ghost sm" data-copy="c-key">Copy</button></div>
+      <details class="code-help">
+        <summary>Show me code for my agent</summary>
+        <div class="code-tabs" role="tablist">
+          <button type="button" data-code="py-openai" class="on">Python (OpenAI SDK)</button>
+          <button type="button" data-code="py-anthropic">Python (Anthropic SDK)</button>
+          <button type="button" data-code="curl">curl</button>
+          <button type="button" data-code="langchain">LangChain</button>
+          <button type="button" data-code="mcp">MCP (AI apps)</button>
+          <button type="button" data-code="spend">Ask before buying</button>
+        </div>
+        <pre id="code-box"></pre>
+      </details>
+      <button type="button" class="btn ghost" id="connect-done">Done</button>
+    </div>
+
+    <div class="row-head">
+      <h2>Your agents</h2>
+      <div class="row-actions">
+        <button type="button" class="btn ghost" id="add-agent">Add an agent</button>
+        <button type="button" class="btn ghost" id="run-demo" title="Runs real Lowtides logic against a built-in simulated model">Watch it work (demo)</button>
+        <button type="button" class="btn ghost" id="run-loop" title="Sends the same request over and over through the demo agent">Show the loop guard (demo)</button>
+      </div>
+    </div>
+    <div id="agents" class="agents"></div>
+
+    <div class="panel">
+      <h2>Try it</h2>
+      <p class="muted">Ask anything through one of your agents and see which model answered, what it cost and what it saved.</p>
+      <div class="try">
+        <select id="try-agent" aria-label="Agent"></select>
+        <select id="try-model" aria-label="Model your agent asks for"></select>
+        <input id="try-prompt" placeholder="Like: Summarize this email in one line…" aria-label="Your question">
+        <button type="button" class="btn go" id="try-go">Send</button>
+      </div>
+      <div id="try-out" class="try-out" hidden></div>
+    </div>
+
+    <div class="panel" id="outside-panel">
+      <h2>Outside watch</h2>
+      <p class="muted">Watches your provider's real bill, including scripts that skip Lowtides.</p>
+      <p id="out-off" class="muted" hidden>Off — set caps and turn it on below.</p>
+      <div id="out-providers"></div>
+      <div class="row-actions">
+        <button type="button" class="btn ghost" id="out-check">Check now</button>
+        <button type="button" class="btn stop" id="out-disable">Disable keys now</button>
+        <button type="button" class="btn ghost" id="out-sim" hidden>Simulate a runaway script</button>
+      </div>
+      <ul id="out-alerts" class="events" aria-label="Recent outside-watch alerts"></ul>
+      <details id="out-settings">
+        <summary>Outside watch settings</summary>
+        <form id="out-form" class="form-grid" autocomplete="off"></form>
+        <button type="button" class="btn go" id="out-save">Save outside watch settings</button>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>What the governor noticed</h2>
+      <ul id="events" class="events"></ul>
+    </div>
+  </section>
+
+  <!-- APPROVALS -->
+  <section id="tab-approvals" class="tab" hidden>
+    <div class="row-head">
+      <h2>Waiting for you</h2>
+      <p class="muted small appr-poll">Checks for new requests every 3 seconds.</p>
+    </div>
+    <p class="muted">Your agents ask Lowtides before they buy anything. Purchases your rules can't settle on their own wait here until you approve or deny them.</p>
+    <div id="appr-list" class="appr-list"></div>
+
+    <div class="panel">
+      <div class="row-head log-head">
+        <h2>Decision log</h2>
+        <p id="audit-line" class="audit-line" hidden></p>
+      </div>
+      <p class="muted small">Every decision, with the reasons Lowtides gave. Each entry is written to a tamper-evident audit log.</p>
+      <ol id="decision-log" class="dlog"></ol>
+    </div>
+  </section>
+
+  <!-- TASKS -->
+  <section id="tab-tasks" class="tab" hidden>
+    <div class="panel">
+      <h2>Get a price before the work starts</h2>
+      <p class="muted">Like a contractor's estimate. Lowtides quotes the job from what similar jobs really cost. Hold the quote on PayPal, and when the job is done you pay only the real cost. The rest is released.</p>
+      <div class="form-grid">
+        <label>Agent<select id="t-agent"></select></label>
+        <label>Job name<input id="t-label" placeholder="Like: Weekly SEO report"></label>
+        <label class="wide">What's the job?<input id="t-desc" placeholder="Short description helps the first estimate"></label>
+        <label>Budget cap (optional)<input id="t-budget" type="number" min="0.01" step="0.01" placeholder="Uses the quote"></label>
+      </div>
+      <button type="button" class="btn go" id="t-quote">Get my quote</button>
+      <div id="t-result" class="quote" hidden></div>
+    </div>
+    <div class="panel">
+      <h2>Jobs</h2>
+      <div id="task-list"></div>
+      <p class="muted small">Agents add calls to a job by sending the header <code>X-Lowtides-Task: job-id</code>. Charges round to the nearest cent, and anything under half a cent is free.</p>
+    </div>
+  </section>
+
+  <!-- WALLET -->
+  <section id="tab-wallet" class="tab" hidden>
+    <div class="panel">
+      <h2>Prepaid allowance</h2>
+      <p class="muted">Turn on "Pay from wallet" for an agent and it spends only what you've loaded. When the wallet is empty, it stops. No surprise bills.</p>
+      <div id="wallets"></div>
+    </div>
+    <div class="panel" id="vault-panel">
+      <h2>PayPal on file</h2>
+      <p class="muted">Save a PayPal payment method for an agent so its wallet can be topped up without a checkout page. Shut off and STOP ALL revoke it at PayPal, so a stopped agent can't be charged again until you reconnect it.</p>
+      <div id="vaults"></div>
+    </div>
+  </section>
+
+  <!-- CLIENTS -->
+  <section id="tab-clients" class="tab" hidden>
+    <div class="panel">
+      <h2>Bill clients for the AI you run for them</h2>
+      <p class="muted">Give each client their own agents. Lowtides totals what their agents cost, adds your markup, and sends a PayPal invoice with the savings receipt on it.</p>
+      <div class="form-grid">
+        <label>Client name<input id="cl-name" placeholder="Business name"></label>
+        <label>Billing email<input id="cl-email" type="email" placeholder="billing@client.com"></label>
+        <label>Markup %<input id="cl-markup" type="number" min="0" step="1" value="20"></label>
+      </div>
+      <button type="button" class="btn go" id="cl-add">Add client</button>
+    </div>
+    <div id="client-list"></div>
+    <div class="panel">
+      <h2>Invoices</h2>
+      <div id="invoice-list"></div>
+    </div>
+  </section>
+
+  <!-- LEDGER -->
+  <section id="tab-ledger" class="tab" hidden>
+    <div class="row-head">
+      <h2>Every call, every cent</h2>
+      <div class="row-actions">
+        <a class="btn ghost" href="/api/ledger.csv" id="csv-link">Download all (CSV)</a>
+      </div>
+    </div>
+    <p class="muted">"Would have cost" is the same tokens on the model your agent asked for, with no trimming, no added caching and no answer memory. Cheap attempts that had to be redone are included in what you paid.</p>
+    <div class="ledger-tools">
+      <button type="button" class="btn" id="ledger-export" disabled title="No calls to export yet">Export this view (CSV)</button>
+      <span class="muted" id="ledger-summary" aria-live="polite"></span>
+    </div>
+    <div id="grid" class="grid ag-theme-quartz"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab" hidden>
+    <div class="panel" id="merchants-panel">
+      <h2>Merchants your agents may pay</h2>
+      <p class="muted">Paying a merchant that isn't on this list needs your approval, so a prompt-injected agent can't send money to a stranger's PayPal account.</p>
+      <div id="merchant-list"></div>
+      <h3>Add a merchant</h3>
+      <form id="merchant-form" class="form-grid" novalidate>
+        <label>Merchant name<input id="mc-name" required autocomplete="off" placeholder="Like: Acme Data"></label>
+        <label>PayPal email (who gets paid)<input id="mc-email" type="email" required autocomplete="off" placeholder="payments@acme.example"></label>
+        <label>Category<input id="mc-cat" autocomplete="off" placeholder="Like: data, software, travel"></label>
+        <div class="form-end"><button type="submit" class="btn go">Add merchant</button></div>
+      </form>
+    </div>
+    <div class="panel" id="hooks-panel">
+      <h2>Alerts to Zapier / webhooks</h2>
+      <p class="muted">Get a text, email or Slack message when a purchase needs you. Paste a Zapier "Catch Hook" URL (or Make, or any URL). Lowtides sends signed JSON and never waits for it before deciding. <a href="https://github.com/seniorhelper/lowtides/blob/main/docs/ZAPIER.md" target="_blank" rel="noopener">How to set up the Zap</a></p>
+      <div id="hk-list"></div>
+      <form id="hk-form" class="form-grid" novalidate>
+        <label class="wide">Webhook URL<input id="hk-url" type="url" autocomplete="off" placeholder="https://hooks.zapier.com/hooks/catch/..."></label>
+        <label>Label<input id="hk-label" autocomplete="off" placeholder="Like: Text my phone"></label>
+        <label style="display:flex;align-items:center;gap:.5em;align-self:end"><input id="hk-approvals" type="checkbox" checked style="width:auto;height:auto;margin:0"> Only approvals and stops</label>
+        <div class="form-end"><button type="submit" class="btn go">Add webhook</button></div>
+      </form>
+      <p id="hk-secret" class="small" hidden>Signing secret (shown once): <code id="hk-secret-val"></code></p>
+      <p id="hk-msg" class="small muted" role="status"></p>
+      <div id="hk-log"></div>
+    </div>
+    <div class="panel">
+      <h2>Rules of the road</h2>
+      <div id="policy" class="policy"></div>
+      <button type="button" class="btn go" id="policy-save">Save rules</button>
+    </div>
+    <div class="panel">
+      <h2>Models and prices</h2>
+      <p class="muted">Prices are per 1 million tokens. Check them against your provider's pricing page: Lowtides's dollar math is only as right as these numbers.</p>
+      <div id="models"></div>
+      <h3>Add or update a model</h3>
+      <div class="form-grid">
+        <label>Model name<input id="m-name" placeholder="Exact model ID"></label>
+        <label>Provider<select id="m-provider"></select></label>
+        <label>Ladder group<input id="m-family" placeholder="Models that can swap for each other"></label>
+        <label>Tier<select id="m-tier"><option value="1">1 (cheapest)</option><option value="2">2 (middle)</option><option value="3">3 (strongest)</option></select></label>
+        <label>Input $<input id="m-in" type="number" min="0" step="0.01"></label>
+        <label>Output $<input id="m-out" type="number" min="0" step="0.01"></label>
+      </div>
+      <button type="button" class="btn ghost" id="m-save">Save model</button>
+    </div>
+    <div class="panel">
+      <h2>Connections</h2>
+      <div id="providers"></div>
+      <h3>Add an OpenAI-compatible server</h3>
+      <p class="muted small">Works with OpenAI, OpenRouter, Groq, Together, or a local server like Ollama or LM Studio. Keys live in environment variables, never in this page.</p>
+      <div class="form-grid">
+        <label>Name<input id="p-name" placeholder="Like: ollama"></label>
+        <label class="wide">Base URL<input id="p-url" placeholder="http://localhost:11434/v1"></label>
+        <label>Key variable name<input id="p-env" placeholder="Leave blank if none"></label>
+      </div>
+      <button type="button" class="btn ghost" id="p-save">Save connection</button>
+    </div>
+    <div class="panel">
+      <h2>Answer memory</h2>
+      <p class="muted">Repeat questions are answered free from memory for 24 hours. Answers that call tools are never reused.</p>
+      <button type="button" class="btn ghost" id="mem-clear">Forget all remembered answers</button>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p class="muted small" id="foot-line"></p>
+  <p class="muted small foot-links"><a href="/">Lowtides home</a> &middot; <a href="/why/">Why Lowtides</a> &middot; <a href="https://github.com/seniorhelper/lowtides">Open-source code</a> &middot; <a href="/llms.txt">llms.txt</a> &middot; <a href="/blog/">Blog</a> &middot; <a href="/tools/">Free tools</a> &middot; <a href="/sitemap/">Site map</a> &middot; <a href="/privacy/">Privacy</a> &middot; <span class="pat-pend">Patent Pending</span></p>
+  <div class="heart-line" id="heart-line">
+    <span class="heart" aria-hidden="true">&#10084;</span>
+    <a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a>
+  </div>
+</footer>
+
+<div id="flash" class="flash" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+<dialog id="kill-dlg" class="modal" aria-labelledby="kill-h">
+  <form method="dialog" class="modal-in">
+    <h2 id="kill-h">Shut off this agent?</h2>
+    <p id="kill-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn stop big" id="kill-yes">Shut it off now</button>
+      <button type="submit" class="btn ghost big" value="cancel">Keep it running</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="rules-dlg" class="modal wide" aria-labelledby="rules-h">
+  <div class="modal-in">
+    <div class="modal-top">
+      <h2 id="rules-h">Rules in plain English</h2>
+      <button type="button" class="btn ghost sm" id="rules-close">Close</button>
+    </div>
+    <h3>Rules now</h3>
+    <ul id="rules-now" class="rule-list"></ul>
+    <fieldset class="leash" id="leash-set">
+      <legend>Leash (data dumps)</legend>
+      <p class="muted small">Stop one runaway call from flooding your bill. Token counts are estimates.</p>
+      <div class="leash-f">
+        <label for="leash-reply">Max reply length</label>
+        <select id="leash-reply" aria-describedby="leash-reply-h">
+          <option value="">No limit</option>
+          <option value="400">Short (about 400 tokens)</option>
+          <option value="1000">Medium (about 1,000 tokens)</option>
+          <option value="4000">Long (about 4,000 tokens)</option>
+          <option value="custom">Custom tokens</option>
+        </select>
+        <input id="leash-reply-custom" type="number" min="1" step="1" inputmode="numeric" aria-label="Custom max reply length in tokens" placeholder="Tokens, like 2500" hidden>
+        <p class="muted small" id="leash-reply-h">Caps how long an answer can be, so the agent can't write a book.</p>
+      </div>
+      <div class="leash-f">
+        <label for="leash-pages">Biggest prompt allowed (pages)</label>
+        <input id="leash-pages" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-pages-h" placeholder="No limit">
+        <p class="muted small" id="leash-pages-h">1 page is about 500 tokens. Blank means no limit. Bigger prompts are blocked.</p>
+      </div>
+      <div class="leash-f">
+        <label for="leash-cost">Max cost per AI call ($)</label>
+        <input id="leash-cost" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-cost-h" placeholder="No limit">
+        <p class="muted small" id="leash-cost-h">Blocks any single call that would cost more than this. Blank means no limit.</p>
+      </div>
+      <div class="leash-f">
+        <label for="leash-alert">Alert when a call is this many times bigger than usual</label>
+        <input id="leash-alert" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-alert-h" placeholder="5">
+        <p class="muted small" id="leash-alert-h">Flags a call, without blocking it, when it is this many times its usual size. 0 turns it off.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn go" id="leash-save">Save leash</button>
+      </div>
+    </fieldset>
+    <h3><label for="rules-text" class="inline-label">Write new rules</label></h3>
+    <p class="muted small" id="rules-hint">Write them the way you'd tell a person. Lowtides turns them into exact rules for you to check before anything is saved. Example: Keep replies short. Never send more than 50 pages. No single call over 25 cents.</p>
+    <textarea id="rules-text" rows="3" aria-describedby="rules-hint" placeholder="Like: max $50 a day, ask me over $20, never buy gift cards. Keep replies short. Never send more than 50 pages. No single call over 25 cents."></textarea>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" id="rules-translate">Translate</button>
+    </div>
+    <div id="rules-preview" class="rules-preview" hidden>
+      <h3>Check these before saving</h3>
+      <p class="rules-source" id="rules-source"></p>
+      <ul id="rules-new" class="rule-list new"></ul>
+      <ul id="rules-notes" class="muted small notes"></ul>
+      <div class="modal-actions">
+        <button type="button" class="btn go big" id="rules-save">Save these rules</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div id="login" class="login" hidden>
+  <form class="login-box" id="login-form">
+    <h2>Dashboard password</h2>
+    <input id="login-pw" type="password" autocomplete="current-password" aria-label="Password">
+    <button class="btn go" type="submit">Open dashboard</button>
+    <p class="muted small" id="login-err"></p>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js" defer></script>
+<script src="/dialog.js" defer></script>
+<script src="/app.js" defer></script>
+<script src="/tour.js" defer></script>
+<script src="/pass.js" defer></script>
+<script src="/webhooks.js" defer></script>
+<link rel="stylesheet" href="/ask.css">
+<script src="/ask.js" defer></script>
+</body>
+</html>

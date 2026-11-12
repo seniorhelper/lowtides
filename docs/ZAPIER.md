@@ -11,7 +11,7 @@ Webhooks never slow your agents down. Lowtides decides first, puts the event on 
 | `spend.needs_approval` | A purchase is waiting for you | `agent_name`, `amount`, `merchant`, `item`, `reason`, `reasons`, `flags`, `id`, `approve_url` |
 | `spend.paid` | A purchase was paid (PayPal Payouts, or simulated) | `amount`, `merchant`, `payout_status`, `payout_batch_id`, `payout_proof` |
 | `spend.denied` | The rules blocked a purchase, or a person denied it | `amount`, `merchant`, `reasons`, `decided_by` |
-| `agent.killed` | Someone pressed KILL on one agent | `agent_name`, `denied`, `holds_voided`, `payouts_cancelled` |
+| `agent.killed` | Someone pressed Stop all on one agent | `agent_name`, `denied`, `holds_voided`, `payouts_cancelled` |
 | `stop_all` | STOP ALL was pressed (by you or the outside spend guard) | `by`, `denied`, `holds_voided`, `payouts_cancelled` |
 | `loop_guard.paused` | The loop guard paused an agent that kept repeating itself | `agent_name`, `repeats` |
 | `test.ping` | You pressed Test | `message` |

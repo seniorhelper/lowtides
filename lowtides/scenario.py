@@ -11,7 +11,7 @@ they are simulated and labeled that way.
 
 Story: an overnight research agent does honest work, buys data it needs, then reads a
 poisoned web page telling it to pay a stranger, tries a huge purchase, tries to push a
-giant data dump through one AI call (blocked by the leash), gets stuck in a loop, and finally the owner hits KILL,
+giant data dump through one AI call (blocked by the leash), gets stuck in a loop, and finally the owner presses Stop all,
 which also revokes the agent's saved PayPal payment method. Every step shows what Lowtides decided and why.
 """
 import argparse
@@ -83,7 +83,7 @@ def show(r, pause):
 
 
 def seed(base, admin="", headers=None):
-    """Load the story into a fresh public demo, quietly, and stop before the KILL so
+    """Load the story into a fresh public demo, quietly, and stop before the Stop all so
     visitors find purchases waiting for them to approve, deny, or kill."""
     import contextlib
     import io
@@ -99,7 +99,7 @@ def run(base, admin="", pause=True, kill=True, headers=None):
 
     say("\n== Lowtides: the runaway-agent replay ==\n", pause, 0.5)
     # In the PayPal sandbox a payout to an address nobody has claimed stays UNCLAIMED,
-    # which is exactly what lets the KILL step cancel it. Override with a real sandbox account if you like.
+    # which is exactly what lets the Stop all step cancel it. Override with a real sandbox account if you like.
     payee = os.environ.get("LOWTIDES_DEMO_PAYEE", "merchant-demo@example.com")
     c.call("POST", "/api/merchants", {"name": "Acme Data", "paypal_email": payee, "category": "data"})
     c.call("POST", "/api/merchants", {"name": "CloudGPU Inc", "paypal_email": payee, "category": "compute"})
@@ -110,6 +110,7 @@ def run(base, admin="", pause=True, kill=True, headers=None):
     say('   "%s"' % RULES_TEXT, pause)
     s, comp = c.call("POST", "/api/rules/compile", {"text": RULES_TEXT})
     c.call("POST", "/api/agents/%d/rules" % agent["id"], {"rules": comp["rules"]})
+    s, lt_pass = c.call("GET", "/v1/pass", key=key)  # the agent's Lowtides Pass (signed spending permission)
     say("   Read by %s and saved:" % ("Claude" if comp.get("source") == "claude" else "the offline parser"), pause, 0.4)
     for line in comp.get("plain", []):
         say("     * " + line, False)
@@ -177,9 +178,9 @@ def run(base, admin="", pause=True, kill=True, headers=None):
 
     if not kill:
         return agent
-    say("\n9. The owner wakes up, sees the alert and hits KILL:", pause)
+    say("\n9. The owner wakes up, sees the alert and presses Stop all:", pause)
     s, k = c.call("POST", "/api/agents/%d/kill" % agent["id"])
-    say("    Stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts cancelled."
+    say("    Stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts canceled."
         % (k.get("denied", 0), k.get("holds_voided", 0), k.get("payouts_cancelled", 0)), pause)
     pof = k.get("paypal_on_file") or {}
     if pof.get("status") in ("revoked", "revoke_failed"):
@@ -188,6 +189,10 @@ def run(base, admin="", pause=True, kill=True, headers=None):
                                         "reason": "please"}, key)
     say("    A purchase after the kill:", False)
     show(r, pause)
+    if lt_pass.get("pass"):
+        s, v = c.call("POST", "/v1/pass/verify", {"pass": lt_pass["pass"]})
+        if v.get("revoked"):
+            say("    Its Lowtides Pass is revoked, so merchants checking it see REVOKED.", pause)
 
     s, v = c.call("GET", "/api/audit/verify")
     say("\n10. Audit log: %d entries, hash chain %s. An evidence pack for any purchase is one click: /api/spend/%s/evidence"

@@ -2,10 +2,10 @@ services:
   - type: web
     name: lowtides
     runtime: python
-    # Free plan: no cost, sleeps after ~15 idle minutes (first visit then takes about a minute)
-    # and the database resets on each deploy. For a persistent ledger, switch to "starter"
-    # and add a disk mounted at /var/data, then point LOWTIDES_DB and LOWTIDES_CONFIG there.
-    plan: free
+    # Starter plan: does not sleep, so judges never wait on a cold start. (The free plan sleeps
+    # after ~15 idle minutes.) The database still resets on each deploy; for a persistent ledger
+    # add a disk mounted at /var/data, then point LOWTIDES_DB and LOWTIDES_CONFIG there.
+    plan: starter
     buildCommand: "echo no build step needed"
     startCommand: "python -m lowtides.server"
     healthCheckPath: /health
@@ -19,7 +19,7 @@ services:
       # a "Reset demo" button. Remove this line to run your own private, password-protected copy.
       - key: LOWTIDES_PUBLIC_DEMO
         value: "1"
-      # The base of "Approve or deny" links.
+      # The issuer (iss) on every Lowtides Pass and the base of "Approve or deny" links.
       # Request headers never choose it.
       # Signs each visitor's demo cookie, so cookies stay valid across restarts.
       - key: LOWTIDES_DEMO_SECRET
@@ -41,4 +41,24 @@ services:
       - key: PAYPAL_CLIENT_SECRET
         sync: false
       - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      # Sandbox PayPal email that receives demo payouts (a sandbox "personal" account).
+      - key: LOWTIDES_DEMO_PAYEE
+        sync: false
+      # Ask Lowtides on AI: needs ANTHROPIC_API_KEY too. Hard daily dollar cap; falls back to the built-in guide.
+      - key: LOWTIDES_ASK_CLAUDE
+        value: "1"
+      - key: LOWTIDES_ASK_DAILY_CAP
+        value: "1.00"
+      # Optional premium voice for Ask Lowtides (Google Cloud Text-to-Speech API key). Unset = browser voice.
+      - key: GOOGLE_TTS_API_KEY
+        sync: false
+      # Optional sign-in accounts (docs/ACCOUNTS.md). Leave unset to keep accounts off.
+      - key: ACCOUNTS_ENABLED
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
         sync: false

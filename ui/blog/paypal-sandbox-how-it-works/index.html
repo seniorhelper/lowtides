@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How the PayPal Sandbox Works (and How Lowtides Uses It) | Lowtides</title>
+<meta name="description" content="The PayPal sandbox is a test copy of PayPal with pretend money. Here is how it works, what a sandbox payment proves, and how the Lowtides demo uses it.">
+<link rel="canonical" href="https://lowtides.ai/blog/paypal-sandbox-how-it-works/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#0A1B1E">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/blog/paypal-sandbox-how-it-works/">
+<meta property="og:title" content="How the PayPal Sandbox Works (and How Lowtides Uses It) | Lowtides">
+<meta property="og:description" content="The PayPal sandbox is a test copy of PayPal with pretend money. Here is how it works, what a sandbox payment proves, and how the Lowtides demo uses it.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/cc.css">
+<link rel="stylesheet" href="/blog/blog.css">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "BlogPosting",
+   "@id": "https://lowtides.ai/blog/paypal-sandbox-how-it-works/#post",
+   "headline": "How the PayPal Sandbox Works (and How Lowtides Uses It)",
+   "description": "The PayPal sandbox is a test copy of PayPal with pretend money. Here is how it works, what a sandbox payment proves, and how the Lowtides demo uses it.",
+   "url": "https://lowtides.ai/blog/paypal-sandbox-how-it-works/",
+   "mainEntityOfPage": "https://lowtides.ai/blog/paypal-sandbox-how-it-works/",
+   "datePublished": "2026-11-11",
+   "dateModified": "2026-11-11",
+   "inLanguage": "en-US",
+   "image": "https://lowtides.ai/brand/og.png",
+   "author": {
+    "@type": "Organization",
+    "@id": "https://lowtides.ai/#org",
+    "name": "Lowtides",
+    "url": "https://lowtides.ai/",
+    "logo": "https://lowtides.ai/brand/favicon-180.png"
+   },
+   "publisher": {
+    "@type": "Organization",
+    "@id": "https://lowtides.ai/#org",
+    "name": "Lowtides",
+    "url": "https://lowtides.ai/",
+    "logo": "https://lowtides.ai/brand/favicon-180.png"
+   }
+  },
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "Lowtides",
+     "item": "https://lowtides.ai/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "Blog",
+     "item": "https://lowtides.ai/blog/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 3,
+     "name": "How the PayPal sandbox works",
+     "item": "https://lowtides.ai/blog/paypal-sandbox-how-it-works/"
+    }
+   ]
+  },
+  {
+   "@type": "FAQPage",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "Does the PayPal sandbox use real money?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. The PayPal sandbox is a test environment with pretend accounts and pretend balances. No real person is charged and no real money moves."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What is the difference between a sandbox payment and a simulated payment?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "A sandbox payment is a real API call to PayPal's test servers and comes back with a PayPal-issued id. A simulated payment makes no call to PayPal; the app produces the result itself and should label it as simulated."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Does Lowtides move real money?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. The Lowtides demo uses the PayPal sandbox with test money and fictional stores, and labels a payment as simulated when no sandbox credentials are set."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
+</head>
+<body class="lt-page cc">
+<a class="cc-skip" href="#main">Skip to content</a>
+<header class="lt-header">
+  <div class="lt-header-in">
+    <a class="lt-logo" href="/" aria-label="Lowtides home">
+      <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+      <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+    </a>
+    <nav class="lt-nav" aria-label="Main">
+      <a href="/#how">How it works</a>
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+    </nav>
+    <a class="lt-btn lt-btn--primary lt-header-cta" href="/shop/">Try the demo</a>
+  </div>
+</header>
+<main id="main" class="bl-main">
+<article class="bl-post lt-wrap">
+<nav class="bl-crumbs" aria-label="Breadcrumb"><a href="/">Lowtides</a> / <a href="/blog/">Blog</a></nav>
+<h1>How the PayPal sandbox works</h1>
+<p class="bl-meta">By Lowtides &middot; <time datetime="2026-11-11">November 11, 2026</time></p>
+<p class="bl-lede">The PayPal sandbox is a separate test copy of PayPal. It has pretend accounts and pretend money, and it answers the same API calls the real service does. Nothing in it can charge a real person.</p>
+<h2>What the sandbox is</h2>
+<p>PayPal gives developers a test environment so they can build and check payment code safely. When a developer signs up, PayPal creates sandbox test accounts, by default one business account and one personal account, each with a pretend balance (<a href="https://developer.paypal.com/tools/sandbox/" rel="noopener">PayPal sandbox guide</a>). The developer also gets sandbox API credentials, a client ID and a secret, that work only against the sandbox.</p>
+
+<h2>What happens in a sandbox payment</h2>
+<ol>
+<li>The app signs in to the sandbox API with its sandbox credentials and gets a short-lived access token.</li>
+<li>It makes a normal API call, for example creating an order or sending a payout.</li>
+<li>The sandbox answers the way the live service would, with a real-looking id and status.</li>
+<li>Pretend money moves between test accounts. A developer can sign in to the test accounts to see it arrive (<a href="https://developer.paypal.com/payouts/use-payouts/set-up" rel="noopener">PayPal payouts setup</a>).</li>
+</ol>
+
+<h2>What a sandbox payment proves, and what it does not</h2>
+<p><strong>It proves</strong> the code talks to PayPal correctly: sign-in, the request, the response, the id, webhooks and error handling.</p>
+<p><strong>It does not prove</strong> that real money moved, because none did. It also does not cover live-only steps such as business account review. Any demo that uses the sandbox should say so plainly.</p>
+
+<h2>Sandbox versus simulated</h2>
+<p>These are different things, and honest software labels them differently.</p>
+<ul>
+<li><strong>PayPal sandbox:</strong> a real call to PayPal's test servers, with a PayPal-issued id.</li>
+<li><strong>Simulated:</strong> no call to PayPal at all. The app made up the result so the flow can be shown without credentials.</li>
+</ul>
+
+<h2>How Lowtides uses the sandbox</h2>
+<p>Lowtides is a demo of Consent Shopping: an AI shopper and a store both say yes, or no money moves. PayPal comes in only after that yes.</p>
+<ul>
+<li><strong>After a green Handshake,</strong> Lowtides settles the purchase with a PayPal Payouts call in the sandbox.</li>
+<li><strong>On yellow or red,</strong> no PayPal call is made. A held order waits for a person and a blocked order never reaches PayPal.</li>
+<li><strong>The stop switch</strong> cancels payouts the receiver has not claimed yet.</li>
+<li><strong>Every receipt says which it was.</strong> When a server has no sandbox credentials, Lowtides labels the payment "Simulated" and never calls it a PayPal payment.</li>
+<li><strong>No card numbers.</strong> Lowtides never asks for or stores a card number.</li>
+</ul>
+<p>The demo stores are fictional and the money is test money. You can <a href="/shop/">run a purchase yourself</a> and open the receipt to see the label.</p>
+
+<h2>If you are building your own</h2>
+<ul>
+<li>Keep sandbox and live credentials in separate places, and never put either in a web page or a public repository.</li>
+<li>Show the environment on every receipt, so a test payment is never mistaken for a real one.</li>
+<li>Test the unhappy paths: declined, pending, canceled and refunded.</li>
+<li>Verify webhook signatures before trusting a webhook.</li>
+</ul>
+<p>Related reading: <a href="/blog/agentic-commerce-consent/">why agentic commerce needs consent from both sides</a>.</p>
+<h2>Common questions</h2>
+<details><summary>Does the PayPal sandbox use real money?</summary><p>No. The PayPal sandbox is a test environment with pretend accounts and pretend balances. No real person is charged and no real money moves.</p></details>
+<details><summary>What is the difference between a sandbox payment and a simulated payment?</summary><p>A sandbox payment is a real API call to PayPal&#x27;s test servers and comes back with a PayPal-issued id. A simulated payment makes no call to PayPal; the app produces the result itself and should label it as simulated.</p></details>
+<details><summary>Does Lowtides move real money?</summary><p>No. The Lowtides demo uses the PayPal sandbox with test money and fictional stores, and labels a payment as simulated when no sandbox credentials are set.</p></details>
+
+<p class="bl-cta"><a class="lt-btn lt-btn--primary" href="/shop/">Try Consent Shopping</a> <a class="lt-btn" href="/blog/">More from the blog</a></p>
+</article>
+</main>
+<footer class="cc-foot">
+  <div class="lt-wrap cc-foot-in">
+    <p>Demo only: PayPal sandbox, test money, fictional demo stores. Open source under AGPL-3.0. <span class="pat-pend">Patent Pending.</span></p>
+    <nav aria-label="Footer">
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+      <a href="/pass/">Check a Pass</a>
+      <a href="/why/">Why Lowtides</a>
+      <a href="/blog/">Blog</a>
+      <a href="/sitemap/">Site map</a>
+      <a href="/privacy/">Privacy</a>
+    </nav>
+    <div class="cc-heart"><span aria-hidden="true">&#10084;</span><a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a></div>
+  </div>
+</footer>
+<link rel="stylesheet" href="/ask.css">
+<script src="/ask.js" defer></script>
+</body>
+</html>

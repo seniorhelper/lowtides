@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your AI Shopper, Your Rules: Shopper Control Center | Lowtides</title>
+<meta name="description" content="Set your AI shopper's budget with sliders, let Scout find matches, and watch your rules and the store's rules both say yes before PayPal sandbox pays.">
+<link rel="canonical" href="https://lowtides.ai/shop/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#FFFFFF">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/shop/">
+<meta property="og:title" content="Your AI shopper, your rules">
+<meta property="og:description" content="Set the rules, let Scout shop, and see both sides say yes before any money moves. Demo with PayPal sandbox test money.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta property="og:image:alt" content="Lowtides. Let AI shop for you. Keep the keys. Both say yes, or no money moves.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Your AI shopper, your rules">
+<meta name="twitter:description" content="Set the rules, let Scout shop, and see both sides say yes before any money moves.">
+<meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/cc.css">
+<link rel="stylesheet" href="/shop/muzzle.css">
+<link rel="stylesheet" href="/shop/pass.css">
+<link rel="stylesheet" href="/shop/report.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","@id":"https://lowtides.ai/shop/#page","url":"https://lowtides.ai/shop/","name":"Your AI shopper, your rules","description":"Shopper control center: set the rules your AI shopper carries in its signed Pass, find matches, and see the two-sided Handshake before PayPal sandbox pays.","isPartOf":{"@id":"https://lowtides.ai/#site"},"breadcrumb":{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Lowtides","item":"https://lowtides.ai/"},{"@type":"ListItem","position":2,"name":"For shoppers","item":"https://lowtides.ai/shop/"}]}}
+</script>
+</head>
+<body class="lt-page cc cc-has-dock">
+<a class="cc-skip" href="#main">Skip to content</a>
+
+<header class="lt-header">
+  <div class="lt-header-in">
+    <a class="lt-logo" href="/" aria-label="Lowtides home">
+      <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+      <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+    </a>
+    <nav class="lt-nav" aria-label="Main">
+      <a href="/#how">How it works</a>
+      <a href="/shop/" aria-current="page">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+    </nav>
+    <a class="lt-btn lt-btn--primary lt-header-cta" href="#find">Let Scout shop</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="cc-hero" aria-labelledby="h1">
+    <div class="lt-wrap">
+      <img class="cc-hero-scout" data-mascot="sit" src="/brand/mascot/dog-sit.webp" width="220" height="220" alt="GuardPooch, the Lowtides watchdog: a clay German Shepherd with a round gold collar">
+      <p class="lt-eyebrow">For shoppers</p>
+      <h1 class="lt-h1" id="h1">Your AI shopper, your rules.</h1>
+      <p class="lt-lead">Set what Scout may spend. Scout shops. Your rules and the store’s rules are checked both ways, and only a match pays.</p>
+      <p class="cc-demo">Demo: PayPal sandbox, test money, fictional demo stores. Nothing here charges a real card.</p>
+      <p class="cc-tour-cta"><a class="lt-btn lt-btn--ghost" href="/handshake/?tour=1"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>Play the 90-second tour</a><span>See it first: shopper and store side by side</span></p>
+      <ol class="cc-stepper" aria-label="Your progress">
+        <li id="st-1"><span>1</span>Set your rules</li>
+        <li id="st-2"><span>2</span>Let Scout shop</li>
+        <li id="st-3"><span>3</span>Both sides say yes</li>
+        <li id="st-4"><span>4</span>PayPal sandbox pays</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="cc-band" id="agents-sec" aria-labelledby="agents-h">
+    <div class="lt-wrap">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2 id="agents-h">My AI shoppers</h2>
+          <a href="#" class="cc-ask" data-ask="Can I have more than one AI shopper?">Ask about this</a>
+          <p>Pick one to set its rules and let it shop. Each has its own signed Pass, mode and trust score.</p>
+        </div>
+        <ul class="cc-agents" id="agents" aria-live="polite" style="min-height:180px"></ul>
+        <div class="cc-inline" style="margin-top:16px" role="group" aria-label="Add an AI shopper">
+          <span class="cc-label">Add one:</span>
+          <button type="button" class="lt-btn lt-btn--ghost" data-preset="everyday">Scout, everyday</button>
+          <button type="button" class="lt-btn lt-btn--ghost" data-preset="bargain">Bargain Scout, deal hunter</button>
+          <button type="button" class="lt-btn lt-btn--ghost" data-preset="restock">Restock, repeat buys</button>
+        </div>
+        <p class="cc-status" id="agents-status" role="status" aria-live="polite"></p>
+        <p class="cc-fine" style="margin:8px 0 0">Lowtides never sees your card. PayPal holds it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" aria-labelledby="mode-h">
+    <div class="lt-wrap">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2 id="mode-h"><span class="agent-name">Scout</span>’s mode</h2>
+          <a href="#" class="cc-ask" data-ask="What do the shopper modes do?">Ask about this</a>
+        </div>
+        <fieldset class="cc-fieldset" style="margin:0">
+          <legend class="cc-sr">Shopper mode</legend>
+          <div class="cc-seg cc-seg--big" id="mode">
+            <label><input type="radio" name="mode" value="autopilot" checked><b>Full Autopilot</b><small>Buys green matches by itself and asks you on yellow.</small></label>
+            <label><input type="radio" name="mode" value="assist"><b>AI Assist</b><small>Finds and checks, but asks you before any money moves.</small></label>
+            <label><input type="radio" name="mode" value="off"><b>Off</b><small>Paused. Nothing can be bought until you switch it back.</small></label>
+          </div>
+        </fieldset>
+        <p class="cc-status" id="mode-status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" aria-labelledby="rules-h">
+    <div class="lt-wrap cc-grid-2">
+      <form class="lt-card cc-card" id="rules" novalidate>
+        <div class="cc-card-h">
+          <h2 id="rules-h">1. Your rules</h2>
+          <a href="#" class="cc-ask" data-ask="What do these rules do?">Ask about this</a>
+          <p><span class="agent-name">Scout</span> carries these in its signed Pass. Changes save by themselves.</p>
+        </div>
+        <div class="pd" id="pass-design" role="group" aria-labelledby="pd-h">
+          <div class="pd-head">
+            <h3 class="cc-h3" id="pd-h">Design your Pass</h3>
+            <span class="pd-custom" id="pd-custom" hidden>Custom</span>
+          </div>
+          <p class="cc-fine pd-intro">Pick a starting point. You can change anything below.</p>
+          <div class="pd-row">
+            <button type="button" class="pd-btn" data-pass-design="careful" aria-pressed="false"><b>Careful</b><small>Small buys only. Asks often.</small><span>$100 a day, $40 per item, asks over $20</span></button>
+            <button type="button" class="pd-btn" data-pass-design="balanced" aria-pressed="false"><b>Balanced</b><small>Everyday shopping. Asks on big buys.</small><span>$400 a day, $200 per item, asks over $100</span></button>
+            <button type="button" class="pd-btn" data-pass-design="handsoff" aria-pressed="false"><b>Hands-off</b><small>More freedom. Asks rarely.</small><span>$800 a day, $400 per item, asks over $300</span></button>
+          </div>
+          <p class="cc-status pd-status" id="pd-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="cc-sliders">
+          <div class="lt-slider" data-prefix="$">
+            <div class="lt-slider-head"><label for="daily_cap">Daily budget</label><output for="daily_cap">$400</output></div>
+            <input id="daily_cap" name="daily_cap" type="range" min="0" max="1000" step="10" value="400" aria-describedby="daily-help">
+            <p class="cc-slider-help" id="daily-help">The most it may spend in one day.</p>
+          </div>
+          <div class="lt-slider" data-prefix="$">
+            <div class="lt-slider-head"><label for="per_item_cap">Most per item</label><output for="per_item_cap">$200</output></div>
+            <input id="per_item_cap" name="per_item_cap" type="range" min="0" max="500" step="5" value="200" aria-describedby="item-help">
+            <p class="cc-slider-help" id="item-help">Anything pricier is a no.</p>
+          </div>
+          <div class="lt-slider" data-prefix="$">
+            <div class="lt-slider-head"><label for="ask_above">Ask me above</label><output for="ask_above">$100</output></div>
+            <input id="ask_above" name="ask_above" type="range" min="0" max="500" step="5" value="100" aria-describedby="ask-help">
+            <p class="cc-slider-help" id="ask-help">Above this, it waits for your yes.</p>
+          </div>
+        </div>
+
+        <fieldset class="cc-fieldset">
+          <legend>How strict is GuardPooch about new or odd stores?</legend>
+          <div class="cc-seg">
+            <label><input type="radio" name="guard_strictness" value="relaxed"><b>Relaxed</b><small>Shop at “be careful” stores without asking.</small></label>
+            <label><input type="radio" name="guard_strictness" value="balanced" checked><b>Balanced</b><small>Ask me first at “be careful” stores.</small></label>
+            <label><input type="radio" name="guard_strictness" value="strict"><b>Strict</b><small>Never buy at “be careful” stores.</small></label>
+          </div>
+          <p class="cc-fine" style="margin:8px 0 0">A fake or lookalike store is always a no, whatever you pick.</p>
+        </fieldset>
+
+        <div class="cc-field">
+          <div class="lt-slider" data-format="deal">
+            <div class="lt-slider-head"><label for="deal_mode">Deals vs. safest</label><output for="deal_mode">Deals first</output></div>
+            <input id="deal_mode" name="deal_mode" type="range" min="0" max="100" step="1" value="50" aria-describedby="deal-help">
+            <div class="cc-range-ends" aria-hidden="true"><span>Safest stores first</span><span>Cheapest first</span></div>
+            <p class="cc-slider-help" id="deal-help">Changes the order matches are shown in. It never makes a no into a yes.</p>
+          </div>
+        </div>
+
+        <fieldset class="cc-fieldset">
+          <legend><span class="agent-name">Scout</span> may buy</legend>
+          <div class="cc-chips" id="cats" role="group" aria-describedby="cats-help"></div>
+          <p class="cc-fine" id="cats-help" style="margin:8px 0 0">None picked means any category.</p>
+        </fieldset>
+
+        <fieldset class="cc-fieldset">
+          <legend>Never buy</legend>
+          <div class="cc-chips" id="never" aria-live="polite"></div>
+          <div class="cc-inline" style="margin-top:10px">
+            <label class="cc-sr" for="never-in">Add something it must never buy</label>
+            <input class="cc-input" id="never-in" type="text" maxlength="40" placeholder="Add, like “tobacco”" autocomplete="off" style="flex:1 1 180px">
+            <button type="button" class="lt-btn lt-btn--ghost" id="never-add">Add</button>
+          </div>
+        </fieldset>
+
+        <p class="cc-status" id="save-status" role="status" aria-live="polite"></p>
+
+        <div class="cc-field">
+          <label class="cc-label" for="plain">Or say it in plain words</label>
+          <textarea class="cc-textarea" id="plain" maxlength="500" placeholder="never buy gift cards, ask me over $50"></textarea>
+          <div class="cc-inline"><button type="button" class="lt-btn lt-btn--ghost" id="plain-go">Turn into rules</button></div>
+          <div id="plain-out" aria-live="polite"></div>
+        </div>
+      </form>
+
+      <div class="cc-stack">
+        <div class="cc-pass" id="pass" data-state="VALID" aria-live="polite" style="min-height:300px"><p>Loading the Pass…</p></div>
+        <div class="lt-card cc-card cc-kill">
+          <button type="button" class="estop" id="kill" aria-label="Stop all: revoke every AI shopper’s Pass at every store">
+            <span class="estop-cap" aria-hidden="true">Stop all</span>
+          </button>
+          <p><b>Changed your mind?</b> Stop all revokes every AI shopper’s Pass at every store at once.</p>
+          <p class="cc-status" id="kill-status" role="status" aria-live="polite" style="flex-basis:100%;margin:0 !important"></p>
+          <div class="cc-inline" style="flex-basis:100%">
+            <button type="button" class="lt-btn lt-btn--primary" id="resume" hidden>Turn <span class="agent-name">Scout</span> back on</button>
+            <button type="button" class="lt-btn lt-btn--ghost" id="reset">Reset demo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" id="find" aria-labelledby="find-h">
+    <div class="lt-wrap">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2 id="find-h">2. Ask <span class="agent-name">Scout</span> to shop</h2>
+          <a href="#" class="cc-ask" id="find-ask" data-ask="Find me a drill under $90">Ask the AI guide instead</a>
+          <p>It searches the demo stores and shows each match with its light: green both say yes, yellow needs your yes, red no.</p>
+        </div>
+        <form class="cc-search" id="search" role="search">
+          <label class="cc-sr" for="q">What should your AI shopper look for?</label>
+          <input class="cc-input" id="q" type="search" placeholder="Say it: cordless drill under $90" autocomplete="off">
+          <div class="cc-money"><label class="cc-sr" for="maxp">Highest price</label><input class="cc-input" id="maxp" type="number" min="1" step="1" inputmode="decimal" placeholder="Max price"></div>
+          <button class="lt-btn lt-btn--primary" type="submit">Find matches</button>
+        </form>
+        <div class="cc-auto" id="auto">
+          <fieldset class="cc-auto-mode">
+            <legend><span class="agent-name">Scout</span> is on</legend>
+            <div class="cc-seg cc-seg--sm" id="mode-q">
+              <label><input type="radio" name="mode-q" value="off"><b>Off</b></label>
+              <label><input type="radio" name="mode-q" value="assist"><b>AI Assist</b></label>
+              <label><input type="radio" name="mode-q" value="autopilot" checked><b>Full Autopilot</b></label>
+            </div>
+          </fieldset>
+          <div class="cc-auto-go">
+            <button class="lt-btn lt-btn--primary" type="button" id="auto-go">Just buy the best match</button>
+            <p class="cc-fine" id="auto-help">Type what you want above. Scout picks the best item both sides accept and buys it inside its Pass.</p>
+          </div>
+        </div>
+        <div class="cc-chips" style="margin-top:12px" role="group" aria-label="Quick picks">
+          <button type="button" class="cc-chip" data-q="cordless drill">cordless drill</button>
+          <button type="button" class="cc-chip" data-q="tape measure">tape measure</button>
+          <button type="button" class="cc-chip" data-q="printer ink">printer ink</button>
+          <button type="button" class="cc-chip" data-q="dog food">dog food</button>
+          <button type="button" class="cc-chip" data-q="gift card">gift card</button>
+          <button type="button" class="cc-chip" data-q="">show everything</button>
+        </div>
+        <p class="cc-status" id="find-status" role="status" aria-live="polite"></p>
+        <div class="cc-filters" id="filters" hidden>
+          <div class="cc-chips" role="group" aria-label="Filter by light">
+            <button type="button" class="cc-chip cc-chip--plain" data-sig="" aria-pressed="true">All</button>
+            <button type="button" class="cc-chip cc-chip--plain" data-sig="match" aria-pressed="false">Green: both say yes</button>
+            <button type="button" class="cc-chip cc-chip--plain" data-sig="needs_yes" aria-pressed="false">Yellow: needs my yes</button>
+            <button type="button" class="cc-chip cc-chip--plain" data-sig="no_match" aria-pressed="false">Red: no match</button>
+          </div>
+          <div class="cc-filter-selects">
+            <label><span>Store</span><select class="cc-select" id="f-store"><option value="">All stores</option></select></label>
+            <label><span>Category</span><select class="cc-select" id="f-cat"><option value="">All categories</option></select></label>
+            <label><span>Sort</span><select class="cc-select" id="f-sort">
+              <option value="">Best match first</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option><option value="trust">Most trusted store</option>
+            </select></label>
+            <button type="button" class="lt-btn lt-btn--ghost" id="f-clear">Clear filters</button>
+          </div>
+        </div>
+        <ul class="cc-results" id="results" aria-label="Matches"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" id="hs" aria-labelledby="hs-h">
+    <div class="lt-wrap">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2 id="hs-h">3. The Handshake: both sides check</h2>
+          <a href="#" class="cc-ask" data-ask="What is the Handshake?">Ask about this</a>
+          <p>Your rules on the left, the store’s rules on the right, GuardPooch in the middle checking the store is real.</p>
+        </div>
+        <div id="hs-panel" style="min-height:120px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" aria-label="Trust and activity">
+    <div class="lt-wrap cc-grid-2 cc-grid-2--even">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2><span class="agent-name">Scout</span>’s trust score</h2>
+          <a href="#" class="cc-ask" data-ask="How is the trust score worked out?">Ask about this</a>
+        </div>
+        <div id="trust" style="min-height:220px" aria-live="polite"></div>
+      </div>
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2>Recent activity</h2>
+          <a href="/app/">Open the full dashboard</a>
+        </div>
+        <ul class="cc-act" id="activity"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" aria-labelledby="money-h">
+    <div class="lt-wrap">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2 id="money-h">Where your money went</h2>
+          <p>Paid purchases by <span class="agent-name">Scout</span>, from its real Handshakes (PayPal sandbox test money).</p>
+        </div>
+        <div class="cc-grid-2 cc-grid-2--even" id="money" style="min-height:120px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band mz" id="muzzle" aria-labelledby="mz-h">
+    <div class="lt-wrap">
+      <div class="mz-head">
+        <p class="lt-eyebrow">Action Muzzle</p>
+        <h2 id="mz-h">Your AI does only what you asked.</h2>
+        <p>Buying is one thing an AI can do for you. It can also book, call, sign up and send messages. The same rule applies: both sides say yes, or it does not happen. This demo uses made-up businesses, so nothing real is contacted.</p>
+      </div>
+      <p class="mz-banner" id="mz-banner" role="status" hidden>Frozen. Your AI can’t do anything until you release it.</p>
+      <p class="cc-fine mz-load" id="mz-load" role="status">Loading the Action Muzzle…</p>
+      <div class="mz-stack" id="mz-body" hidden>
+        <div class="lt-card cc-card">
+          <h3 class="mz-title">1. Tell it the job</h3>
+          <form class="mz-form" id="mz-task-form" novalidate>
+            <label for="mz-task">What should your AI do?</label>
+            <div class="mz-form-row">
+              <input class="cc-input" id="mz-task" type="text" maxlength="300" placeholder="book a table for two Friday at 7 at Harbor Bistro" autocomplete="off">
+              <button class="lt-btn lt-btn--primary" type="submit" id="mz-task-go" data-help="Type the job in the box, then press this. Your AI may then do only that job without asking you.">Set the job</button>
+            </div>
+          </form>
+          <p class="cc-status" id="mz-task-status" role="status" aria-live="polite"></p>
+          <p class="mz-scope" id="mz-scope" aria-live="polite">No job set yet.</p>
+        </div>
+
+        <div class="lt-card cc-card">
+          <h3 class="mz-title">2. Watch it try</h3>
+          <p class="mz-sub">Press one. Your AI tries it, and you see who said yes and who said no.</p>
+          <div class="mz-samples" id="mz-samples" role="group" aria-label="Things your AI can try"></div>
+          <p class="cc-status" id="mz-try-status" role="status" aria-live="polite"></p>
+          <div class="mz-results-wrap" id="mz-results-wrap" hidden>
+            <ul class="mz-list" id="mz-results" aria-live="polite" aria-label="What happened"></ul>
+          </div>
+        </div>
+
+        <div class="mz-pair">
+          <div class="lt-card cc-card">
+            <h3 class="mz-title">3. What it may do without asking</h3>
+            <p class="mz-sub">Pick one for each. Changes save by themselves.</p>
+            <div id="mz-rules"></div>
+            <p class="cc-status" id="mz-rules-status" role="status" aria-live="polite"></p>
+          </div>
+
+          <div class="lt-card cc-card">
+            <h3 class="mz-title">Stop word</h3>
+            <form class="mz-form" id="mz-word-form" novalidate>
+              <label for="mz-word">Your stop word</label>
+              <div class="mz-form-row">
+                <input class="cc-input" id="mz-word" type="text" maxlength="40" autocomplete="off">
+                <button class="lt-btn lt-btn--ghost" type="submit" id="mz-word-go">Save</button>
+              </div>
+            </form>
+            <p class="mz-stop-text">Say or type this to Ask Lowtides and everything freezes at once. Unlike Stop all, a freeze can be released and waiting jobs pick up where they left off.</p>
+            <button type="button" class="lt-btn lt-btn--lg lt-btn--danger mz-freeze" id="mz-freeze" data-frozen="0" data-help="Freeze pauses everything your AI is doing. Release lets it carry on where it left off.">Freeze everything now</button>
+            <p class="cc-status" id="mz-stop-status" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div class="lt-card cc-card">
+          <h3 class="mz-title">Recent actions</h3>
+          <p class="cc-fine" id="mz-recent-none">Nothing yet. Try one of the examples above.</p>
+          <ul class="mz-list mz-recent" id="mz-recent" aria-label="Recent actions"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" id="receipts" aria-labelledby="rc-h">
+    <div class="lt-wrap">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2 id="rc-h">Receipts</h2>
+          <a href="#" class="cc-ask" data-ask="How do receipts work?">Ask about this</a>
+          <p>Every purchase your AI shoppers made or tried, with its signed proof, plus receipts you add yourself. Search in plain English.</p>
+        </div>
+        <form class="cc-search cc-search--one" id="rc-search" role="search">
+          <label class="cc-sr" for="rc-q">Search your receipts</label>
+          <input class="cc-input" id="rc-q" type="search" maxlength="200" placeholder="Try: paid this week over $20" autocomplete="off">
+          <button class="lt-btn lt-btn--primary" type="submit">Search receipts</button>
+        </form>
+        <div class="cc-chips" style="margin-top:12px" role="group" aria-label="Receipt searches" id="rc-picks">
+          <button type="button" class="cc-chip" data-rq="">all receipts</button>
+          <button type="button" class="cc-chip" data-rq="paid this week">paid this week</button>
+          <button type="button" class="cc-chip" data-rq="waiting for my yes">waiting for my yes</button>
+          <button type="button" class="cc-chip" data-rq="blocked">blocked</button>
+          <button type="button" class="cc-chip" data-rq="refunded">refunded</button>
+          <button type="button" class="cc-chip" data-rq="over $20">over $20</button>
+          <button type="button" class="cc-chip" data-rq="added by me">added by me</button>
+        </div>
+        <p class="cc-status" id="rc-status" role="status" aria-live="polite"></p>
+        <div class="ra" id="rc-chart" role="group" aria-labelledby="ra-h">
+          <h3 class="cc-h3" id="ra-h">Activity</h3>
+          <div id="ra-body"><p class="cc-fine ra-none">No activity yet. Let Scout shop and it shows up here.</p></div>
+          <div class="ra-foot">
+            <p class="ra-total" id="ra-total"></p>
+            <button type="button" class="lt-btn lt-btn--ghost" id="ra-csv" disabled>Download receipts (CSV)</button>
+          </div>
+        </div>
+        <ul class="cc-rc" id="rc-list" aria-label="Receipts"></ul>
+        <details class="cc-rc-add" id="rc-more">
+          <summary>Add a receipt from somewhere else</summary>
+          <form id="rc-add" class="cc-rc-form">
+            <label><span>Store</span><input class="cc-input" id="rc-store" maxlength="80" autocomplete="off"></label>
+            <label><span>What you bought</span><input class="cc-input" id="rc-title" maxlength="120" autocomplete="off"></label>
+            <label><span>Total paid ($)</span><input class="cc-input" id="rc-amount" type="number" min="0.01" step="0.01" inputmode="decimal"></label>
+            <label><span>Date</span><input class="cc-input" id="rc-date" type="date"></label>
+            <label class="cc-rc-wide"><span>Or paste the receipt text and Lowtides fills in what it can</span><textarea class="cc-input" id="rc-text" rows="4" maxlength="4000"></textarea></label>
+            <button class="lt-btn lt-btn--primary" type="submit">Add receipt</button>
+          </form>
+          <p class="cc-status" id="rc-add-status" role="status" aria-live="polite"></p>
+        </details>
+        <p class="cc-fine">The search is rule-based: no AI model reads your receipts. Receipts you add are your own notes and are not signed. Demo data stays in this browser session.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cc-band" id="connect" aria-labelledby="connect-h">
+    <div class="lt-wrap">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2 id="connect-h">Connect your own AI</h2>
+          <a href="#" class="cc-ask" data-ask="How do I connect my own AI agent?">Ask about this</a>
+          <p>Already use an AI assistant or agent? Plug it in. It shops under <span class="agent-name">Scout</span>’s Pass, so it has to pass the same Handshake, and your Stop all button stops it too.</p>
+        </div>
+        <ol class="cc-connect-steps">
+          <li><b>Copy the setup</b><span>Pick how your AI connects and copy the block below.</span></li>
+          <li><b>Paste it into your AI</b><span>Its settings, or its code. It can now see stores and ask before it buys.</span></li>
+          <li><b>Watch it here</b><span>Every check it runs shows up in Recent activity, with a signed receipt.</span></li>
+        </ol>
+        <details class="cc-connect" id="connect-more">
+          <summary>Show the setup</summary>
+          <div class="cc-connect-body">
+            <div class="cc-connect-tabs" role="group" aria-label="How your AI connects">
+              <button type="button" class="cc-chip" data-kind="mcp" aria-pressed="true">AI apps (MCP)</button>
+              <button type="button" class="cc-chip" data-kind="curl" aria-pressed="false">Any agent (web call)</button>
+              <button type="button" class="cc-chip" data-kind="python" aria-pressed="false">Python</button>
+            </div>
+            <p class="cc-fine" id="connect-note"></p>
+            <pre class="cc-code" id="connect-code" tabindex="0" aria-label="Setup to copy">Loading…</pre>
+            <div class="cc-connect-acts">
+              <button type="button" class="lt-btn lt-btn--primary" id="connect-copy">Copy</button>
+              <a class="lt-btn lt-btn--ghost" href="/openapi.json">Full API description</a>
+            </div>
+            <p class="cc-fine">The key inside is <span class="agent-name">Scout</span>’s own. Treat it like a password. It can only ask; your rules and the store’s rules still decide. In this demo it is a test key and only test money moves.</p>
+            <p class="cc-status" id="connect-status" role="status" aria-live="polite"></p>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="cc-killdock">
+  <button type="button" class="estop" id="kill-dock" aria-label="Stop all: revoke every AI shopper’s Pass at every store">
+    <span class="estop-cap" aria-hidden="true">Stop all</span>
+  </button>
+  <span class="cc-killdock-label" aria-hidden="true">Changed your mind?<small>Stop all stops every AI shopper at every store.</small></span>
+</div>
+
+<footer class="cc-foot">
+  <div class="lt-wrap cc-foot-in">
+    <p>Demo only: PayPal sandbox, test money, fictional demo stores. Open source under AGPL-3.0. <span class="pat-pend">Patent Pending.</span></p>
+    <nav aria-label="Footer">
+      <a href="/handshake/">See both sides</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/pass/">Check a Pass</a>
+      <a href="/app/">Agent bills &amp; controls</a>
+      <a href="/why/">Why Lowtides</a>
+      <a href="/blog/">Blog</a>
+      <a href="/sitemap/">Site map</a>
+      <a href="/privacy/">Privacy</a>
+    </nav>
+    <div class="cc-heart"><span aria-hidden="true">&#10084;</span><a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a></div>
+  </div>
+</footer>
+
+<script src="/cc.js" defer></script>
+<script src="/shop/shop.js" defer></script>
+<script src="/shop/muzzle.js" defer></script>
+<link rel="stylesheet" href="/ask.css">
+<script src="/ask.js" defer></script>
+</body>
+</html>

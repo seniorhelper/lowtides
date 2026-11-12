@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check a Lowtides Pass: Is This AI Agent Allowed to Spend? | Lowtides</title>
+<meta name="description" content="Paste a Lowtides Pass to see if an AI agent may spend: its live limits and whether Stop all revoked it. Signed with Ed25519, AP2-aligned. Free.">
+<link rel="canonical" href="https://lowtides.ai/pass/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#F4F8F7">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/pass/">
+<meta property="og:title" content="Check a Lowtides Pass: is this AI agent allowed to spend?">
+<meta property="og:description" content="A signed spending permission for AI agents. Check who governs the agent, its limits, and whether it was revoked.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
+<link rel="stylesheet" href="/brand.css">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"WebPage","@id":"https://lowtides.ai/pass/#page","url":"https://lowtides.ai/pass/","name":"Check a Lowtides Pass","description":"Verify an AI agent's signed spending permission: who governs it, its limits, and whether it was revoked.","isPartOf":{"@id":"https://lowtides.ai/#site"},"about":{"@id":"https://lowtides.ai/#app"},"breadcrumb":{"@id":"https://lowtides.ai/pass/#crumbs"}},
+ {"@type":"BreadcrumbList","@id":"https://lowtides.ai/pass/#crumbs","itemListElement":[{"@type":"ListItem","position":1,"name":"Lowtides","item":"https://lowtides.ai/"},{"@type":"ListItem","position":2,"name":"Check a Lowtides Pass","item":"https://lowtides.ai/pass/"}]},
+ {"@type":"FAQPage","@id":"https://lowtides.ai/pass/#faq","mainEntity":[
+  {"@type":"Question","name":"What is a Lowtides Pass?","acceptedAnswer":{"@type":"Answer","text":"A Lowtides Pass is a signed spending permission that an AI agent carries. It says who the agent is, which Lowtides server governs it, and its live limits: per-purchase cap, daily limit, approval line, allowed and blocked categories, blocked merchants and expiry."}},
+  {"@type":"Question","name":"How do I know a pass is genuine?","acceptedAnswer":{"@type":"Answer","text":"Each pass is signed with Ed25519. Anyone can check the signature offline with the server's public key at /.well-known/lowtides-pass-keys.json. Checking online also tells you whether the owner revoked it."}},
+  {"@type":"Question","name":"What happens to the pass when the owner presses Stop all?","acceptedAnswer":{"@type":"Answer","text":"Stop all, STOP and a loop-guard pause revoke the agent's pass instantly. Anyone checking it online sees REVOKED."}},
+  {"@type":"Question","name":"Is this the Agent Payments Protocol (AP2)?","acceptedAnswer":{"@type":"Answer","text":"The Lowtides Pass is AP2-aligned: it follows the idea of an AP2 Intent Mandate (a natural-language intent plus structured constraints). It is not an official AP2 integration."}}
+ ]}
+]}
+</script>
+<style>
+:root{--bg:#F4F8F7;--card:#fff;--ink:#0D2A2E;--ink-2:#33504F;--line:#D5E3E0;--tide:#16A285;--tide-l:#E3F5F0;--amber:#E39A2D;--stop:var(--lt-revoked-strong,#B3261E);
+--ok-bg:#E3F5F0;--ok-ink:#0B5E4D;--ok-line:#16A285;--bad-bg:var(--lt-revoked-bg,#FDECEA);--bad-ink:var(--lt-revoked-ink,#B3261E);--bad-line:var(--lt-revoked-line,#D9483B);--warn-bg:#FFF3DC;--warn-ink:#704600;--warn-line:#E39A2D;
+--font:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--head:"Sora","Instrument Sans",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--font);-webkit-font-smoothing:antialiased}
+a{color:#0E7A64}a:hover{color:var(--ink)}
+h1,h2,h3{font-family:var(--head);letter-spacing:-.025em;line-height:1.15;margin:0 0 .6rem}
+h1{font-size:clamp(1.9rem,5vw,2.9rem)}h2{font-size:clamp(1.35rem,3.4vw,1.8rem)}h3{font-size:1.08rem}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}
+.skip{position:absolute;left:-999px}.skip:focus{left:12px;top:12px;z-index:9;background:#fff;padding:.5rem 1rem}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+#verdict-h:focus{outline:none}/* focused by script to announce the result, not a control */
+header.top{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.top-in{display:flex;align-items:center;gap:16px;height:66px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font:600 1.35rem var(--head);letter-spacing:-.04em}
+.top nav{margin-left:auto;display:flex;gap:6px;align-items:center}
+.top nav a{text-decoration:none;color:var(--ink-2);font-weight:600;padding:.5rem .7rem;border-radius:8px}
+.top nav a:hover{background:var(--tide-l);color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:.5rem;justify-content:center;font:700 1rem var(--font);text-decoration:none;border-radius:10px;padding:.8rem 1.2rem;border:2px solid transparent;min-height:48px;cursor:pointer}
+.btn.go{background:#0E7A64;color:#fff}.btn.go:hover{background:#0A5C4B;color:#fff}
+.btn.line{border-color:var(--ink);color:var(--ink);background:#fff}.btn.line:hover{background:var(--ink);color:#fff}
+.btn[disabled]{opacity:.6;cursor:wait}
+.top .btn{padding:.55rem 1rem;min-height:42px;font-size:.95rem}
+.intro{padding:clamp(32px,6vw,64px) 0 8px}
+.eyebrow{font:500 .82rem var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#0E7A64;margin:0 0 .7rem}
+.lead{font-size:1.12rem;color:var(--ink-2);max-width:40em;margin:0 0 1.4rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:clamp(16px,3vw,24px);margin-bottom:18px}
+label{font-weight:700;display:block;margin-bottom:.35rem}
+textarea,input{width:100%;font:500 .92rem/1.45 var(--mono);color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:10px;padding:.7rem .8rem}
+textarea{min-height:120px;resize:vertical;word-break:break-all}
+input{font-family:var(--font);font-size:1rem;min-height:48px}
+textarea:focus,input:focus{border-color:var(--tide);outline:none}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.hint{color:var(--ink-2);font-size:.92rem;margin:.4rem 0 0}
+.err{color:var(--bad-ink);font-weight:600}
+.verdict{border-radius:14px;padding:18px 20px;border:2px solid;margin-bottom:16px}
+.verdict h2{display:flex;align-items:center;gap:.6rem;margin:0 0 .35rem}
+.verdict p{margin:0}
+.v-ok{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok-ink)}
+.v-bad{background:var(--bad-bg);border-color:var(--bad-line);color:var(--ink)}.v-bad h3{color:var(--bad-ink)}
+.v-warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn-ink)}
+.v-ok h2,.v-bad h2,.v-warn h2{color:inherit}
+.dot{width:14px;height:14px;border-radius:50%;background:currentColor;flex:none}
+dl.facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:0 0 14px}
+dl.facts dt{color:var(--ink-2);font-weight:600}dl.facts dd{margin:0;word-break:break-word}
+ul.limits{margin:0;padding-left:1.2rem}ul.limits li{margin:.15rem 0}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.answer{margin-top:14px;border-radius:10px;padding:12px 14px;border:2px solid}
+.answer strong{display:block;font-family:var(--head);font-size:1.05rem}
+.answer ul{margin:.3rem 0 0;padding-left:1.2rem}
+pre{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow-x:auto;font:500 .86rem/1.5 var(--mono);color:var(--ink)}
+section.more{padding:28px 0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g2 .card p{margin:0;color:var(--ink-2)}
+.note{background:var(--tide-l);border-radius:10px;padding:12px 14px;color:var(--ink)}
+footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
+.foot-g{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center}
+.heart-line{display:flex;align-items:center;justify-content:center;gap:.45rem;padding-top:1.2rem;font-weight:600}
+.heart{color:var(--stop);display:inline-block;animation:beat 1.4s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.25)}30%{transform:scale(1)}45%{transform:scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.heart{animation:none}}
+@media (max-width:700px){.g3,.g2{grid-template-columns:1fr}dl.facts{grid-template-columns:1fr}dl.facts dd{margin-bottom:6px}.top nav a.hide-s{display:none}.row .btn{width:100%}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="/" aria-label="Lowtides home"><img src="/brand/lowtides-mark-animated.svg" width="32" height="32" alt="">lowtides</a>
+    <nav aria-label="Page">
+      <a href="#what" class="hide-s">What is a pass?</a>
+      <a href="/merchants/" class="hide-s">For stores</a>
+      <a href="/handshake/" class="hide-s">See both sides</a>
+      <a class="btn go" href="/shop/">Try the demo</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<section class="intro">
+  <div class="wrap">
+    <p class="eyebrow">Lowtides Pass verifier</p>
+    <h1>Check a Lowtides Pass</h1>
+    <p class="lead">An AI agent shows you its pass before it buys. Paste it here to see who governs the agent, what it's allowed to spend, and whether its owner has pulled the plug.</p>
+
+    <form class="card" id="check-form" novalidate>
+      <label for="pass-in">The agent's pass</label>
+      <textarea id="pass-in" spellcheck="false" autocomplete="off" aria-describedby="pass-hint" placeholder="eyJhbGciOiJFZERTQSIs..."></textarea>
+      <p class="hint" id="pass-hint">Three parts separated by dots. Nothing is bought or recorded when you check.</p>
+      <div class="row">
+        <button class="btn go" type="submit" id="check-btn">Check this pass</button>
+        <span class="err" id="check-err" role="alert"></span>
+      </div>
+    </form>
+
+    <div id="result" aria-live="polite"></div>
+
+    <form class="card" id="buy-form" hidden novalidate>
+      <h2 id="buy-h">Would this purchase be allowed?</h2>
+      <p class="hint" style="margin:0 0 12px">Lowtides runs the same checks a real purchase would get, right now, without spending anything.</p>
+      <div class="g3">
+        <div><label for="buy-amount">Amount (US dollars)</label><input id="buy-amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="12.50"></div>
+        <div><label for="buy-merchant">Merchant</label><input id="buy-merchant" type="text" maxlength="120" placeholder="Acme Data" autocomplete="off"></div>
+        <div><label for="buy-category">Category</label><input id="buy-category" type="text" maxlength="60" placeholder="data" autocomplete="off"></div>
+      </div>
+      <div class="row"><button class="btn line" type="submit" id="buy-btn">Check this purchase</button></div>
+      <div id="buy-out" aria-live="polite"></div>
+    </form>
+  </div>
+</section>
+
+<section class="more" id="what">
+  <div class="wrap">
+    <h2>What is a Lowtides Pass?</h2>
+    <div class="g2">
+      <div class="card"><h3>A permission slip you can check</h3><p>Today a merchant can't tell if an AI agent is allowed to spend. The pass says who the agent is, which Lowtides server governs it, and its live limits: most per purchase, daily limit, when a person must approve, blocked categories and merchants, and when the pass expires.</p></div>
+      <div class="card"><h3>Signed, and revoked in an instant</h3><p>Every pass is signed with Ed25519. Check the signature offline with the public key, or online to also see if it was revoked. Stop all, STOP and a loop-guard pause revoke it at once.</p></div>
+    </div>
+    <p class="note"><strong>AP2-aligned.</strong> The pass follows the idea of an Agent Payments Protocol (AP2) Intent Mandate: a plain-English intent plus structured constraints. It is not an official AP2 integration.</p>
+    <h3>Check one from code</h3>
+<pre><code>curl -X POST https://lowtides.ai/v1/pass/verify \
+  -H "Content-Type: application/json" \
+  -d '{"pass": "PASTE_THE_PASS", "amount": 12.50, "merchant": "Acme Data", "category": "data"}'</code></pre>
+    <p class="hint">Public keys: <a href="/.well-known/lowtides-pass-keys.json">/.well-known/lowtides-pass-keys.json</a>. Agents get their pass from <code>GET /v1/pass</code> or the MCP tool <code>get_pass</code>.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-g">
+      <span>&copy; 2026 Lowtides &middot; Open source under AGPL-3.0 &middot; <span class="pat-pend">Patent Pending</span> &middot; <a href="/blog/">Blog</a> &middot; <a href="/tools/">Free tools</a> &middot; <a href="/sitemap/">Site map</a> &middot; <a href="/privacy/">Privacy</a></span>
+      <span><a href="/shop/">Shopper demo</a> &middot; <a href="/app/">Dashboard</a> &middot; <a href="/why/">Why Lowtides</a> &middot; <a href="https://github.com/seniorhelper/lowtides">GitHub</a> &middot; <a href="/llms.txt">llms.txt</a></span>
+    </div>
+    <div class="heart-line"><span class="heart" aria-hidden="true">&#10084;</span><a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a></div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var token = "";
+  function esc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function when(iso) {
+    if (!iso) return "unknown";
+    var d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  }
+  function verify(body) {
+    return fetch("/v1/pass/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; return j; }); });
+  }
+  function verdictCard(v) {
+    var cls, head, text;
+    if (!v.signature_ok) { cls = "v-bad"; head = "Not genuine"; text = (v.reasons || [])[0] || "The signature doesn't check out."; }
+    else if (v.revoked) { cls = "v-bad"; head = "Revoked"; text = v.revoked_reason || "The owner revoked this pass."; }
+    else if (v.expired && v.gone) { cls = "v-warn"; head = "Expired"; text = String((v.reasons || [])[0] || "This pass is no longer in force.").replace(/^EXPIRED: /, ""); }
+    else if (v.expired) { cls = "v-warn"; head = "Expired"; text = "This pass ran out on " + when(v.expires_at) + ". Ask the agent for a fresh one."; }
+    else { cls = "v-ok"; head = "Valid"; text = "Signed by this Lowtides server and still in force. The agent may spend within the limits below."; }
+    var a = v.agent || {};
+    var html = '<div class="verdict ' + cls + '"><h2 id="verdict-h" tabindex="-1"><span class="dot" aria-hidden="true"></span>' + esc(head) + "</h2><p>" + esc(text) + "</p></div>";
+    if (v.signature_ok) {
+      html += '<div class="card"><h2>' + esc(a.name || "Agent") + "</h2>" +
+        '<dl class="facts"><dt>Governed by</dt><dd>Lowtides at ' + esc(v.issuer || "unknown") + "</dd>" +
+        "<dt>Agent</dt><dd>" + esc(a.name || "") + " (agent " + esc(a.id) + ", " + esc(a.status === "on" ? "running" : a.status) + ")</dd>" +
+        "<dt>Issued</dt><dd>" + esc(when(v.issued_at)) + "</dd><dt>Expires</dt><dd>" + esc(when(v.expires_at)) + "</dd>" +
+        "<dt>Pass ID</dt><dd><code>" + esc(v.jti) + "</code></dd></dl>" +
+        "<h3>What it may spend</h3><ul class=\"limits\">" +
+        (v.limits_plain || []).map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul></div>";
+    }
+    return html;
+  }
+  function check(t) {
+    token = (t || "").trim();
+    $("check-err").textContent = "";
+    if (!token) { $("check-err").textContent = "Paste a pass first."; $("pass-in").focus(); return; }
+    $("check-btn").disabled = true;
+    verify({ pass: token }).then(function (v) {
+      if (v._status !== 200) { $("result").innerHTML = ""; $("buy-form").hidden = true; $("check-err").textContent = v.error || "That pass couldn't be checked."; return; }
+      $("result").innerHTML = verdictCard(v);
+      $("buy-form").hidden = !v.valid;
+      $("buy-out").innerHTML = "";
+      var h = $("verdict-h"); if (h) h.focus();
+    }).catch(function () { $("check-err").textContent = "Couldn't reach Lowtides. Check your connection and try again."; })
+      .then(function () { $("check-btn").disabled = false; });
+  }
+  var LABEL = { allowed: ["Allowed", "v-ok"], needs_owner_approval: ["Needs the owner's OK", "v-warn"], denied: ["Not allowed", "v-bad"] };
+  $("check-form").addEventListener("submit", function (e) { e.preventDefault(); check($("pass-in").value); });
+  $("buy-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var body = { pass: token, merchant: $("buy-merchant").value.trim(), category: $("buy-category").value.trim() };
+    var amt = $("buy-amount").value.trim();
+    if (amt) body.amount = Number(amt);
+    if (!amt && !body.merchant && !body.category) { $("buy-out").innerHTML = '<p class="err">Add an amount, a merchant or a category.</p>'; $("buy-amount").focus(); return; }
+    $("buy-btn").disabled = true;
+    verify(body).then(function (v) {
+      if (v._status !== 200) { $("buy-out").innerHTML = '<p class="err">' + esc(v.error || "That couldn't be checked.") + "</p>"; return; }
+      var l = LABEL[v.would_allow] || ["Nothing to check", "v-warn"];
+      $("buy-out").innerHTML = '<div class="answer ' + l[1] + '"><strong>' + esc(l[0]) + "</strong><ul>" +
+        (v.reasons || []).map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + "</ul></div>";
+      if (!v.valid) $("result").innerHTML = verdictCard(v);
+    }).catch(function () { $("buy-out").innerHTML = '<p class="err">Couldn\'t reach Lowtides. Try again.</p>'; })
+      .then(function () { $("buy-btn").disabled = false; });
+  });
+  function fromHash() {
+    var h = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+    if (h && h.split(".").length === 3) { $("pass-in").value = h; check(h); }
+  }
+  window.addEventListener("hashchange", fromHash);
+  fromHash();
+})();
+</script>
+</body>
+</html>

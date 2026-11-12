@@ -99,16 +99,26 @@ class TestPublicDemo(unittest.TestCase):
         s, _, _ = http("DELETE", self.url + "/api/models/sim-small")
         self.assertEqual(s, 403)
 
-    def test_reset_clears_webhooks(self):
+    def test_reset_clears_webhooks_and_passes(self):
+        from lowtides import passport
         n = self.app.notify
         n.add("https://hooks.zapier.com/hooks/catch/1/reset/")
         n._log(1, {"id": "evt_x", "type": "test.ping"}, 1, False, None, "x", 0)
-        for t in ("outbound_webhooks", "webhook_deliveries"):
+        s, r, _ = http("POST", self.url + "/api/agents", {"name": "Pass holder"})
+        a = self.app.store.agent(r["agent"]["id"])
+        b = passport.book(self.app)
+        b.issue(a, self.url)
+        b.revoke(a["id"])
+        for t in ("outbound_webhooks", "webhook_deliveries", "passes", "pass_holds"):
             self.assertTrue(self.app.store.q("SELECT * FROM " + t), t)
         self.app.reset_demo(seed_story=False)
-        for t in ("outbound_webhooks", "webhook_deliveries"):
+        for t in ("outbound_webhooks", "webhook_deliveries", "passes", "pass_holds"):
             self.assertEqual(self.app.store.q("SELECT * FROM " + t), [], t)
         self.assertEqual(n.hooks(), [])
+
+    def test_reset_works_before_any_pass_exists(self):
+        self.app.__dict__.pop("passes", None)
+        self.app.reset_demo(seed_story=False)
 
     def test_reset_loads_the_story(self):
         s, _, _ = http("POST", self.url + "/api/demo/reset", {})

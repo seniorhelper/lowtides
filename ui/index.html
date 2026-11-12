@@ -3,513 +3,486 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lowtides: AI Agent Spending Limits &amp; Kill Switch | AI Cost Governor</title>
-<meta name="description" content="One budget and one STOP button for AI agents: cap what they cost to run and what they buy. Plain-English rules, approvals, runaway-loop protection, PayPal settlement. Live demo.">
+<title>Lowtides: Let AI Shop for You and Keep the Keys | Consent Shopping</title>
+<meta name="description" content="Let an AI shopper buy for you without handing over your wallet. Both you and the store say yes, or no money moves. Free demo, PayPal sandbox.">
 <link rel="canonical" href="https://lowtides.ai/">
 <meta name="robots" content="index,follow,max-image-preview:large">
-<meta name="theme-color" content="#0A1B1E">
+<meta name="theme-color" content="#FFFFFF">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lowtides">
 <meta property="og:url" content="https://lowtides.ai/">
-<meta property="og:title" content="Lowtides: one budget and a STOP button for AI agents">
-<meta property="og:description" content="Caps what AI agents cost to run and what they buy. Plain-English rules, one-tap approvals, a kill switch, and purchases settled through PayPal. Try the live demo.">
+<meta property="og:title" content="Lowtides: let AI shop for you. Keep the keys.">
+<meta property="og:description" content="Your AI shopper carries your rules. Stores show theirs. Both say yes, or no money moves. Try the free demo (PayPal sandbox, test money).">
 <meta property="og:image" content="https://lowtides.ai/brand/og.png">
-<meta property="og:image:width" content="1280">
-<meta property="og:image:height" content="640">
-<meta property="og:image:alt" content="lowtides.ai: Keep AI spend at low tide. Budgets, spend limits, kill switch, PayPal settlement.">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Lowtides. Let AI shop for you. Keep the keys. Both say yes, or no money moves.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Lowtides: one budget and a STOP button for AI agents">
-<meta name="twitter:description" content="Cap what AI agents cost to run and what they buy. Approvals, a kill switch, PayPal settlement.">
+<meta name="twitter:title" content="Lowtides: let AI shop for you. Keep the keys.">
+<meta name="twitter:description" content="Your AI shopper carries your rules. Stores show theirs. Both say yes, or no money moves.">
 <meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
 <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM-readable summary">
-<script type="application/ld+json">
-{"@context":"https://schema.org","@graph":[
- {"@type":"WebSite","@id":"https://lowtides.ai/#site","url":"https://lowtides.ai/","name":"Lowtides","description":"The AI spend governor: one budget and a STOP button for AI agents."},
- {"@type":"SoftwareApplication","@id":"https://lowtides.ai/#app","name":"Lowtides","alternateName":"Lowtides AI spend governor","url":"https://lowtides.ai/","applicationCategory":"FinanceApplication","applicationSubCategory":"AI agent spend control","operatingSystem":"Web, Windows, macOS, Linux","softwareVersion":"1.1.0","license":"https://www.gnu.org/licenses/agpl-3.0.html","codeRepository":"https://github.com/seniorhelper/lowtides","image":"https://lowtides.ai/brand/og.png","description":"Lowtides puts one budget, plain-English rules, one-tap approvals and a kill switch between AI agents and your money: what they cost to run (model calls) and what they buy (purchases settled through PayPal).","featureList":["One combined daily budget for AI model costs and agent purchases","Plain-English spending rules compiled into strict, validated rules","Approval queue for purchases over a threshold, new payees and suspected prompt injection","STOP ALL kill switch that voids PayPal holds and cancels unclaimed payouts","Runaway-loop detection and per-call cost caps","Hash-chained audit log and per-purchase dispute evidence pack","MCP server and OpenAI/Anthropic-compatible proxy","PayPal Orders, Payouts, Invoicing and Webhooks"],"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"Open source (AGPL-3.0). Free live demo."},"isAccessibleForFree":true}
-]}
-</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="tour.css">
-<style>
-  /* Startup screen: about 2 seconds, once per visit, skippable, never delays the app (it loads underneath). */
-  #lt-splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; cursor: pointer;
-    background: radial-gradient(120% 90% at 80% 10%, #123A3D 0%, #0A1B1E 62%); color: #E6F4F1;
-    transition: opacity .38s ease, visibility .38s; }
-  #lt-splash.out { opacity: 0; visibility: hidden; }
-  .lt-s-in { width: min(520px, 86vw); }
-  .lt-s-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
-  .lt-s-word { font: 600 clamp(2rem, 7vw, 2.9rem)/1 "Sora", system-ui, sans-serif; letter-spacing: -.045em; }
-  .lt-s-word b { color: #3FD6B5; font-weight: 600; }
-  .lt-s-grid { display: grid; grid-template-columns: repeat(6, 9px); gap: 5px; }
-  .lt-s-grid i { width: 9px; height: 9px; border-radius: 50%; background: #24434A; animation: ltS 1.5s ease-in-out both; }
-  .lt-s-grid i.top { background: #E39A2D; animation: none; }
-  @keyframes ltS { 0% { background: #24434A; transform: scale(.6); } 45% { background: #3FD6B5; transform: scale(1); } 100% { background: #3FD6B5; } }
-  .lt-s-grid i.ebb { animation-name: ltE; }
-  @keyframes ltE { 0% { background: #24434A; transform: scale(.6); } 40% { background: #3FD6B5; transform: scale(1); } 100% { background: #24434A; transform: scale(.75); } }
-  .lt-s-log { list-style: none; margin: 0; padding: 0; font: 500 .92rem/1.9 "JetBrains Mono", ui-monospace, monospace; color: #9DB5B1; min-height: 7.6em; }
-  .lt-s-log li { opacity: 0; transform: translateY(4px); animation: ltL .22s ease forwards; }
-  .lt-s-log li b { color: #3FD6B5; font-weight: 500; }
-  .lt-s-log li.last { color: #E6F4F1; }
-  @keyframes ltL { to { opacity: 1; transform: none; } }
-  .lt-s-bar { height: 3px; margin-top: 14px; background: #24434A; border-radius: 3px; overflow: hidden; }
-  .lt-s-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3FD6B5, #E39A2D); animation: ltB 1.75s cubic-bezier(.3,.7,.2,1) forwards; }
-  @keyframes ltB { to { width: 100%; } }
-  .lt-s-skip { position: absolute; right: 18px; bottom: 16px; font: 500 .8rem "JetBrains Mono", monospace; color: #9DB5B1; background: none; border: 1px solid #24434A; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
-  @media (prefers-reduced-motion: reduce) { #lt-splash *, #lt-splash { animation: none !important; transition: none !important; } .lt-s-log li { opacity: 1; transform: none; } .lt-s-bar i { width: 100%; } }
-</style>
 <link rel="icon" href="/brand/favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
 <link rel="apple-touch-icon" href="/brand/favicon-180.png">
-</head>
-<body>
-<div id="lt-splash" aria-hidden="true" hidden>
-  <div class="lt-s-in">
-    <div class="lt-s-brand"><div class="lt-s-grid" id="lt-s-grid"></div><div class="lt-s-word">low<b>tides</b></div></div>
-    <ol class="lt-s-log" id="lt-s-log"></ol>
-    <div class="lt-s-bar"><i></i></div>
-  </div>
-  <button type="button" class="lt-s-skip" tabindex="-1">skip ▸</button>
-</div>
-<script>
-(function () {
-  var KEY = "lt_splash_seen", el = document.getElementById("lt-splash");
-  try { if (sessionStorage.getItem(KEY)) { el.remove(); return; } sessionStorage.setItem(KEY, "1"); } catch (e) { el.remove(); return; }
-  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  document.documentElement.classList.add("lt-splashing");
-  el.hidden = false;
-  var g = document.getElementById("lt-s-grid"), r, c, d;
-  for (r = 0; r < 6; r++) for (c = 0; c < 6; c++) {
-    d = document.createElement("i");
-    if (r === 0) d.className = "top"; else { d.className = r < 4 ? "ebb" : ""; d.style.animationDelay = ((5 - r) * 90 + c * 25) + "ms"; }
-    g.appendChild(d);
-  }
-  var lines = ["Reading your budget rules", "Arming the STOP ALL switch", "Connecting PayPal sandbox", "Watching every AI call"],
-      log = document.getElementById("lt-s-log"), done = false;
-  lines.forEach(function (t, i) {
-    var li = document.createElement("li");
-    li.innerHTML = "<b>&#10003;</b> " + t; li.style.animationDelay = (reduce ? 0 : 180 + i * 330) + "ms"; log.appendChild(li);
-  });
-  var last = document.createElement("li"); last.className = "last";
-  last.textContent = "Tide is low. You're in."; last.style.animationDelay = (reduce ? 0 : 1450) + "ms"; log.appendChild(last);
-  function close() {
-    if (done) return; done = true;
-    el.classList.add("out");
-    document.documentElement.classList.remove("lt-splashing");
-    setTimeout(function () { el.remove(); }, 420);
-  }
-  el.addEventListener("click", close);
-  document.addEventListener("keydown", function k(e) { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") { close(); document.removeEventListener("keydown", k); } });
-  setTimeout(close, reduce ? 700 : 2100);
-})();
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/site.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"WebSite","@id":"https://lowtides.ai/#site","url":"https://lowtides.ai/","name":"Lowtides","description":"Consent Shopping: let AI shop for you and keep the keys."},
+ {"@type":"SoftwareApplication","@id":"https://lowtides.ai/#app","name":"Lowtides","alternateName":"Lowtides Consent Shopping","url":"https://lowtides.ai/","applicationCategory":"FinanceApplication","applicationSubCategory":"AI shopping safety","operatingSystem":"Web","license":"https://www.gnu.org/licenses/agpl-3.0.html","codeRepository":"https://github.com/seniorhelper/lowtides","image":"https://lowtides.ai/brand/og.png","description":"Lowtides lets an AI shopper buy for you under your rules. The shopper carries a signed Pass with your rules, each store publishes a signed Store Policy, GuardPooch checks the store is real, and a purchase is paid only when both sides say yes. Payments in the demo use the PayPal sandbox with test money.","featureList":["Signed Pass that carries the shopper's spending rules","Signed Store Policy that each store publishes for AI shoppers","Two-sided Handshake: green when both say yes, yellow when it needs your yes, red when nothing is paid","GuardPooch store check for lookalike and fake stores","One Stop all button that revokes the Pass at every store at once","Signed receipt and proof pack for every AI order","PayPal sandbox settlement in the demo"],"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"Open source (AGPL-3.0). Free demo."},"isAccessibleForFree":true},
+ {"@type":"FAQPage","@id":"https://lowtides.ai/#faq","mainEntity":[
+  {"@type":"Question","name":"What is Lowtides?","acceptedAnswer":{"@type":"Answer","text":"Lowtides lets an AI shopper buy things for you without giving it free rein over your money. Your rules travel with the shopper as a signed Pass, each store shows its own rules, and nothing is paid unless both sides say yes."}},
+  {"@type":"Question","name":"Is this real money?","acceptedAnswer":{"@type":"Answer","text":"No. This is a demo. Payments run in the PayPal sandbox with test money, and the stores are fictional demo stores. Nothing here charges a real card or account."}},
+  {"@type":"Question","name":"What is a Pass?","acceptedAnswer":{"@type":"Answer","text":"Your Pass is a signed note your AI shopper carries. It says what it may buy, how much it may spend and when it must ask you first. Stores can check it, and you can cancel it at any time."}},
+  {"@type":"Question","name":"What happens when my rules and the store's rules don't match?","acceptedAnswer":{"@type":"Answer","text":"Nothing is paid. If the order only needs a person to say okay, it waits for your yes (yellow). If it breaks a rule on either side, it shows red: no match, and no money moves."}},
+  {"@type":"Question","name":"How does GuardPooch spot a fake store?","acceptedAnswer":{"@type":"Answer","text":"GuardPooch checks the store before your shopper pays: names spelled one letter off from a real store, web addresses that are brand new, store rules that are not signed, and prices that look too good to be true. A store that fails gets a red light."}},
+  {"@type":"Question","name":"How do I stop everything?","acceptedAnswer":{"@type":"Answer","text":"Press the big red button. Stop all revokes your Pass at every store at once, so your AI shopper cannot buy anything else until you turn it back on."}}
+ ]}
+]}
 </script>
+</head>
+<body class="lt-page site">
 <a class="skip" href="#main">Skip to content</a>
-<header class="top">
-  <div class="top-in">
-    <a class="brand" href="#home" aria-label="Lowtides home">
-      <img src="/brand/lowtides-mark-animated.svg" width="34" height="34" alt="">
-      <span id="app-name">lowtides</span>
+
+<header class="lt-header">
+  <div class="lt-header-in">
+    <a class="lt-logo" href="/" aria-label="Lowtides home">
+      <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+      <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
     </a>
-    <div class="mode" role="group" aria-label="Who is this for">
-      <button type="button" data-mode="home" class="mode-btn">Home</button>
-      <button type="button" data-mode="business" class="mode-btn">Business</button>
-    </div>
-    <button type="button" id="stop-all" class="stop-all" title="Stop every agent right now">STOP ALL</button>
+    <nav class="lt-nav" aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+    </nav>
+    <a class="lt-btn lt-btn--primary lt-header-cta" href="/shop/">Try the demo</a>
   </div>
-  <nav class="tabs" aria-label="Sections">
-    <a href="#home" data-tab="home">Home</a>
-    <a href="#approvals" data-tab="approvals" id="approvals-link">Approvals<span class="badge" id="appr-badge" hidden></span></a>
-    <a href="#tasks" data-tab="tasks">Quotes &amp; holds</a>
-    <a href="#wallet" data-tab="wallet">Wallet</a>
-    <a href="#clients" data-tab="clients" class="biz-only">Clients</a>
-    <a href="#ledger" data-tab="ledger">Every call</a>
-    <a href="#settings" data-tab="settings">Settings</a>
-  </nav>
 </header>
 
-<main id="main" tabindex="-1">
-  <!-- HOME -->
-  <section id="tab-home" class="tab">
-    <div id="out-banner" class="out-banner" role="alert" hidden>
-      <div class="out-banner-body">
-        <p id="out-banner-text"></p>
-        <ul id="out-banner-keys"></ul>
-      </div>
-      <button type="button" class="btn ghost" id="out-dismiss">Dismiss</button>
-    </div>
-    <div id="appr-banner" class="appr-banner" hidden>
-      <span class="appr-banner-icon" aria-hidden="true">!</span>
-      <p id="appr-banner-text"></p>
-      <a class="btn warn" href="#approvals">Review now</a>
-    </div>
+<main id="main">
 
-    <section class="tide" aria-labelledby="tide-h">
-      <div class="tide-head">
-        <div class="tide-intro">
-          <p class="tide-eyebrow">Tide chart</p>
-          <h1 id="tide-h">Keep AI spend at low tide.</h1>
-          <ul class="tide-legend" aria-label="How to read the chart">
-            <li><span class="lg-dot lg-tide" aria-hidden="true"></span>Spent today</li>
-            <li><span class="lg-dot lg-limit" aria-hidden="true"></span>Daily limit (top row)</li>
-            <li><span class="lg-dash" aria-hidden="true"></span>Where today's pace ends up</li>
-          </ul>
+  <!-- HERO -->
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="lt-wrap hero-grid">
+      <div class="hero-copy">
+        <div class="hero-say">
+        <p class="lt-pill hero-pill"><span class="dot" aria-hidden="true"></span>Consent Shopping</p>
+        <h1 class="lt-h1" id="hero-h">Let AI shop for you. <span class="keep">Keep the keys.</span></h1>
+        <p class="lt-lead">Your AI shopper carries your rules. Stores show theirs. Both say yes, or no money moves.</p>
         </div>
-        <div class="tide-saved">
-          <div class="tide-saved-k">Protected today</div>
-          <div class="tide-saved-v prot-v" id="prot-today">$0.00</div>
-          <div class="prot-label" id="prot-label">nothing needed stopping today</div>
-          <ul class="prot-chips" id="prot-chips" aria-label="What Lowtides stopped today"></ul>
-          <div class="prot-saved" id="prot-saved">
-            <span class="prot-saved-k">Saved on AI calls</span>
-            <span class="prot-saved-v" id="saved-today">$0.00</span>
+        <div class="hero-do">
+        <form class="hero-search" action="/shop/" method="get" role="search" aria-label="Send your AI shopper to look for something">
+          <svg class="hero-search-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+          <input type="search" name="q" id="hero-q" maxlength="80" autocomplete="off" placeholder="Search: cordless drill" aria-label="What should your AI shopper find?">
+          <button class="lt-btn lt-btn--primary" type="submit">Shop it</button>
+        </form>
+        <p class="hero-picks">Try: <a href="/shop/?q=cordless+drill">cordless drill</a> <a href="/shop/?q=dog+food">dog food</a> <a href="/shop/?q=gift+card">gift card</a></p>
+        <div class="hero-cta">
+          <a class="lt-btn lt-btn--primary lt-btn--lg" href="/handshake/?tour=1" id="hero-tour"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>Play the 90-second tour</a>
+        </div>
+        <a class="hero-vid" href="#video" id="hero-video" hidden>
+          <span class="hero-vid-thumb"><picture><source srcset="/brand/video-poster.webp" type="image/webp"><img src="/brand/video-poster.jpg" width="1280" height="720" alt="" decoding="async"></picture><span class="hero-vid-play" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+          <span class="hero-vid-text"><b>Watch the 3-minute story</b><small>See a real PayPal sandbox payment, the fake-store catch and Stop all.</small></span>
+        </a>
+        <p class="hero-note">Free demo. PayPal sandbox, test money only.</p>
+        <p class="hero-note hero-note--2">Not just shopping: <a href="/shop/#muzzle">Action Muzzle</a> covers booking, calls and sign-ups too.</p>
+        <p class="hero-note hero-note--2">Pays through PayPal (sandbox) &middot; Rules in plain English, read by AI when connected</p>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div id="hs-live" data-video-slot class="hs" role="img"
+             aria-label="Animation: your Pass, the key, meets a store's Policy, the lock. Three outcomes take turns: green, both said yes; yellow, needs your yes; red, no match and no money moved.">
+          <div class="hs-dots" aria-hidden="true"></div>
+          <div class="hs-stage" aria-hidden="true">
+            <div class="hs-badge hs-badge--pass">
+              <svg class="hs-icon" viewBox="0 0 48 48"><circle cx="16" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="4.5"/><path d="M25 24h17m-6 0v7m-6-7v5" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>
+              <span class="hs-name">Your Pass</span>
+              <span class="hs-sub">your rules</span>
+            </div>
+            <div class="hs-mid">
+              <span class="hs-line"></span>
+              <span class="hs-coin">$</span>
+              <span class="hs-medal">
+                <svg class="hs-m hs-m--1" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg class="hs-m hs-m--2" viewBox="0 0 24 24"><path d="M12 6v7" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="12" cy="18" r="1.8" fill="currentColor"/></svg>
+                <svg class="hs-m hs-m--3" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+              </span>
+            </div>
+            <div class="hs-badge hs-badge--policy">
+              <svg class="hs-icon" viewBox="0 0 48 48"><path class="hs-shackle" d="M15 22v-6a9 9 0 0 1 18 0v6" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><rect x="9" y="22" width="30" height="20" rx="5" fill="currentColor"/><circle cx="24" cy="31" r="3" fill="#fff"/></svg>
+              <span class="hs-name">Store Policy</span>
+              <span class="hs-sub">their rules</span>
+            </div>
           </div>
-          <div class="tide-saved-sub" id="saved-sub">Would have cost $0.00. You paid $0.00.</div>
+          <div class="hs-signals">
+            <span class="sig sig--match hs-sig hs-sig--1">Both said yes</span>
+            <span class="sig sig--needs_yes hs-sig hs-sig--2">Needs your yes</span>
+            <span class="sig sig--no_match hs-sig hs-sig--3">No match — no money moved</span>
+          </div>
         </div>
       </div>
-      <div id="tide-grid" class="tide-grid"></div>
-    </section>
 
-    <div class="panel receipt">
-      <h2>Today in plain English</h2>
-      <ul id="receipt-lines" class="lines"></ul>
-      <p class="muted small" id="week-line"></p>
+      <nav class="doors" aria-label="Pick your side">
+        <a class="door" href="/shop/">
+          <span class="door-ico" aria-hidden="true"><svg viewBox="0 0 48 48" focusable="false"><circle cx="16" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="4.5"/><path d="M25 24h17m-6 0v7m-6-7v5" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg></span>
+          <span class="door-t"><b>I'm a shopper</b><small>Set your rules and let Scout shop</small></span>
+          <span class="door-go" aria-hidden="true">&rarr;</span>
+        </a>
+        <a class="door" href="/merchants/">
+          <span class="door-ico door-ico--store" aria-hidden="true"><svg viewBox="0 0 48 48" focusable="false"><path d="M15 22v-6a9 9 0 0 1 18 0v6" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><rect x="9" y="22" width="30" height="20" rx="5" fill="currentColor"/><circle cx="24" cy="31" r="3" fill="#fff"/></svg></span>
+          <span class="door-t"><b>I'm a store</b><small>Publish your rules for AI shoppers</small></span>
+          <span class="door-go" aria-hidden="true">&rarr;</span>
+        </a>
+      </nav>
     </div>
+  </section>
 
-    <div id="setup" class="panel setup" hidden>
-      <h2>Set up your first agent</h2>
-      <p class="muted">Three steps. Takes about a minute.</p>
+  <!-- VIDEO: hidden until data-video-id is set (one place). The iframe loads only after a click. -->
+  <section class="band video-band" id="video" data-video-id="qt9pDoqOMFI" aria-labelledby="video-h" hidden>
+    <div class="lt-wrap">
+      <h2 class="lt-h2 video-h" id="video-h">Watch the 3-minute story</h2>
+      <div class="video-card">
+        <button type="button" class="video-play" id="video-play" aria-label="Play the 3-minute Lowtides story (captions are part of the video)">
+          <picture>
+            <source srcset="/brand/video-poster.webp" type="image/webp" width="1280" height="720">
+            <img class="video-poster" src="/brand/video-poster.jpg" width="1280" height="720" alt="" loading="lazy" decoding="async">
+          </picture>
+          <span class="video-btn" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span>
+        </button>
+      </div>
+      <p class="video-note">Plays from YouTube (privacy-enhanced mode) only after you press play.</p>
+    </div>
+  </section>
+  <script>
+  /* The video's one switch: data-video-id on #video above. Empty = no video block and no video button. */
+  (function () {
+    var box = document.getElementById("video"), id = box && (box.getAttribute("data-video-id") || "").trim();
+    if (!id || !/^[A-Za-z0-9_-]{6,20}$/.test(id)) return;
+    box.hidden = false;
+    document.getElementById("hero-video").hidden = false;
+    var img = box.querySelector(".video-poster");
+    img.addEventListener("error", function () {     // a missing poster falls back to the hero still, never a broken image
+      var src = box.querySelector("picture source");
+      if (src) src.remove();
+      if (!/hero-poster/.test(img.src)) img.src = "/brand/lowtides-hero-poster.jpg";
+    });
+    document.getElementById("hero-video").addEventListener("click", function (e) {
+      var play = document.getElementById("video-play");
+      if (!play) return;                              // already playing: the plain link just scrolls there
+      e.preventDefault();
+      box.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+      play.click();
+    });
+    document.getElementById("video-play").addEventListener("click", function () {
+      var f = document.createElement("iframe");
+      f.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id) + "?autoplay=1&rel=0";
+      f.title = "Lowtides: the 3-minute story (video)";
+      f.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture");
+      f.setAttribute("allowfullscreen", "");
+      f.className = "video-frame";
+      var card = this.parentNode;
+      card.replaceChild(f, this);
+      f.focus();
+    });
+  })();
+  </script>
+
+  <!-- BOTH SIDES: a click-through picture of the two control panels (sample data, nothing live) -->
+  <section class="band" id="both-sides" aria-labelledby="bs-h">
+    <div class="lt-wrap">
+      <p class="lt-eyebrow">Take the tour</p>
+      <h2 class="lt-h2" id="bs-h">Two control panels. One yes from each.</h2>
+      <p class="lt-lead bs-lead">Tap the numbers to see what each side controls. This is a picture with sample data; the real pages are one click away.</p>
+      <div class="bs-grid">
+        <div class="bs-panel" data-side="shopper">
+          <p class="bs-tag">Shopper control panel</p>
+          <div class="bs-row" data-for="1">
+            <button type="button" class="bs-spot" data-spot="1" aria-pressed="false" aria-controls="bs-say" aria-label="Step 1: your limits"><span aria-hidden="true">1</span></button>
+            <div><b>Scout&rsquo;s limits</b><ul class="bs-list"><li>Max $100 a day</li><li>No more than $60 per purchase</li><li>Ask me over $25</li><li>Never gift cards or crypto</li></ul></div>
+          </div>
+          <div class="bs-row" data-for="2">
+            <button type="button" class="bs-spot" data-spot="2" aria-pressed="false" aria-controls="bs-say" aria-label="Step 2: how much freedom your AI shopper gets"><span aria-hidden="true">2</span></button>
+            <div><b>Mode</b><div class="bs-seg" aria-hidden="true"><span>Off</span><span class="on">AI Assist</span><span>Full Autopilot</span></div></div>
+          </div>
+          <div class="bs-row" data-for="5">
+            <button type="button" class="bs-spot" data-spot="5" aria-pressed="false" aria-controls="bs-say" aria-label="Step 5: Stop all"><span aria-hidden="true">5</span></button>
+            <div><b>Changed your mind?</b><div class="bs-stop" aria-hidden="true">Stop all</div></div>
+          </div>
+          <div class="bs-row" data-for="6">
+            <button type="button" class="bs-spot" data-spot="6" aria-pressed="false" aria-controls="bs-say" aria-label="Step 6: Action Muzzle"><span aria-hidden="true">6</span></button>
+            <div><b>Action Muzzle: the job</b><ul class="bs-list"><li>&ldquo;Book a table for two, Friday at 7&rdquo;</li><li>Anything extra: ask me first</li><li>Stop word: red light</li></ul></div>
+          </div>
+        </div>
+        <div class="bs-mid" data-for="4">
+          <button type="button" class="bs-spot" data-spot="4" aria-pressed="false" aria-controls="bs-say" aria-label="Step 4: both say yes"><span aria-hidden="true">4</span></button>
+          <span class="sig sig--match">Both said yes</span>
+          <small>Yellow waits for you. Red moves no money.</small>
+        </div>
+        <div class="bs-panel" data-side="store">
+          <p class="bs-tag">Store control center</p>
+          <div class="bs-row" data-for="3">
+            <button type="button" class="bs-spot" data-spot="3" aria-pressed="false" aria-controls="bs-say" aria-label="Step 3: the store's rules for AI shoppers"><span aria-hidden="true">3</span></button>
+            <div><b>Rules for AI shoppers</b><ul class="bs-list"><li>AI orders: accepted</li><li>Max order without a person: $150</li><li>Minimum trust score: 60</li><li>Gift cards: people only</li></ul></div>
+          </div>
+          <div class="bs-row">
+            <span class="bs-nospot" aria-hidden="true"></span>
+            <div><b>Mode</b><div class="bs-seg" aria-hidden="true"><span>Off</span><span>AI Assist</span><span class="on">Full Autopilot</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="bs-say" id="bs-say" role="status" aria-live="polite">
+        <p class="bs-step" id="bs-step">Step 1 of 6</p>
+        <p class="bs-text" id="bs-text">Here you set your limits in plain English. Your AI shopper carries them in a signed Pass.</p>
+        <div class="bs-nav">
+          <button type="button" class="lt-btn lt-btn--ghost" id="bs-back">Back</button>
+          <button type="button" class="lt-btn lt-btn--primary" id="bs-next">Next</button>
+          <a class="lt-btn lt-btn--ghost" id="bs-open" href="/shop/#rules">Open the shopper page</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACTION MUZZLE -->
+  <section class="band" aria-labelledby="mz-home-h">
+    <div class="lt-wrap">
+      <div class="lt-card mz-home">
+        <div>
+          <p class="lt-eyebrow">Action Muzzle</p>
+          <h2 class="lt-h2" id="mz-home-h">Not just shopping. Your AI does only what you asked.</h2>
+          <p class="big-p">Book a table, schedule a visit, call the phone company. Tell your AI the job and it may do only that. Anything extra, it asks you first. A deposit or fare still pays through PayPal, and only when both sides say yes. Say your stop word and everything freezes.</p>
+          <p class="hero-note">Demo: the businesses are made up and nothing real is contacted.</p>
+        </div>
+        <a class="lt-btn lt-btn--primary lt-btn--lg" href="/shop/#muzzle">Try Action Muzzle</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section class="band" aria-labelledby="problem-h">
+    <div class="lt-wrap">
+      <div class="lt-card lt-card--tint problem">
+        <p class="lt-eyebrow">The problem</p>
+        <h2 class="lt-h2" id="problem-h">AI can shop for you now, but nothing makes you, your AI and the store agree on the rules before your money moves.</h2>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="band" id="how" aria-labelledby="how-h">
+    <div class="lt-wrap">
+      <div class="section-head">
+        <p class="lt-eyebrow">How it works</p>
+        <h2 class="lt-h2" id="how-h">Three steps. You stay in charge.</h2>
+      </div>
       <ol class="steps">
-        <li>
-          <label for="setup-name">Name your agent</label>
-          <input id="setup-name" placeholder="Like: Support bot" autocomplete="off">
+        <li class="lt-card step">
+          <span class="step-n" aria-hidden="true">1</span>
+          <h3>Set your rules</h3>
+          <p>Use sliders or plain words, like “under $80, no gift cards, ask me first above $50.” Your rules become your Pass.</p>
+          <div class="lt-slider" data-lt-slider data-prefix="$">
+            <div class="lt-slider-head"><label for="try-ask">Ask me first above</label><output for="try-ask">$50</output></div>
+            <input id="try-ask" type="range" min="10" max="200" step="5" value="50">
+          </div>
+          <p class="step-fine">Just a preview. Set real rules in the shopper demo.</p>
         </li>
-        <li>
-          <label for="setup-budget">Daily allowance: <strong id="setup-budget-val">$5</strong></label>
-          <input id="setup-budget" type="range" min="1" max="50" step="1" value="5">
-          <span class="muted small">It can never spend more than this in a day.</span>
+        <li class="lt-card step">
+          <span class="step-n" aria-hidden="true">2</span>
+          <h3>Scout shops. GuardPooch sniffs.</h3>
+          <p>Scout, the demo AI shopper, finds what you asked for. GuardPooch checks that each store is real before anything is bought.</p>
+          <div class="mini-list" aria-hidden="true">
+            <span class="sig sig--match">Real demo store</span>
+            <span class="sig sig--no_match">Lookalike store</span>
+          </div>
         </li>
-        <li>
-          <button type="button" id="setup-go" class="btn go big">Turn it on</button>
+        <li class="lt-card step">
+          <span class="step-n" aria-hidden="true">3</span>
+          <h3>Both say yes. Then it pays.</h3>
+          <p>Your Pass and the store’s Policy are checked both ways. Only a match pays, through the PayPal sandbox in this demo.</p>
+          <div class="mini-list" aria-hidden="true">
+            <span class="sig sig--match">Both said yes</span>
+          </div>
         </li>
       </ol>
     </div>
+  </section>
 
-    <div id="connect" class="panel" hidden>
-      <h2>Paste these two lines into your agent</h2>
-      <p class="muted">Your agent keeps working exactly the same. It just talks to Lowtides first.</p>
-      <div class="kv"><span>Base URL</span><code id="c-base"></code><button class="btn ghost sm" data-copy="c-base">Copy</button></div>
-      <div class="kv"><span>API key</span><code id="c-key"></code><button class="btn ghost sm" data-copy="c-key">Copy</button></div>
-      <details class="code-help">
-        <summary>Show me code for my agent</summary>
-        <div class="code-tabs" role="tablist">
-          <button type="button" data-code="py-openai" class="on">Python (OpenAI SDK)</button>
-          <button type="button" data-code="py-anthropic">Python (Anthropic SDK)</button>
-          <button type="button" data-code="curl">curl</button>
-          <button type="button" data-code="langchain">LangChain</button>
-          <button type="button" data-code="mcp">Claude / MCP</button>
-          <button type="button" data-code="spend">Ask before buying</button>
+  <!-- GUARDPOOCH -->
+  <section class="band" aria-labelledby="gp-h">
+    <div class="lt-wrap">
+      <div class="lt-card split">
+        <div>
+          <p class="lt-eyebrow">Meet GuardPooch</p>
+          <h2 class="lt-h2" id="gp-h">A watchdog for fake stores.</h2>
+          <p class="big-p">Scam stores copy a real store’s name with one letter off. GuardPooch checks the spelling, how new the web address is, whether the store signed its rules, and prices that look too good. A store that fails gets a red light, before any money moves.</p>
         </div>
-        <pre id="code-box"></pre>
-      </details>
-      <button type="button" class="btn ghost" id="connect-done">Done</button>
-    </div>
-
-    <div class="row-head">
-      <h2>Your agents</h2>
-      <div class="row-actions">
-        <button type="button" class="btn ghost" id="add-agent">Add an agent</button>
-        <button type="button" class="btn ghost" id="run-demo" title="Runs real Lowtides logic against a built-in simulated model">Watch it work (demo)</button>
-        <button type="button" class="btn ghost" id="run-loop" title="Sends the same request over and over through the demo agent">Show the loop guard (demo)</button>
+        <div class="gp-visual" aria-hidden="true">
+          <img data-mascot="full" class="pooch" src="/brand/mascot/dog-full.webp" width="160" height="160" alt="" loading="lazy" decoding="async">
+          <div class="gp-rows">
+            <div class="gp-row sig--match"><span class="gp-dom">harborhardware.example</span><span class="sig sig--match">Real demo store</span></div>
+            <div class="gp-row sig--no_match"><span class="gp-dom">harbor-hard<u>warre</u>-deals.example</span><span class="sig sig--no_match">Lookalike, blocked</span></div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div id="agents" class="agents"></div>
-
-    <div class="panel">
-      <h2>Try it</h2>
-      <p class="muted">Ask anything through one of your agents and see which model answered, what it cost and what it saved.</p>
-      <div class="try">
-        <select id="try-agent" aria-label="Agent"></select>
-        <select id="try-model" aria-label="Model your agent asks for"></select>
-        <input id="try-prompt" placeholder="Like: Summarize this email in one line…" aria-label="Your question">
-        <button type="button" class="btn go" id="try-go">Send</button>
-      </div>
-      <div id="try-out" class="try-out" hidden></div>
-    </div>
-
-    <div class="panel" id="outside-panel">
-      <h2>Outside watch</h2>
-      <p class="muted">Watches your provider's real bill, including scripts that skip Lowtides.</p>
-      <p id="out-off" class="muted" hidden>Off — set caps and turn it on below.</p>
-      <div id="out-providers"></div>
-      <div class="row-actions">
-        <button type="button" class="btn ghost" id="out-check">Check now</button>
-        <button type="button" class="btn stop" id="out-disable">Disable keys now</button>
-        <button type="button" class="btn ghost" id="out-sim" hidden>Simulate a runaway script</button>
-      </div>
-      <ul id="out-alerts" class="events" aria-label="Recent outside-watch alerts"></ul>
-      <details id="out-settings">
-        <summary>Outside watch settings</summary>
-        <form id="out-form" class="form-grid" autocomplete="off"></form>
-        <button type="button" class="btn go" id="out-save">Save outside watch settings</button>
-      </details>
-    </div>
-
-    <div class="panel">
-      <h2>What the governor noticed</h2>
-      <ul id="events" class="events"></ul>
     </div>
   </section>
 
-  <!-- APPROVALS -->
-  <section id="tab-approvals" class="tab" hidden>
-    <div class="row-head">
-      <h2>Waiting for you</h2>
-      <p class="muted small appr-poll">Checks for new requests every 3 seconds.</p>
-    </div>
-    <p class="muted">Your agents ask Lowtides before they buy anything. Purchases your rules can't settle on their own wait here until you approve or deny them.</p>
-    <div id="appr-list" class="appr-list"></div>
-
-    <div class="panel">
-      <div class="row-head log-head">
-        <h2>Decision log</h2>
-        <p id="audit-line" class="audit-line" hidden></p>
+  <!-- Stop all -->
+  <section class="band" aria-labelledby="kill-h">
+    <div class="lt-wrap">
+      <div class="lt-card lt-card--tint split split--kill">
+        <div class="kill-visual">
+          <button type="button" class="estop estop--lg" id="kill-demo" aria-pressed="false" aria-describedby="kill-msg" aria-label="Stop all: try the big red button (preview only, nothing is revoked here)">
+            <span class="estop-cap" aria-hidden="true">Stop all</span>
+          </button>
+          <p class="kill-msg" id="kill-msg" role="status" aria-live="polite">Go on, press it. This one is just a preview.</p>
+        </div>
+        <div>
+          <p class="lt-eyebrow">One big red button</p>
+          <h2 class="lt-h2" id="kill-h">Changed your mind? Stop it everywhere.</h2>
+          <p class="big-p">Stop all revokes your Pass at every store at once. Your AI shopper can’t buy another thing until you turn it back on.</p>
+        </div>
       </div>
-      <p class="muted small">Every decision, with the reasons Lowtides gave. Each entry is written to a tamper-evident audit log.</p>
-      <ol id="decision-log" class="dlog"></ol>
     </div>
   </section>
 
-  <!-- TASKS -->
-  <section id="tab-tasks" class="tab" hidden>
-    <div class="panel">
-      <h2>Get a price before the work starts</h2>
-      <p class="muted">Like a contractor's estimate. Lowtides quotes the job from what similar jobs really cost. Hold the quote on PayPal, and when the job is done you pay only the real cost. The rest is released.</p>
-      <div class="form-grid">
-        <label>Agent<select id="t-agent"></select></label>
-        <label>Job name<input id="t-label" placeholder="Like: Weekly SEO report"></label>
-        <label class="wide">What's the job?<input id="t-desc" placeholder="Short description helps the first estimate"></label>
-        <label>Budget cap (optional)<input id="t-budget" type="number" min="0.01" step="0.01" placeholder="Uses the quote"></label>
+  <!-- FOR STORES -->
+  <section class="band" id="stores" aria-labelledby="stores-h">
+    <div class="lt-wrap">
+      <div class="section-head">
+        <p class="lt-eyebrow">For stores</p>
+        <h2 class="lt-h2" id="stores-h">Know which AI shoppers to trust.</h2>
+        <p class="lt-lead">Publish your rules for AI shoppers once, as a signed Store Policy. Every AI order is checked against them before it is paid.</p>
       </div>
-      <button type="button" class="btn go" id="t-quote">Get my quote</button>
-      <div id="t-result" class="quote" hidden></div>
-    </div>
-    <div class="panel">
-      <h2>Jobs</h2>
-      <div id="task-list"></div>
-      <p class="muted small">Agents add calls to a job by sending the header <code>X-Lowtides-Task: job-id</code>. Charges round to the nearest cent, and anything under half a cent is free.</p>
+      <div class="trio">
+        <div class="lt-card mini">
+          <h3>Trust at a glance</h3>
+          <p>Each AI shopper gets a 0 to 100 trust score worked out from its own order history in Lowtides. It is a simple guide, not a credit check.</p>
+        </div>
+        <div class="lt-card mini">
+          <h3>Fewer bad orders</h3>
+          <p>Orders over your limit wait for a person. Orders that break your rules, or come from a revoked Pass, never get paid.</p>
+        </div>
+        <div class="lt-card mini">
+          <h3>Proof for every agent order</h3>
+          <p>Each order gets a signed receipt and a proof pack with the Pass, your Policy and the PayPal sandbox ids, checkable with public keys.</p>
+        </div>
+      </div>
+      <p class="center"><a class="lt-btn lt-btn--ghost lt-btn--lg" href="/merchants/">I'm a store</a></p>
     </div>
   </section>
 
-  <!-- WALLET -->
-  <section id="tab-wallet" class="tab" hidden>
-    <div class="panel">
-      <h2>Prepaid allowance</h2>
-      <p class="muted">Turn on "Pay from wallet" for an agent and it spends only what you've loaded. When the wallet is empty, it stops. No surprise bills.</p>
-      <div id="wallets"></div>
-    </div>
-    <div class="panel" id="vault-panel">
-      <h2>PayPal on file</h2>
-      <p class="muted">Save a PayPal payment method for an agent so its wallet can be topped up without a checkout page. KILL and STOP ALL revoke it at PayPal, so a stopped agent can't be charged again until you reconnect it.</p>
-      <div id="vaults"></div>
+  <!-- ASK -->
+  <section class="band" aria-labelledby="ask-h">
+    <div class="lt-wrap">
+      <div class="lt-card split">
+        <div>
+          <p class="lt-eyebrow">Ask Lowtides</p>
+          <h2 class="lt-h2" id="ask-h">Stuck? Just ask.</h2>
+          <p class="big-p">Ask Lowtides is a guide built into the site. Ask in plain words and it explains what happened or suggests what to do next. It only suggests: nothing changes until you tap yes, and it can never move money.</p>
+        </div>
+        <div class="chat" aria-label="Example conversation" role="group">
+          <p class="bubble bubble--me">Why didn’t my order go through?</p>
+          <p class="bubble bubble--lt">The price is over the store’s limit for AI orders without a person, so it needs your yes. Want to approve it?</p>
+          <p class="chat-fine">Example</p>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- CLIENTS -->
-  <section id="tab-clients" class="tab" hidden>
-    <div class="panel">
-      <h2>Bill clients for the AI you run for them</h2>
-      <p class="muted">Give each client their own agents. Lowtides totals what their agents cost, adds your markup, and sends a PayPal invoice with the savings receipt on it.</p>
-      <div class="form-grid">
-        <label>Client name<input id="cl-name" placeholder="Business name"></label>
-        <label>Billing email<input id="cl-email" type="email" placeholder="billing@client.com"></label>
-        <label>Markup %<input id="cl-markup" type="number" min="0" step="1" value="20"></label>
+  <!-- HONEST DEMO NOTE -->
+  <section class="band" aria-labelledby="demo-h">
+    <div class="lt-wrap">
+      <div class="demo-note">
+        <span class="demo-ico" aria-hidden="true">i</span>
+        <div>
+          <h2 id="demo-h">This is a demo.</h2>
+          <p>Payments run in the PayPal sandbox with test money. The stores are fictional demo stores. Nothing here charges a real card or account.</p>
+        </div>
       </div>
-      <button type="button" class="btn go" id="cl-add">Add client</button>
-    </div>
-    <div id="client-list"></div>
-    <div class="panel">
-      <h2>Invoices</h2>
-      <div id="invoice-list"></div>
     </div>
   </section>
 
-  <!-- LEDGER -->
-  <section id="tab-ledger" class="tab" hidden>
-    <div class="row-head">
-      <h2>Every call, every cent</h2>
-      <div class="row-actions">
-        <a class="btn ghost" href="/api/ledger.csv" id="csv-link">Download CSV</a>
+  <!-- FAQ -->
+  <section class="band" id="faq" aria-labelledby="faq-h">
+    <div class="lt-wrap faq-wrap">
+      <div class="section-head">
+        <p class="lt-eyebrow">Questions</p>
+        <h2 class="lt-h2" id="faq-h">Good questions, plain answers.</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>What is Lowtides?</summary>
+          <p>Lowtides lets an AI shopper buy things for you without giving it free rein over your money. Your rules travel with the shopper as a signed Pass, each store shows its own rules, and nothing is paid unless both sides say yes.</p>
+        </details>
+        <details>
+          <summary>Is this real money?</summary>
+          <p>No. This is a demo. Payments run in the PayPal sandbox with test money, and the stores are fictional demo stores. Nothing here charges a real card or account.</p>
+        </details>
+        <details>
+          <summary>What is a Pass?</summary>
+          <p>Your Pass is a signed note your AI shopper carries. It says what it may buy, how much it may spend and when it must ask you first. Stores can check it, and you can cancel it at any time.</p>
+        </details>
+        <details>
+          <summary>What happens when my rules and the store’s rules don’t match?</summary>
+          <p>Nothing is paid. If the order only needs a person to say okay, it waits for your yes (yellow). If it breaks a rule on either side, it shows red: no match, and no money moves.</p>
+        </details>
+        <details>
+          <summary>How does GuardPooch spot a fake store?</summary>
+          <p>GuardPooch checks the store before your shopper pays: names spelled one letter off from a real store, web addresses that are brand new, store rules that are not signed, and prices that look too good to be true. A store that fails gets a red light.</p>
+        </details>
+        <details>
+          <summary>How do I stop everything?</summary>
+          <p>Press the big red button. Stop all revokes your Pass at every store at once, so your AI shopper cannot buy anything else until you turn it back on.</p>
+        </details>
       </div>
     </div>
-    <p class="muted">"Would have cost" is the same tokens on the model your agent asked for, with no trimming, no added caching and no answer memory. Cheap attempts that had to be redone are included in what you paid.</p>
-    <div id="grid" class="grid ag-theme-quartz"></div>
   </section>
 
-  <!-- SETTINGS -->
-  <section id="tab-settings" class="tab" hidden>
-    <div class="panel" id="merchants-panel">
-      <h2>Merchants your agents may pay</h2>
-      <p class="muted">Paying a merchant that isn't on this list needs your approval, so a prompt-injected agent can't send money to a stranger's PayPal account.</p>
-      <div id="merchant-list"></div>
-      <h3>Add a merchant</h3>
-      <form id="merchant-form" class="form-grid" novalidate>
-        <label>Merchant name<input id="mc-name" required autocomplete="off" placeholder="Like: Acme Data"></label>
-        <label>PayPal email (who gets paid)<input id="mc-email" type="email" required autocomplete="off" placeholder="payments@acme.example"></label>
-        <label>Category<input id="mc-cat" autocomplete="off" placeholder="Like: data, software, travel"></label>
-        <div class="form-end"><button type="submit" class="btn go">Add merchant</button></div>
-      </form>
-    </div>
-    <div class="panel" id="hooks-panel">
-      <h2>Alerts to Zapier / webhooks</h2>
-      <p class="muted">Get a text, email or Slack message when a purchase needs you. Paste a Zapier "Catch Hook" URL (or Make, or any URL). Lowtides sends signed JSON and never waits for it before deciding. <a href="https://github.com/seniorhelper/lowtides/blob/main/docs/ZAPIER.md" target="_blank" rel="noopener">How to set up the Zap</a></p>
-      <div id="hk-list"></div>
-      <form id="hk-form" class="form-grid" novalidate>
-        <label class="wide">Webhook URL<input id="hk-url" type="url" autocomplete="off" placeholder="https://hooks.zapier.com/hooks/catch/..."></label>
-        <label>Label<input id="hk-label" autocomplete="off" placeholder="Like: Text my phone"></label>
-        <label style="display:flex;align-items:center;gap:.5em;align-self:end"><input id="hk-approvals" type="checkbox" checked style="width:auto;height:auto;margin:0"> Only approvals and stops</label>
-        <div class="form-end"><button type="submit" class="btn go">Add webhook</button></div>
-      </form>
-      <p id="hk-secret" class="small" hidden>Signing secret (shown once): <code id="hk-secret-val"></code></p>
-      <p id="hk-msg" class="small muted" role="status"></p>
-      <div id="hk-log"></div>
-    </div>
-    <div class="panel">
-      <h2>Rules of the road</h2>
-      <div id="policy" class="policy"></div>
-      <button type="button" class="btn go" id="policy-save">Save rules</button>
-    </div>
-    <div class="panel">
-      <h2>Models and prices</h2>
-      <p class="muted">Prices are per 1 million tokens. Check them against your provider's pricing page: Lowtides's dollar math is only as right as these numbers.</p>
-      <div id="models"></div>
-      <h3>Add or update a model</h3>
-      <div class="form-grid">
-        <label>Model name<input id="m-name" placeholder="Exact model ID"></label>
-        <label>Provider<select id="m-provider"></select></label>
-        <label>Ladder group<input id="m-family" placeholder="Models that can swap for each other"></label>
-        <label>Tier<select id="m-tier"><option value="1">1 (cheapest)</option><option value="2">2 (middle)</option><option value="3">3 (strongest)</option></select></label>
-        <label>Input $<input id="m-in" type="number" min="0" step="0.01"></label>
-        <label>Output $<input id="m-out" type="number" min="0" step="0.01"></label>
+  <!-- FINAL CTA -->
+  <section class="band band--last" aria-labelledby="cta-h">
+    <div class="lt-wrap">
+      <div class="lt-card lt-card--deep cta-card">
+        <h2 class="lt-h2" id="cta-h">See it say yes, wait, or say no.</h2>
+        <div class="hero-cta">
+          <a class="lt-btn lt-btn--light lt-btn--lg" href="/shop/">I'm a shopper</a>
+          <a class="lt-btn lt-btn--outline-light lt-btn--lg" href="/handshake/">See both sides</a>
+        </div>
       </div>
-      <button type="button" class="btn ghost" id="m-save">Save model</button>
-    </div>
-    <div class="panel">
-      <h2>Connections</h2>
-      <div id="providers"></div>
-      <h3>Add an OpenAI-compatible server</h3>
-      <p class="muted small">Works with OpenAI, OpenRouter, Groq, Together, or a local server like Ollama or LM Studio. Keys live in environment variables, never in this page.</p>
-      <div class="form-grid">
-        <label>Name<input id="p-name" placeholder="Like: ollama"></label>
-        <label class="wide">Base URL<input id="p-url" placeholder="http://localhost:11434/v1"></label>
-        <label>Key variable name<input id="p-env" placeholder="Leave blank if none"></label>
-      </div>
-      <button type="button" class="btn ghost" id="p-save">Save connection</button>
-    </div>
-    <div class="panel">
-      <h2>Answer memory</h2>
-      <p class="muted">Repeat questions are answered free from memory for 24 hours. Answers that call tools are never reused.</p>
-      <button type="button" class="btn ghost" id="mem-clear">Forget all remembered answers</button>
     </div>
   </section>
 </main>
 
-<footer class="foot">
-  <p class="muted small" id="foot-line"></p>
-  <p class="muted small foot-links"><a href="/why/">Why Lowtides</a> &middot; <a href="https://github.com/seniorhelper/lowtides">Open-source code</a> &middot; <a href="/llms.txt">llms.txt</a></p>
-  <div class="heart-line" id="heart-line">
-    <span class="heart" aria-hidden="true">&#10084;</span>
-    <a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a>
+<footer class="site-foot">
+  <div class="lt-wrap foot-grid">
+    <div>
+      <a class="lt-logo foot-logo" href="/" aria-label="Lowtides home">
+        <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+        <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+      </a>
+      <p class="foot-tag">Consent Shopping. Both say yes, or no money moves.</p>
+    </div>
+    <nav aria-label="Footer" class="foot-links">
+      <a href="/why/">Why Lowtides</a>
+      <a href="/pass/">Check a Pass</a>
+      <a href="/app/">Agent bills &amp; controls</a>
+      <a href="https://github.com/seniorhelper/lowtides">GitHub</a>
+      <a href="/openapi.json">API (OpenAPI)</a>
+    </nav>
+  </div>
+  <div class="lt-wrap foot-bottom">
+    <p>Demo only: PayPal sandbox and test money. Open source under AGPL-3.0. <span class="pat-pend">Patent Pending.</span> <a href="/blog/">Blog</a> &middot; <a href="/tools/">Free tools</a> &middot; <a href="/sitemap/">Site map</a> &middot; <a href="/privacy/">Privacy</a></p>
+    <div class="heart-line">
+      <span class="heart" aria-hidden="true">&#10084;</span>
+      <a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a>
+    </div>
   </div>
 </footer>
 
-<div id="flash" class="flash" role="status" aria-live="polite" aria-atomic="true" hidden></div>
-
-<dialog id="kill-dlg" class="modal" aria-labelledby="kill-h">
-  <form method="dialog" class="modal-in">
-    <h2 id="kill-h">Kill this agent?</h2>
-    <p id="kill-text"></p>
-    <div class="modal-actions">
-      <button type="button" class="btn stop big" id="kill-yes">Kill it now</button>
-      <button type="submit" class="btn ghost big" value="cancel">Keep it running</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog id="rules-dlg" class="modal wide" aria-labelledby="rules-h">
-  <div class="modal-in">
-    <div class="modal-top">
-      <h2 id="rules-h">Rules in plain English</h2>
-      <button type="button" class="btn ghost sm" id="rules-close">Close</button>
-    </div>
-    <h3>Rules now</h3>
-    <ul id="rules-now" class="rule-list"></ul>
-    <fieldset class="leash" id="leash-set">
-      <legend>Leash (data dumps)</legend>
-      <p class="muted small">Stop one runaway call from flooding your bill. Token counts are estimates.</p>
-      <div class="leash-f">
-        <label for="leash-reply">Max reply length</label>
-        <select id="leash-reply" aria-describedby="leash-reply-h">
-          <option value="">No limit</option>
-          <option value="400">Short (about 400 tokens)</option>
-          <option value="1000">Medium (about 1,000 tokens)</option>
-          <option value="4000">Long (about 4,000 tokens)</option>
-          <option value="custom">Custom tokens</option>
-        </select>
-        <input id="leash-reply-custom" type="number" min="1" step="1" inputmode="numeric" aria-label="Custom max reply length in tokens" placeholder="Tokens, like 2500" hidden>
-        <p class="muted small" id="leash-reply-h">Caps how long an answer can be, so the agent can't write a book.</p>
-      </div>
-      <div class="leash-f">
-        <label for="leash-pages">Biggest prompt allowed (pages)</label>
-        <input id="leash-pages" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-pages-h" placeholder="No limit">
-        <p class="muted small" id="leash-pages-h">1 page is about 500 tokens. Blank means no limit. Bigger prompts are blocked.</p>
-      </div>
-      <div class="leash-f">
-        <label for="leash-cost">Max cost per AI call ($)</label>
-        <input id="leash-cost" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-cost-h" placeholder="No limit">
-        <p class="muted small" id="leash-cost-h">Blocks any single call that would cost more than this. Blank means no limit.</p>
-      </div>
-      <div class="leash-f">
-        <label for="leash-alert">Alert when a call is this many times bigger than usual</label>
-        <input id="leash-alert" type="number" min="0" step="any" inputmode="decimal" aria-describedby="leash-alert-h" placeholder="5">
-        <p class="muted small" id="leash-alert-h">Flags a call, without blocking it, when it is this many times its usual size. 0 turns it off.</p>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn go" id="leash-save">Save leash</button>
-      </div>
-    </fieldset>
-    <h3><label for="rules-text" class="inline-label">Write new rules</label></h3>
-    <p class="muted small" id="rules-hint">Write them the way you'd tell a person. Lowtides turns them into exact rules for you to check before anything is saved. Example: Keep replies short. Never send more than 50 pages. No single call over 25 cents.</p>
-    <textarea id="rules-text" rows="3" aria-describedby="rules-hint" placeholder="Like: max $50 a day, ask me over $20, never buy gift cards. Keep replies short. Never send more than 50 pages. No single call over 25 cents."></textarea>
-    <div class="modal-actions">
-      <button type="button" class="btn ghost" id="rules-translate">Translate</button>
-    </div>
-    <div id="rules-preview" class="rules-preview" hidden>
-      <h3>Check these before saving</h3>
-      <p class="rules-source" id="rules-source"></p>
-      <ul id="rules-new" class="rule-list new"></ul>
-      <ul id="rules-notes" class="muted small notes"></ul>
-      <div class="modal-actions">
-        <button type="button" class="btn go big" id="rules-save">Save these rules</button>
-      </div>
-    </div>
-  </div>
-</dialog>
-
-<div id="login" class="login" hidden>
-  <form class="login-box" id="login-form">
-    <h2>Dashboard password</h2>
-    <input id="login-pw" type="password" autocomplete="current-password" aria-label="Password">
-    <button class="btn go" type="submit">Open dashboard</button>
-    <p class="muted small" id="login-err"></p>
-  </form>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.3.3/dist/ag-grid-community.min.js" defer></script>
-<script src="/dialog.js" defer></script>
-<script src="/app.js" defer></script>
-<script src="tour.js" defer></script>
-<script src="/webhooks.js" defer></script>
+<script src="/site.js" defer></script>
+<link rel="stylesheet" href="/ask.css">
+<script src="/ask.js" defer></script>
 </body>
 </html>

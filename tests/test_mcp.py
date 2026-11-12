@@ -38,6 +38,15 @@ class Fake(BaseHTTPRequestHandler):
         Fake.seen.append(("POST", self.path, body))
         if not self._authed():
             return
+        if self.path == "/v1/handshake":
+            ok = body.get("item_id") == "harbor-tape"
+            return self._send(200, {"id": "hs_1", "signal": "match" if ok else "no_match", "headline": "Both said yes." if ok else "No match.",
+                                    "receipt_signed": True, "executed": bool(body.get("execute")),
+                                    "item": {"title": "Tape measure", "amount": 11.99}, "store": {"name": "Harbor Hardware"},
+                                    "shopper_checks": [{"level": "ok", "label": "Pass", "detail": "Valid."}],
+                                    "store_checks": [{"level": "ok" if ok else "fail", "label": "Store policy", "detail": "Order size."}],
+                                    "order": {"label": "Simulated payout"} if ok and body.get("execute") else None,
+                                    "next": "Both sides say yes." if ok else "No match. Nothing moved."})
         if self.path != "/v1/spend":
             return self._send(404, {"error": "not found"})
         m = body["merchant"]
@@ -58,6 +67,11 @@ class Fake(BaseHTTPRequestHandler):
         if self.path == "/v1/spend/sp_1":
             return self._send(200, {"id": "sp_1", "decision": "needs_approval", "status": "approved",
                                     "amount": 30, "merchant": "New Shop", "reasons": ["Approved by a person."]})
+        if self.path == "/v1/stores":
+            return self._send(200, {"agent": "Research bot", "stores": [{
+                "id": "harbor", "name": "Harbor Hardware", "domain": "harborhardware.example", "policy_signed": True,
+                "policy": {"max_order_no_human": 150, "signature": "zzsecretzz"}, "store_check": {"verdict": "safe"},
+                "items": [{"id": "harbor-tape", "title": "Tape measure", "price": 11.99, "category": "tools"}]}]})
         if self.path == "/v1/budget":
             return self._send(200, {
                 "agent": "Research bot", "status": "on",
@@ -117,11 +131,28 @@ class TestMcp(unittest.TestCase):
     def test_tools_list(self):
         r = mcp.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"]: t for t in r["result"]["tools"]}
-        self.assertEqual(set(tools), {"request_spend", "check_spend", "get_budget"})
+        self.assertEqual(set(tools), {"request_spend", "check_spend", "get_budget", "get_pass", "list_stores", "handshake", "request_action"})
+        self.assertEqual(tools["handshake"]["inputSchema"]["required"], ["store_id"])
         for t in tools.values():
             self.assertTrue(t["description"])
             self.assertEqual(t["inputSchema"]["type"], "object")
         self.assertEqual(set(tools["request_spend"]["inputSchema"]["required"]), {"amount", "merchant", "item", "reason"})
+
+    def test_list_stores_and_handshake(self):
+        t = text(call("list_stores", {}))
+        self.assertIn("harbor-tape", t)
+        self.assertIn("max_order_no_human", t)
+        self.assertNotIn("zzsecretzz", t)
+        r = call("handshake", {"store_id": "harbor", "item_id": "harbor-tape", "execute": True})
+        self.assertFalse(r["result"]["isError"])
+        self.assertIn("MATCH (both said yes)", text(r))
+        self.assertIn("Store side:", text(r))
+        self.assertIn("Simulated payout", text(r))
+        self.assertEqual(Fake.seen[-1], ("POST", "/v1/handshake", {"store_id": "harbor", "item_id": "harbor-tape", "execute": True}))
+        self.assertIn("NO MATCH", text(call("handshake", {"store_id": "harbor", "amount": 900, "category": "tools"})))
+        self.assertTrue(call("handshake", {})["result"]["isError"])
+        self.assertTrue(call("handshake", {"store_id": "harbor"})["result"]["isError"])
+        self.assertTrue(call("handshake", {"store_id": "harbor", "item_id": "x", "execute": "yes"})["result"]["isError"])
 
     def test_request_spend_approved(self):
         r = call("request_spend", dict(SPEND, merchant="Acme Data", category="data", task_id="t1"))

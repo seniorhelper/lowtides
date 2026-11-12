@@ -87,7 +87,7 @@
         }).then(function (res) {
           var a = must(res, "Creating the agent").agent;
           ctx.agent = a; ctx.key = a.key;
-          // Give the agent PayPal on file (simulated in the public demo) so KILL can revoke it.
+          // Give the agent PayPal on file (simulated in the public demo) so Stop all can revoke it.
           return call("POST", "/api/agents/" + a.id + "/vault/connect", {}).then(function () {
             return call("POST", "/api/rules/compile", { text: RULES_TEXT });
           });
@@ -96,6 +96,8 @@
           ctx.plain = comp.plain || [];
           return call("POST", "/api/agents/" + ctx.agent.id + "/rules", { rules: comp.rules }).then(function (r2) {
             must(r2, "Saving the rules");
+            // The agent picks up its Lowtides Pass (signed spending permission); the Stop all step re-checks it.
+            call("GET", "/v1/pass", undefined, ctx.key).then(function (p) { ctx.pass = p.body && p.body.pass; }, function () {});
             return { verdict: "RULES SAVED", tone: "ok",
               why: "Lowtides turned that into " + ctx.plain.length + " enforced rules: " + ctx.plain.slice(0, 3).join(" ") + leashLine(ctx.plain) };
           });
@@ -173,11 +175,12 @@
         }
         return next();
       } },
-    { title: "The owner wakes up to the alert and hits KILL.",
-      tried: "One button: stop the agent, deny what's waiting, cancel what can still be cancelled, and revoke its saved PayPal.",
+    { title: "The owner wakes up to the alert and presses Stop all.",
+      tried: "One button: stop the agent, deny what's waiting, cancel what can still be canceled, and revoke its saved PayPal.",
       run: function (ctx) {
+        var pass = ctx.pass;  // the agent's Lowtides Pass, checked again after the kill
         return call("POST", "/api/agents/" + ctx.agent.id + "/kill").then(function (res) {
-          var k = ctx.kill = must(res, "KILL");
+          var k = ctx.kill = must(res, "Stop all");
           return call("POST", "/v1/spend", { amount: 5.00, merchant: "Acme Data", item: "one more thing", category: "data", reason: "please" }, ctx.key)
             .then(function (r2) {
               var after = spendResult(r2.body || {});
@@ -185,9 +188,14 @@
               var vault = pof.status === "revoked"
                 ? " Revoked the saved PayPal payment method" + (pof.simulated ? " (simulated)" : "") + ", so this agent can't be charged again until you reconnect it."
                 : (pof.status === "revoke_failed" ? " Revoking the saved PayPal payment method failed: " + (pof.error || "see the activity feed") + "." : "");
-              return { verdict: "AGENT KILLED", tone: "bad",
-                why: n(k.denied, "waiting purchase") + " denied, " + n(k.payouts_cancelled, "payout") + " cancelled, " +
-                     n(k.holds_voided, "PayPal hold") + " voided." + vault + " A $5 purchase tried after the kill: " + after.verdict.toLowerCase() + ". " + after.why };
+              var out = { verdict: "AGENT SHUT OFF", tone: "bad",
+                why: n(k.denied, "waiting purchase") + " denied, " + n(k.payouts_cancelled, "payout") + " canceled, " +
+                     n(k.holds_voided, "PayPal hold") + " voided." + vault + " A $5 purchase tried after the shut-off: " + after.verdict.toLowerCase() + ". " + after.why };
+              if (!pass) return out;
+              return call("POST", "/v1/pass/verify", { pass: pass }).then(function (v) {
+                if (v.body && v.body.revoked) out.why += " Its Lowtides Pass is revoked, so merchants checking it see REVOKED.";
+                return out;
+              }, function () { return out; });
             });
         });
       } },
@@ -237,8 +245,8 @@
     var next = el("ol", "tour-next");
     next.hidden = true;
     ["Approve or deny the held $45 dataset. The $19 “verification fee” asks you twice: it looks like prompt injection.",
-     "On Home, the loop guard paused the agent. Press Resume, then ask it something in the Try box: every call is checked against its budget.",
-     "Press KILL yourself: waiting purchases are denied, the payout is pulled back and its saved PayPal is revoked."].forEach(function (t) { next.appendChild(el("li", null, t)); });
+     "On Home, open the agent's Pass, the signed permission merchants check. The loop guard paused the agent, so it reads REVOKED: press Resume and it's valid again.",
+     "Press Stop all yourself, then open the Pass once more and watch it flip back to REVOKED."].forEach(function (t) { next.appendChild(el("li", null, t)); });
     [count, title, tried, ticker, verdict, why, next].forEach(function (x) { card.appendChild(x); });
 
     var live = el("p", "tour-sr");
@@ -341,13 +349,13 @@
     D.title.textContent = "One runaway night, stopped at every turn.";
     var k = ctx.kill || {};
     D.tried.textContent = "The $12 data purchase was approved by the rules. The injected $19 and the $45 waited for a person, " +
-      "the $480 was blocked, the leash refused the data dump and the loop was cut off. Then KILL denied " + n(k.denied || 0, "waiting purchase") +
+      "the $480 was blocked, the leash refused the data dump and the loop was cut off. Then Stop all denied " + n(k.denied || 0, "waiting purchase") +
       (k.payouts_cancelled ? " and pulled back " + n(k.payouts_cancelled, "payout") + " PayPal hadn't delivered yet, including the $12" : "") +
       (k.tokens_revoked ? ", and revoked the agent's saved PayPal payment method" : "") + ".";
     D.ticker.textContent = "";
     D.verdict.textContent = "NOW YOU TRY";
     D.verdict.className = "tour-verdict ok";
-    D.why.textContent = "We'll load the same night again, stopped just before the KILL, so it's your call:";
+    D.why.textContent = "We'll load the same night again, stopped just before the Stop all, so it's your call:";
     D.next.hidden = false;
     D.live.textContent = "Replay finished. " + D.tried.textContent + " Now you try: " + Array.prototype.map.call(D.next.children, function (li) { return li.textContent; }).join(" ");
     D.pause.hidden = true;

@@ -1,0 +1,331 @@
+/* =========================================================================
+   Lowtides shared design system  (/brand.css)
+   Import on any page:  <link rel="stylesheet" href="/brand.css">
+   Plain CSS, no build step, system fonts only (nothing blocks first paint).
+   Only classes below are styled; no element resets, so it is safe to load
+   next to an older stylesheet. Add class="lt-page" to <body> for the base
+   font, colors and background.
+
+   TOKENS (on :root)
+     colors   --lt-ink --lt-ink-2 --lt-muted --lt-bg --lt-surface --lt-surface-2
+               --lt-line --lt-tide --lt-tide-ink --lt-primary --lt-primary-hover
+               --lt-limit --lt-limit-ink --lt-kill --lt-kill-strong --lt-focus
+     signals   --lt-match-bg/-ink  --lt-needs-bg/-ink  --lt-nomatch-bg/-ink
+     states    REVOKED / refused / killed (light red, never brown):
+                 --lt-revoked-bg #FFF1EF  --lt-revoked-line #D9483B (borders, icons, big shapes)
+                 --lt-revoked-ink #B3261E (headings and small text on light, 5.9:1 on the tint)
+                 --lt-revoked-strong #B3261E (solid fill, white text 6.5:1)  --lt-revoked-strong-hover
+               HELD (calm amber):  --lt-held-bg/-line/-ink
+               OFF  (neutral gray): --lt-off-bg/-line/-ink/-strong
+               TRUST BADGES: .lt-tb--trusted (green) .lt-tb--careful (amber) .lt-tb--danger (red)
+               Body text inside any state card stays dark ink (--lt-ink).
+     radii     --lt-r-sm 12px  --lt-r 24px  --lt-r-lg 32px  --lt-r-pill 999px
+     spacing   --lt-s1 4px ... --lt-s10 128px
+     type      --lt-font --lt-font-num  --lt-fs-xs ... --lt-fs-hero (fluid)
+     shadows   --lt-shadow-1 --lt-shadow-2
+
+   LAYOUT
+     .lt-page            body base (font, color, white background)
+     .lt-wrap            centered column, max 1200px, 16px side gutter
+     .lt-header          site header bar;  .lt-header-in  inner row
+     .lt-nav             nav links (wraps under the logo on phones)
+                         mark the current page with aria-current="page"
+     .lt-header-cta      the pill button at the right of the header
+     .lt-logo            logo lockup link: animated mark + wordmark. Width
+                         comes from --lt-logo-w (280px desktop, ~150px phone).
+                         Markup:
+       <a class="lt-logo" href="/" aria-label="Lowtides home">
+         <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+         <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+       </a>
+
+   COMPONENTS
+     .lt-btn             pill button or link (min 48px tall)
+       .lt-btn--primary  solid deep teal, white text
+       .lt-btn--ghost    outlined
+       .lt-btn--danger   solid red
+       .lt-btn--lg       bigger (hero calls to action)
+     .lt-card            big rounded white card (32px radius)
+       .lt-card--tint    soft sea-glass background, no shadow
+       .lt-card--deep    dark ink background, light text
+     .lt-pill            small rounded label
+     .lt-eyebrow         small uppercase kicker above a heading
+     .lt-h1 .lt-h2 .lt-lead   big bold headline sizes and lead paragraph
+
+   HANDSHAKE SIGNALS (use the API signal names as-is)
+     .sig                pill with a colored dot; pair with one of:
+       .sig--match       green  "Both said yes"
+       .sig--needs_yes   yellow "Needs your yes"
+       .sig--no_match    red    "No match — no money moved"
+     The modifier also sets --sig-bg / --sig-ink / --sig-dot, so any element
+     (a card, a row) can use those variables.
+
+   .lt-slider          range input with a big thumb and a live value:
+       <div class="lt-slider" data-lt-slider data-prefix="$">
+         <div class="lt-slider-head"><label for="cap">Ask me above</label><output for="cap">$50</output></div>
+         <input id="cap" type="range" min="0" max="200" step="5" value="50">
+       </div>
+     The value and the filled track update from /site.js (it binds every
+     [data-lt-slider]); or set style="--lt-val:25%" and the <output> yourself.
+
+   .estop              round emergency-stop button: red mushroom cap on a
+                       yellow collar, with depth and a pressed state.
+       <button type="button" class="estop" aria-label="Stop everything now">
+         <span class="estop-cap" aria-hidden="true">STOP</span>
+       </button>
+       .estop--sm (60px, for headers)  .estop--lg (180px, for heroes)
+       Pressed look: :active, .is-pressed or aria-pressed="true".
+   ========================================================================= */
+
+:root {
+  --lt-ink: #0D2A2E;
+  --lt-ink-2: #2E4A4E;
+  --lt-muted: #4E6468;          /* 6.6:1 on white */
+  --lt-bg: #FFFFFF;
+  --lt-surface: #F2F8F6;
+  --lt-surface-2: #E6F3EF;
+  --lt-line: #D9E6E3;
+  --lt-tide: #1FB89A;           /* graphics and large text only on light */
+  --lt-tide-ink: #0F7F6A;       /* small teal text on light */
+  --lt-primary: #0B6656;        /* white text 6.9:1 */
+  --lt-primary-hover: #084F43;
+  --lt-limit: #E39A2D;
+  --lt-limit-ink: #8A5200;
+  --lt-kill: #D9483B;           /* borders, icons, big shapes (4.3:1 on white: not for small text) */
+  --lt-kill-strong: #B3261E;    /* solid red fill, white text 6.5:1; also red text on light (6.5:1 on white) */
+  --lt-focus: #0F7F6A;
+  --lt-match-bg: #DDF4EC;   --lt-match-ink: #0B5E4F;
+  --lt-needs-bg: #FFF0CC;   --lt-needs-ink: #6E4200;
+  --lt-nomatch-bg: #FFF1EF; --lt-nomatch-ink: #B3261E;      /* ink on bg 5.7:1 */
+
+  --lt-revoked-bg: #FFF1EF;  --lt-revoked-line: #D9483B;  --lt-revoked-ink: #B3261E;
+  --lt-revoked-badge: #C63A2E; --lt-revoked-title: #1F2A2E; --lt-revoked-body: #7A231B;   /* white on badge 5.2:1, body on bg 9.2:1 */
+  --lt-revoked-strong: #B3261E;  --lt-revoked-strong-hover: #8F1D17;   /* white on hover 8.9:1 */
+  --lt-held-bg: #FFF6E0;     --lt-held-line: #E39A2D;     --lt-held-ink: #6E4200;       /* ink on bg 8.0:1 */
+  --lt-off-bg: #F1F4F4;      --lt-off-line: #7A8A8D;      --lt-off-ink: #3B4A4D;        /* ink on bg 8.4:1 */
+  --lt-off-strong: #556568;                                                           /* white on it 6.1:1 */
+
+  --lt-r-sm: 12px;
+  --lt-r: 24px;
+  --lt-r-lg: 32px;
+  --lt-r-pill: 999px;
+
+  --lt-s1: 4px; --lt-s2: 8px; --lt-s3: 12px; --lt-s4: 16px; --lt-s5: 24px;
+  --lt-s6: 32px; --lt-s7: 48px; --lt-s8: 64px; --lt-s9: 96px; --lt-s10: 128px;
+
+  --lt-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --lt-font-num: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --lt-fs-xs: .8125rem;
+  --lt-fs-sm: .9375rem;
+  --lt-fs-md: 1.0625rem;
+  --lt-fs-lg: 1.25rem;
+  --lt-fs-xl: clamp(1.4rem, 1.1rem + 1.2vw, 1.875rem);
+  --lt-fs-2xl: clamp(2rem, 1.3rem + 3vw, 3.5rem);
+  --lt-fs-hero: clamp(2.6rem, 1.4rem + 5.4vw, 5.25rem);
+
+  --lt-shadow-1: 0 1px 2px rgba(13, 42, 46, .05), 0 2px 8px -4px rgba(13, 42, 46, .08);
+  --lt-shadow-2: 0 1px 2px rgba(13, 42, 46, .04), 0 18px 40px -20px rgba(13, 42, 46, .25);
+}
+
+/* ---------- layout ---------- */
+.lt-page {
+  margin: 0; background: var(--lt-bg); color: var(--lt-ink);
+  font: 400 var(--lt-fs-md)/1.6 var(--lt-font);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+}
+.lt-page *, .lt-page *::before, .lt-page *::after { box-sizing: border-box; }
+.lt-wrap { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 720px) { .lt-wrap { padding: 0 32px; } }
+
+/* ---------- header ---------- */
+.lt-header { background: #fff; position: relative; z-index: 20; }
+.lt-header-in {
+  max-width: 1200px; margin: 0 auto; padding: 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
+}
+.lt-header-cta { order: 1; margin-left: auto; }
+.lt-nav { order: 2; width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.lt-nav a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px;
+  border-radius: var(--lt-r-pill); color: var(--lt-ink); text-decoration: none;
+  font: 600 var(--lt-fs-sm)/1.2 var(--lt-font); transition: background-color .15s ease;
+}
+.lt-nav a:hover { background: var(--lt-surface); }
+.lt-nav a[aria-current="page"] { background: var(--lt-surface-2); }
+.lt-nav a:focus-visible, .lt-logo:focus-visible { outline: 3px solid var(--lt-focus); outline-offset: 2px; }
+@media (min-width: 720px) { .lt-header-in { padding: 20px 32px; } }
+@media (min-width: 1100px) {
+  .lt-nav { order: 1; width: auto; margin-left: auto; flex-wrap: nowrap; }
+  .lt-nav a { font-size: var(--lt-fs-md); padding: 10px 16px; }
+  .lt-header-cta { order: 2; margin-left: 0; }
+}
+
+/* ---------- logo ---------- */
+.lt-logo {
+  --lt-logo-w: clamp(150px, 38vw, 280px);
+  width: var(--lt-logo-w); display: inline-flex; align-items: center;
+  gap: calc(var(--lt-logo-w) * .043); color: var(--lt-ink); text-decoration: none; flex: none;
+  border-radius: 8px;
+}
+.lt-logo-mark { width: calc(var(--lt-logo-w) * .2286); height: auto; aspect-ratio: 1; flex: none; display: block; }
+.lt-logo-word { flex: 1 1 auto; min-width: 0; height: auto; display: block; overflow: visible; }
+.lt-logo-word text { font: 700 36px var(--lt-font); fill: currentColor; }
+
+/* ---------- type helpers ---------- */
+.lt-eyebrow {
+  display: inline-block; margin: 0 0 var(--lt-s3); font: 700 var(--lt-fs-xs)/1.2 var(--lt-font);
+  letter-spacing: .1em; text-transform: uppercase; color: var(--lt-tide-ink);
+}
+.lt-h1 { font: 800 var(--lt-fs-hero)/1.02 var(--lt-font); letter-spacing: -.035em; margin: 0 0 var(--lt-s5); color: var(--lt-ink); text-wrap: balance; }
+.lt-h2 { font: 800 var(--lt-fs-2xl)/1.08 var(--lt-font); letter-spacing: -.03em; margin: 0 0 var(--lt-s4); color: var(--lt-ink); text-wrap: balance; }
+.lt-lead { font-size: var(--lt-fs-lg); line-height: 1.5; color: var(--lt-ink-2); max-width: 38em; margin: 0 0 var(--lt-s6); }
+
+/* ---------- buttons ---------- */
+.lt-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 12px 24px; border-radius: var(--lt-r-pill);
+  border: 2px solid transparent; background: var(--lt-surface-2); color: var(--lt-ink);
+  font: 700 var(--lt-fs-md)/1.2 var(--lt-font); text-decoration: none; text-align: center;
+  cursor: pointer; transition: background-color .15s ease, color .15s ease, border-color .15s ease, transform .1s ease;
+}
+.lt-btn:hover { background: var(--lt-line); }
+.lt-btn:active { transform: translateY(1px); }
+.lt-btn:focus-visible { outline: 3px solid var(--lt-focus); outline-offset: 3px; }
+/* One primary per section: the main action, solid deep teal, white text (6.9:1; 9.5:1 on hover).
+   Everything else is ghost (outlined). Hover = darker + lift, focus = ring, disabled = flat gray. */
+.lt-btn--primary { background: var(--lt-primary); color: #fff; box-shadow: 0 6px 14px -8px rgba(11, 102, 86, .7); }
+.lt-btn--primary:hover { background: var(--lt-primary-hover); color: #fff; box-shadow: 0 8px 18px -8px rgba(8, 79, 67, .85); }
+.lt-btn--ghost { background: transparent; border-color: var(--lt-ink-2); color: var(--lt-ink); }
+.lt-btn--ghost:hover { background: var(--lt-ink); border-color: var(--lt-ink); color: #fff; }
+.lt-btn--danger { background: var(--lt-revoked-strong); color: #fff; }
+.lt-btn--danger:hover { background: var(--lt-revoked-strong-hover); color: #fff; }
+.lt-btn--amber { background: #fff; border-color: var(--lt-held-line); color: var(--lt-held-ink); }
+.lt-btn--amber:hover { background: var(--lt-held-bg); border-color: var(--lt-held-ink); color: var(--lt-held-ink); }
+.lt-btn--danger-ghost { background: transparent; border-color: var(--lt-revoked-strong); color: var(--lt-revoked-ink); }
+.lt-btn--danger-ghost:hover { background: var(--lt-revoked-strong); border-color: var(--lt-revoked-strong); color: #fff; }
+.lt-btn--lg { min-height: 60px; padding: 16px 32px; font-size: var(--lt-fs-lg); }
+.lt-btn[disabled], .lt-btn[aria-disabled="true"] {
+  background: #E3EAE9; border-color: transparent; color: #5A6E71; box-shadow: none; cursor: not-allowed; transform: none;
+}
+.lt-btn--ghost[disabled], .lt-btn--ghost[aria-disabled="true"] { background: transparent; border-color: var(--lt-line); border-style: dashed; }
+.lt-btn--primary[aria-pressed="true"][disabled] { background: var(--lt-primary); color: #fff; box-shadow: none; opacity: .88; cursor: default; }
+
+/* ---------- trust badges (shopper sees the store, store sees the AI shopper) ---------- */
+.lt-tb {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--lt-r-pill);
+  border: 2px solid transparent; font: 800 var(--lt-fs-xs)/1.4 var(--lt-font); white-space: nowrap; max-width: 100%;
+}
+button.lt-tb { cursor: pointer; }
+button.lt-tb:hover { filter: brightness(.96); text-decoration: underline; text-underline-offset: 3px; }
+button.lt-tb:focus-visible { outline: 3px solid var(--lt-focus); outline-offset: 2px; }
+.lt-tb::before { flex: none; font-weight: 900; }
+.lt-tb--trusted { background: var(--lt-match-bg); color: var(--lt-match-ink); border-color: #1FB89A; }
+.lt-tb--trusted::before { content: "¹3"; }
+.lt-tb--careful { background: var(--lt-held-bg); color: var(--lt-held-ink); border-color: var(--lt-held-line); }
+.lt-tb--careful::before { content: "!"; }
+.lt-tb--danger { background: var(--lt-revoked-bg); color: var(--lt-revoked-ink); border-color: var(--lt-revoked-line); }
+.lt-tb--danger::before { content: "¹5"; }
+.lt-tb small { font: 700 var(--lt-fs-xs)/1 var(--lt-font-num); opacity: .9; }
+
+/* ---------- cards, pills ---------- */
+.lt-card {
+  background: #fff; border: 1px solid var(--lt-line); border-radius: var(--lt-r-lg);
+  padding: clamp(24px, 4vw, 48px); box-shadow: var(--lt-shadow-2);
+}
+.lt-card--tint { background: var(--lt-surface); border-color: transparent; box-shadow: none; }
+.lt-card--deep { background: var(--lt-ink); border-color: transparent; color: #E6F4F1; box-shadow: none; }
+.lt-card--deep .lt-h2, .lt-card--deep h2, .lt-card--deep h3 { color: #fff; }
+.lt-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--lt-r-pill);
+  background: var(--lt-surface-2); color: var(--lt-ink); font: 700 var(--lt-fs-xs)/1.3 var(--lt-font);
+}
+
+/* ---------- Handshake signals ---------- */
+.sig--match     { --sig-bg: var(--lt-match-bg);   --sig-ink: var(--lt-match-ink);   --sig-dot: #1FB89A; }
+.sig--needs_yes { --sig-bg: var(--lt-needs-bg);   --sig-ink: var(--lt-needs-ink);   --sig-dot: #E39A2D; }
+.sig--no_match  { --sig-bg: var(--lt-nomatch-bg); --sig-ink: var(--lt-nomatch-ink); --sig-dot: var(--lt-revoked-line); }
+.sig {
+  display: inline-flex; align-items: center; gap: 10px; padding: 8px 18px 8px 14px;
+  border-radius: var(--lt-r-pill); background: var(--sig-bg, var(--lt-surface)); color: var(--sig-ink, var(--lt-ink));
+  font: 700 var(--lt-fs-md)/1.25 var(--lt-font);
+}
+.sig::before {
+  content: ""; flex: none; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--sig-dot, var(--lt-muted)); box-shadow: 0 0 0 4px rgba(255, 255, 255, .7);
+}
+
+/* ---------- slider ---------- */
+.lt-slider { display: grid; gap: 6px; }
+.lt-slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-weight: 600; }
+.lt-slider output { font: 800 var(--lt-fs-xl)/1.1 var(--lt-font); color: var(--lt-primary); font-variant-numeric: tabular-nums; }
+.lt-slider input[type="range"] {
+  --lt-val: 50%;
+  -webkit-appearance: none; appearance: none; width: 100%; height: 44px; margin: 0;
+  background: transparent; cursor: pointer;
+}
+.lt-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 12px; border-radius: var(--lt-r-pill);
+  background: linear-gradient(to right, var(--lt-tide) 0 var(--lt-val), var(--lt-line) var(--lt-val) 100%);
+}
+.lt-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 34px; height: 34px; margin-top: -11px;
+  border-radius: 50%; background: #fff; border: 4px solid var(--lt-primary);
+  box-shadow: 0 2px 6px rgba(13, 42, 46, .25); transition: transform .12s ease;
+}
+.lt-slider input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.1); }
+.lt-slider input[type="range"]::-moz-range-track { height: 12px; border-radius: var(--lt-r-pill); background: var(--lt-line); }
+.lt-slider input[type="range"]::-moz-range-progress { height: 12px; border-radius: var(--lt-r-pill); background: var(--lt-tide); }
+.lt-slider input[type="range"]::-moz-range-thumb {
+  width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 4px solid var(--lt-primary);
+  box-shadow: 0 2px 6px rgba(13, 42, 46, .25);
+}
+.lt-slider input[type="range"]:focus { outline: none; }
+.lt-slider input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px #fff, 0 0 0 7px var(--lt-focus); }
+.lt-slider input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px #fff, 0 0 0 7px var(--lt-focus); }
+
+/* ---------- emergency stop ---------- */
+.estop {
+  --estop-size: 120px;
+  position: relative; flex: none; width: var(--estop-size); height: var(--estop-size);
+  padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  /* yellow collar ring with a dark outer lip */
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, .28) 0 63%, transparent 66%),
+    radial-gradient(circle at 40% 30%, #FFE680 0, #F7C613 45%, #D9A400 100%);
+  box-shadow:
+    inset 0 0 0 calc(var(--estop-size) * .025) #2A2410,
+    inset 0 calc(var(--estop-size) * .03) calc(var(--estop-size) * .04) rgba(255, 255, 255, .45),
+    0 calc(var(--estop-size) * .05) calc(var(--estop-size) * .12) rgba(13, 42, 46, .28);
+  -webkit-tap-highlight-color: transparent;
+}
+.estop-cap {
+  position: absolute; inset: 15%; border-radius: 50%;
+  display: grid; place-items: center; text-align: center;
+  color: #fff; font: 900 calc(var(--estop-size) * .14)/1 var(--lt-font); letter-spacing: .02em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .45);
+  background: radial-gradient(circle at 34% 28%, #F2766A 0, #D9483B 30%, #C23528 62%, #A82A20 100%);
+  box-shadow:
+    0 calc(var(--estop-size) * .055) 0 #8F2118,
+    0 calc(var(--estop-size) * .08) calc(var(--estop-size) * .09) rgba(0, 0, 0, .38),
+    inset 0 calc(var(--estop-size) * -.04) calc(var(--estop-size) * .06) rgba(0, 0, 0, .3),
+    inset 0 calc(var(--estop-size) * .025) calc(var(--estop-size) * .04) rgba(255, 255, 255, .35);
+  transform: translateY(calc(var(--estop-size) * -.045));
+  transition: transform .08s ease, box-shadow .08s ease, filter .15s ease;
+}
+.estop:hover .estop-cap { filter: brightness(1.08); }
+.estop:active .estop-cap, .estop.is-pressed .estop-cap, .estop[aria-pressed="true"] .estop-cap {
+  transform: translateY(calc(var(--estop-size) * .005));
+  box-shadow:
+    0 calc(var(--estop-size) * .008) 0 #8F2118,
+    0 calc(var(--estop-size) * .015) calc(var(--estop-size) * .03) rgba(0, 0, 0, .35),
+    inset 0 calc(var(--estop-size) * .03) calc(var(--estop-size) * .07) rgba(0, 0, 0, .35);
+  filter: brightness(.93);
+}
+.estop:focus { outline: none; }
+.estop:focus-visible { outline: 4px solid var(--lt-focus); outline-offset: 4px; }
+.estop--sm { --estop-size: 60px; }
+.estop--sm .estop-cap { font-size: 11px; line-height: 1.05; letter-spacing: 0; }
+.estop--lg { --estop-size: 180px; }
+@media (prefers-reduced-motion: reduce) { .estop-cap { transition: none; } }
+@media (forced-colors: active) { .estop { border: 2px solid ButtonText; } .estop-cap { forced-color-adjust: none; } }

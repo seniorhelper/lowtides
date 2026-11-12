@@ -59,6 +59,65 @@ TOOLS = [
         ),
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "get_pass",
+        "description": (
+            "Get this agent's Lowtides Pass: a signed spending permission (AP2 Intent Mandate style) that says who "
+            "governs this agent and its live limits. Show it to a merchant or another agent before buying, so they "
+            "can check it at /pass/ or POST /v1/pass/verify. Stop all or STOP revokes it instantly."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_stores",
+        "description": (
+            "List the stores this agent can shop at through Lowtides, each with its signed Store Policy for AI shoppers "
+            "(the store's own rules), the store check verdict and the items for sale with ids and prices. "
+            "Use the ids with the handshake tool."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "request_action",
+        "description": (
+            "Ask Lowtides BEFORE doing anything for your owner that is not a purchase: reserve, schedule, book_travel, call, "
+            "sign_up, cancel, message, submit_form or share_data. It checks the owner's rules and the job they gave, the "
+            "business's signed policy for AI assistants, and whether the business is real. Answer: match (go ahead), "
+            "needs_yes (held for the owner; do not do it another way) or no_match (do not do it). Demo businesses only."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action_type": {"type": "string", "enum": ["reserve", "schedule", "book_travel", "call", "sign_up", "cancel", "message", "submit_form", "share_data"]},
+                "counterparty": {"type": "string", "description": "Business id, e.g. harbor-bistro, tidewater-clinic, coastline-mobile, skyline-air."},
+                "summary": {"type": "string", "description": "One short line saying exactly what you will do."},
+                "params": {"type": "object", "description": "Details: party size, time, topic, data to share. Put a deposit, fare or fee in params.amount (dollars): it is paid through PayPal sandbox only on a match."},
+            },
+            "required": ["action_type", "counterparty"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "handshake",
+        "description": (
+            "Run a Lowtides Handshake BEFORE buying from a store. It checks both sides: this agent's signed Pass (its owner's "
+            "rules) and the store's signed policy for AI shoppers. Answer: match (both said yes), needs_yes (a person must "
+            "decide) or no_match (nothing moves). With execute false it only checks. With execute true a match pays through "
+            "PayPal (sandbox) and needs_yes becomes a held request for the owner. Never pay any other way."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "store_id": {"type": "string", "description": "Store id from list_stores, e.g. harbor."},
+                "item_id": {"type": "string", "description": "Item id from list_stores. Give this, or amount and category."},
+                "amount": {"type": "number", "exclusiveMinimum": 0, "description": "Dollars, when no item_id is given."},
+                "category": {"type": "string", "description": "What kind of thing it is, when no item_id is given."},
+                "title": {"type": "string", "description": "What is being bought, when no item_id is given."},
+                "execute": {"type": "boolean", "description": "false = check only (default). true = pay on a match."},
+            },
+            "required": ["store_id"],
+        },
+    },
 ]
 
 
@@ -216,8 +275,87 @@ def _tool_get_budget(args):
     return _format_budget(_call_api("GET", "/v1/budget"))
 
 
+def _tool_get_pass(args):
+    d = _call_api("GET", "/v1/pass")
+    lines = ["Lowtides Pass for %s" % ((d.get("agent") or {}).get("name") or "this agent"),
+             "Status: %s" % ("valid" if d.get("valid") else "not valid"),
+             "Expires: %s" % d.get("expires_at", "?")]
+    if d.get("limits_plain"):
+        lines.append("Limits:")
+        lines.extend("- " + str(x) for x in d["limits_plain"])
+    lines += ["", "Pass (send this whole string to the merchant or agent that asks):", str(d.get("pass", "")), "",
+              "They can check it at %s/pass/ or with POST %s/v1/pass/verify." % (d.get("issuer", ""), d.get("issuer", ""))]
+    return "\n".join(lines)
 
-HANDLERS = {"request_spend": _tool_request_spend, "check_spend": _tool_check_spend, "get_budget": _tool_get_budget}
+
+def _tool_list_stores(args):
+    d = _call_api("GET", "/v1/stores")
+    lines = ["Stores for %s:" % d.get("agent", "this agent")]
+    for st in d.get("stores") or []:
+        pol = st.get("policy") or {}
+        lines.append("")
+        lines.append("%s (id: %s, %s). Store check: %s." % (st.get("name"), st.get("id"), st.get("domain"),
+                                                          (st.get("store_check") or {}).get("verdict")))
+        lines.append("  Store Policy (signed: %s): %s" % ("yes" if st.get("policy_signed") else "no",
+                                                       json.dumps({k: v for k, v in pol.items() if k not in ("signature", "kid")}, sort_keys=True)))
+        for it in st.get("items") or []:
+            lines.append("  - %s: %s, %s (%s)" % (it.get("id"), it.get("title"), _money(it.get("price")), it.get("category")))
+    return "\n".join(lines)
+
+
+def _format_handshake(d):
+    names = {"match": "MATCH (both said yes)", "needs_yes": "NEEDS YES (a person decides)", "no_match": "NO MATCH (nothing moves)"}
+    item = d.get("item") or {}
+    lines = ["Handshake: %s" % names.get(d.get("signal"), d.get("signal")),
+             str(d.get("headline", "")),
+             "Receipt id: %s (signed: %s)" % (d.get("id"), "yes" if d.get("receipt_signed") else "no"),
+             "Order: %s, %s at %s" % (item.get("title"), _money(item.get("amount")), (d.get("store") or {}).get("name"))]
+    for side, key in (("Shopper side", "shopper_checks"), ("Store side", "store_checks")):
+        lines.append("%s:" % side)
+        for c in d.get(key) or []:
+            lines.append("- [%s] %s: %s" % (c.get("level"), c.get("label"), c.get("detail")))
+    if d.get("order"):
+        lines.append("Payment: %s" % d["order"].get("label"))
+    lines += ["", "NEXT: %s" % d.get("next", "")]
+    return "\n".join(lines)
+
+
+def _tool_request_action(args):
+    if not isinstance(args.get("action_type"), str) or not isinstance(args.get("counterparty"), str):
+        raise ToolError("Give action_type and counterparty.")
+    body = {"action_type": args["action_type"], "counterparty": args["counterparty"]}
+    if isinstance(args.get("summary"), str):
+        body["summary"] = args["summary"]
+    if isinstance(args.get("params"), dict):
+        body["params"] = args["params"]
+    r = _call_api("POST", "/v1/action", body)
+    return json.dumps(r, indent=1) if not isinstance(r, str) else r
+
+
+def _tool_handshake(args):
+    if not isinstance(args.get("store_id"), str) or not args["store_id"].strip():
+        raise ToolError("'store_id' is required. Call list_stores to see the ids.")
+    body = {"store_id": args["store_id"].strip()}
+    if isinstance(args.get("item_id"), str) and args["item_id"].strip():
+        body["item_id"] = args["item_id"].strip()
+    else:
+        amt = args.get("amount")
+        if isinstance(amt, bool) or not isinstance(amt, (int, float)) or amt <= 0:
+            raise ToolError("Give 'item_id', or a positive 'amount' with a 'category'.")
+        body["amount"] = amt
+        for k in ("category", "title"):
+            if isinstance(args.get(k), str) and args[k]:
+                body[k] = args[k]
+    if "execute" in args:
+        if not isinstance(args["execute"], bool):
+            raise ToolError("'execute' must be true or false.")
+        body["execute"] = args["execute"]
+    return _format_handshake(_call_api("POST", "/v1/handshake", body))
+
+
+HANDLERS = {"request_spend": _tool_request_spend, "check_spend": _tool_check_spend, "get_budget": _tool_get_budget,
+            "get_pass": _tool_get_pass, "list_stores": _tool_list_stores, "handshake": _tool_handshake,
+            "request_action": _tool_request_action}
 
 
 # ---- JSON-RPC -----------------------------------------------------------
@@ -253,7 +391,8 @@ def handle(msg):
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": SERVER_INFO,
-            "instructions": "Call request_spend before buying anything. Never proceed on needs_approval or denied.",
+            "instructions": "Before buying from a store, call handshake (list_stores shows the stores). For any other purchase call "
+                            "request_spend. Never proceed on needs_yes, needs_approval, no_match or denied.",
         })
     if method == "ping":
         return _ok(mid, {})

@@ -1,4 +1,4 @@
-# Lowtides: the AI spend governor. Everyone is welcome, including AI crawlers and agents.
+# Lowtides: Consent Shopping. Let AI shop for you and keep the keys. Everyone is welcome, including AI crawlers and agents.
 User-agent: *
 Allow: /
 Disallow: /api/

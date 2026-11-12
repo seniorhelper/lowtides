@@ -1,12 +1,12 @@
 """PayPal on file: a saved PayPal payment method (Vault v3 payment token) per agent.
 
-Why per agent: the kill switch is per agent. Revoking one agent's token cuts off that
+Why per agent: the stop switch is per agent. Revoking one agent's token cuts off that
 agent's money source without touching the others; STOP ALL revokes every agent's.
 
 Flow:
   connect_start  POST /v3/vault/setup-tokens       -> approve URL (payer agrees on PayPal)
   connect_finish POST /v3/vault/payment-tokens     <- /paypal/return?kind=vault&token=...
-  revoke         DELETE /v3/vault/payment-tokens/{id}  (the kill switch calls this)
+  revoke         DELETE /v3/vault/payment-tokens/{id}  (the stop switch calls this)
   topup          POST /v2/checkout/orders with payment_source.paypal.vault_id (no payer present)
 
 Without PayPal keys, or in the public demo, every step is simulated and labeled
@@ -148,7 +148,7 @@ class Vault:
     def revoke(self, agent_id, by="owner"):
         """Delete the agent's saved PayPal at PayPal. Returns None when there was nothing to
         revoke, else {"status": "revoked"|"revoke_failed", ...}. Never raises for a PayPal
-        failure: the kill switch must keep going, and the failure is reported honestly."""
+        failure: the stop switch must keep going, and the failure is reported honestly."""
         r = self.store.vault_current(agent_id)
         if not r or r["status"] not in (USABLE, "revoke_failed"):
             return None

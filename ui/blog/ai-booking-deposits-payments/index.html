@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How AI Agents Should Handle Deposits, Fares and Fees | Lowtides</title>
+<meta name="description" content="Letting an AI agent book for you? Set a spending limit, an ask-me amount and a refundable-first rule so deposits, fares and fees never surprise you.">
+<link rel="canonical" href="https://lowtides.ai/blog/ai-booking-deposits-payments/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#0A1B1E">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/blog/ai-booking-deposits-payments/">
+<meta property="og:title" content="How AI Agents Should Handle Deposits, Fares and Fees | Lowtides">
+<meta property="og:description" content="Letting an AI agent book for you? Set a spending limit, an ask-me amount and a refundable-first rule so deposits, fares and fees never surprise you.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/cc.css">
+<link rel="stylesheet" href="/blog/blog.css">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "BlogPosting",
+   "@id": "https://lowtides.ai/blog/ai-booking-deposits-payments/#post",
+   "headline": "How AI Agents Should Handle Deposits, Fares and Fees",
+   "description": "Letting an AI agent book for you? Set a spending limit, an ask-me amount and a refundable-first rule so deposits, fares and fees never surprise you.",
+   "url": "https://lowtides.ai/blog/ai-booking-deposits-payments/",
+   "mainEntityOfPage": "https://lowtides.ai/blog/ai-booking-deposits-payments/",
+   "datePublished": "2026-11-11",
+   "dateModified": "2026-11-11",
+   "inLanguage": "en-US",
+   "image": "https://lowtides.ai/brand/og.png",
+   "author": {
+    "@type": "Organization",
+    "@id": "https://lowtides.ai/#org",
+    "name": "Lowtides",
+    "url": "https://lowtides.ai/",
+    "logo": "https://lowtides.ai/brand/favicon-180.png"
+   },
+   "publisher": {
+    "@type": "Organization",
+    "@id": "https://lowtides.ai/#org",
+    "name": "Lowtides",
+    "url": "https://lowtides.ai/",
+    "logo": "https://lowtides.ai/brand/favicon-180.png"
+   }
+  },
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "Lowtides",
+     "item": "https://lowtides.ai/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "Blog",
+     "item": "https://lowtides.ai/blog/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 3,
+     "name": "How AI agents should handle deposits, fares and fees when booking",
+     "item": "https://lowtides.ai/blog/ai-booking-deposits-payments/"
+    }
+   ]
+  },
+  {
+   "@type": "FAQPage",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "Should I let an AI agent pay a deposit without asking me?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Only for small amounts under an ask-me amount you set yourself. Anything larger, and anything nonrefundable, should wait for your yes."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What is an ask-me amount?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "It is a dollar figure below your hard spending limit. Under it the agent can pay on its own, and between it and the hard limit the agent must stop and ask you."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Why should an AI agent book refundable options first?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Refundable bookings let you undo a mistake made by you or the agent. A nonrefundable choice can still be right, but it should be your decision each time."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
+</head>
+<body class="lt-page cc">
+<a class="cc-skip" href="#main">Skip to content</a>
+<header class="lt-header">
+  <div class="lt-header-in">
+    <a class="lt-logo" href="/" aria-label="Lowtides home">
+      <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+      <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+    </a>
+    <nav class="lt-nav" aria-label="Main">
+      <a href="/#how">How it works</a>
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+    </nav>
+    <a class="lt-btn lt-btn--primary lt-header-cta" href="/shop/">Try the demo</a>
+  </div>
+</header>
+<main id="main" class="bl-main">
+<article class="bl-post lt-wrap">
+<nav class="bl-crumbs" aria-label="Breadcrumb"><a href="/">Lowtides</a> / <a href="/blog/">Blog</a></nav>
+<h1>How AI agents should handle deposits, fares and fees when booking</h1>
+<p class="bl-meta">By Lowtides &middot; <time datetime="2026-11-11">November 11, 2026</time></p>
+<p class="bl-lede">An AI agent should pay a deposit or fare only when the amount is inside your limit and both you and the business have agreed to the terms. Above a set amount it should ask you, and it should pick refundable options first.</p>
+<h2>Booking is where the money hides</h2>
+<p>Buying a product is simple: one price, one payment. Booking is messier. A restaurant may hold a table with a deposit. A flight has a fare plus bag and seat fees. A hotel may charge a resort fee at the desk. A salon may charge you for a late cancellation.</p>
+<p>A person reads the fine print and decides. An AI agent booking for you has to make the same calls, often in seconds. Without rules, it may accept a nonrefundable fare to save a few dollars, or agree to a deposit you did not expect. The six rules below keep those choices in your hands.</p>
+<h2>1. Set a hard limit for each booking</h2>
+<p>Start with a ceiling the agent can never cross. Set it per booking, not just per month. A monthly limit can be eaten by one bad choice.</p>
+<p>Make sure the limit counts the full cost. That means the fare or price, plus taxes, plus every fee the business adds. An agent that checks only the headline price can go over your limit once the fees land.</p>
+<h2>2. Set an ask-me amount below the limit</h2>
+<p>The hard limit is the wall. The ask-me amount is the speed bump in front of it. Below the ask-me amount, the agent can pay on its own. Between that amount and the hard limit, it stops and waits for your yes.</p>
+<p>For example, you might let an agent pay small deposits without asking, and have it check with you for anything larger. Choose numbers that fit your own budget. The point is that small, routine amounts flow and bigger ones get a second look.</p>
+<h2>3. Pay only after both sides agree</h2>
+<p>A payment should be the last step, not the first. Before any money moves, two things should be true:</p>
+<ul>
+<li><strong>Your side says yes.</strong> The amount, the type of booking and the business all fit the limits you set.</li>
+<li><strong>The business's side says yes.</strong> It has stated its price, deposit and cancellation terms, and those terms are the ones being agreed to.</li>
+</ul>
+<p>If the two sides do not match, no money should move. The agent should wait for you or walk away. This order matters because it is far easier to decline a booking than to chase a refund.</p>
+<h2>4. Choose refundable first</h2>
+<p>Tell the agent to prefer options you can undo. A refundable fare or a deposit that comes back if you cancel in time gives you room to fix a mistake, whether the mistake was yours or the agent's.</p>
+<p>Nonrefundable choices are sometimes worth it. They should still be your choice. A good rule: anything nonrefundable goes under ask me first, no matter how small the amount.</p>
+<h2>5. Demand a receipt with the terms on it</h2>
+<p>A payment confirmation alone is not enough. For each booking, you want a record that shows:</p>
+<ol>
+<li>Who was paid and how much.</li>
+<li>What the payment was for, such as a deposit, a fare or a fee.</li>
+<li>The cancellation and refund terms that applied at the time.</li>
+<li>Which task of yours the payment belonged to.</li>
+</ol>
+<p>Terms on websites change. A receipt that captured the terms on the day you booked is what you will need if there is a dispute later.</p>
+<h2>6. Use a payment method with buyer protection</h2>
+<p>How the agent pays matters as much as what it pays. Some payment methods give you a way to dispute a charge when you do not get what you paid for. Others, such as wire transfers, gift cards and cash apps sent to strangers, give you little or no way back.</p>
+<p>Give your agent access to a method that has a dispute process, and never let it pay by a method you could not reverse. Read your provider's protection terms so you know what is covered, since bookings and travel can have their own conditions.</p>
+<h2>Watch for fake booking sites</h2>
+<p>Scam sites copy the look of real hotels, airlines and ticket sellers. An agent should check that the business is the one you meant before it shares details or pays. If the name or address is a near match rather than an exact one, the safe answer is to stop.</p>
+<h2>How one demo puts this together</h2>
+<p>Lowtides is an open source demo of this pattern. In its <a href="/shop/#muzzle">Action Muzzle</a>, a deposit or fare is paid through PayPal only after both sides say yes, each kind of action can be set to Allowed, Ask me first or Never, and every action gets a signed receipt. It runs on the PayPal sandbox, which means test money, and the businesses are fictional. To learn what that means, see <a href="/blog/paypal-sandbox-how-it-works/">how the PayPal sandbox works</a>, or read more about <a href="/blog/agentic-commerce-consent/">consent in agentic commerce</a>.</p>
+<h2>Common questions</h2>
+<details><summary>Should I let an AI agent pay a deposit without asking me?</summary><p>Only for small amounts under an ask-me amount you set yourself. Anything larger, and anything nonrefundable, should wait for your yes.</p></details>
+<details><summary>What is an ask-me amount?</summary><p>It is a dollar figure below your hard spending limit. Under it the agent can pay on its own, and between it and the hard limit the agent must stop and ask you.</p></details>
+<details><summary>Why should an AI agent book refundable options first?</summary><p>Refundable bookings let you undo a mistake made by you or the agent. A nonrefundable choice can still be right, but it should be your decision each time.</p></details>
+
+<p class="bl-cta"><a class="lt-btn lt-btn--primary" href="/shop/">Try Consent Shopping</a> <a class="lt-btn" href="/blog/">More from the blog</a></p>
+</article>
+</main>
+<footer class="cc-foot">
+  <div class="lt-wrap cc-foot-in">
+    <p>Demo only: PayPal sandbox, test money, fictional demo stores. Open source under AGPL-3.0. <span class="pat-pend">Patent Pending.</span></p>
+    <nav aria-label="Footer">
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+      <a href="/pass/">Check a Pass</a>
+      <a href="/why/">Why Lowtides</a>
+      <a href="/blog/">Blog</a>
+      <a href="/sitemap/">Site map</a>
+      <a href="/privacy/">Privacy</a>
+    </nav>
+    <div class="cc-heart"><span aria-hidden="true">&#10084;</span><a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a></div>
+  </div>
+</footer>
+<link rel="stylesheet" href="/ask.css">
+<script src="/ask.js" defer></script>
+</body>
+</html>

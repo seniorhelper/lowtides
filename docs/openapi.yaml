@@ -5,7 +5,7 @@ info:
   title: Lowtides API
   version: "1.1.0"
   summary: One budget and a STOP button between AI agents and money.
-  description: "Agents ask Lowtides before they buy (`POST /v1/spend`) and send model calls through it (OpenAI- and Anthropic-compatible). Approved purchases are paid with PayPal Payouts. Plain-English rules, approvals and a kill switch are on the dashboard API. The public demo at https://lowtides.ai needs no password: get an agent key from `GET /api/state`."
+  description: "Agents ask Lowtides before they buy (`POST /v1/spend`) and send model calls through it (OpenAI- and Anthropic-compatible). Approved purchases are paid with PayPal Payouts. Plain-English rules, approvals and a stop switch are on the dashboard API. The public demo at https://lowtides.ai needs no password: get an agent key from `GET /api/state`."
   license:
     name: AGPL-3.0-only
     identifier: AGPL-3.0-only
@@ -26,12 +26,16 @@ tags:
     description: Create agents and read their keys.
   - name: "Dashboard: approvals"
     description: A person approves or denies held purchases.
-  - name: "Dashboard: kill switch"
-    description: KILL one agent or STOP ALL.
+  - name: "Dashboard: stop switch"
+    description: Shut off one agent or STOP ALL.
   - name: "Dashboard: rules"
     description: Rules, merchants, forecast and audit.
   - name: "Dashboard: webhooks"
     description: Send events to Zapier, Make or any URL.
+  - name: "Dashboard: assistant"
+    description: "Ask Lowtides: a guide that suggests, and a person confirms."
+  - name: Consent Shopping
+    description: Store Policies, the Handshake (both sides must say yes), GuardPooch, trust scores and shopper preferences.
 paths:
   /v1/spend:
     post:
@@ -155,6 +159,123 @@ paths:
                 "$ref": "#/components/schemas/Budget"
         "401":
           description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  /v1/stores:
+    get:
+      operationId: agentListStores
+      tags:
+        - "Agent: purchases"
+      security:
+        - bearerAuth: []
+        - apiKeyHeader: []
+      summary: Stores, their signed policies for AI shoppers, and their items
+      responses:
+        "200":
+          description: Stores with policy, store check and items.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  /v1/handshake:
+    post:
+      operationId: agentHandshake
+      tags:
+        - "Agent: purchases"
+      security:
+        - bearerAuth: []
+        - apiKeyHeader: []
+      summary: "Run a Handshake: the agent's Pass and the store's policy are checked both ways"
+      description: "Same engine as the site's buttons. `signal` is match, needs_yes or no_match. With `execute: true` a match pays through PayPal Payouts (sandbox; simulated and labeled when the server has no keys) and needs_yes becomes a held request for the owner. Always 200 for an answer: read `signal` and `next`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - store_id
+              properties:
+                store_id:
+                  type: string
+                item_id:
+                  type: string
+                amount:
+                  type: number
+                category:
+                  type: string
+                title:
+                  type: string
+                execute:
+                  type: boolean
+            example:
+              store_id: harbor
+              item_id: harbor-tape
+              execute: false
+      responses:
+        "200":
+          description: The Handshake answer.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  /v1/handshake/{id}:
+    get:
+      operationId: agentGetHandshake
+      tags:
+        - "Agent: purchases"
+      security:
+        - bearerAuth: []
+        - apiKeyHeader: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spend request ID (sp_...).
+      summary: Read one of this agent's Handshakes again (a held one may have been approved)
+      responses:
+        "200":
+          description: The Handshake answer.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
           content:
             application/json:
               schema:
@@ -653,12 +774,12 @@ paths:
     post:
       operationId: killAgent
       tags:
-        - "Dashboard: kill switch"
+        - "Dashboard: stop switch"
       security:
         - adminToken: []
         - adminCookie: []
         - {}
-      summary: KILL one agent
+      summary: Shut off one agent
       responses:
         "200":
           description: OK
@@ -705,11 +826,152 @@ paths:
             type: integer
           description: Agent ID.
       description: Stops the agent, denies its pending purchases, voids its open PayPal holds and cancels its unclaimed payouts.
+  /api/ask:
+    post:
+      operationId: askLowtides
+      tags:
+        - "Dashboard: assistant"
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: Ask Lowtides (the talking guide)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/AskAnswer"
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "415":
+          description: "Send JSON with Content-Type: application/json."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+              properties:
+                question:
+                  type: string
+                  maxLength: 500
+                page:
+                  type: string
+                  description: The page the person is on, like /shop/.
+            example:
+              question: "Why was my purchase held?"
+              page: /shop/
+      description: "Answers from real data. `source` is `claude` or `scripted`, honestly. It can only suggest changes (`actions`); nothing happens until a person confirms one. Claude calls are metered into the ledger as the agent `Ask Lowtides`, under a hard daily dollar cap."
+  /api/ask/confirm:
+    post:
+      operationId: confirmAsk
+      tags:
+        - "Dashboard: assistant"
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: Confirm (or cancel) one suggestion from Ask Lowtides
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "410":
+          description: "Gone: the suggestion expired."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "501":
+          description: That part of Lowtides isn't available on this server yet.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "415":
+          description: "Send JSON with Content-Type: application/json."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action_id
+              properties:
+                action_id:
+                  type: string
+                cancel:
+                  type: boolean
+            example:
+              action_id: act_example
+      description: Runs the suggestion through the existing rules, once. The id belongs to the visitor it was shown to and expires after a few minutes.
   /api/stop-all:
     post:
       operationId: stopAll
       tags:
-        - "Dashboard: kill switch"
+        - "Dashboard: stop switch"
       security:
         - adminToken: []
         - adminCookie: []
@@ -747,7 +1009,7 @@ paths:
             schema:
               type: object
             example: {}
-      description: The kill, for every agent.
+      description: Stop all, for every agent.
   /api/agents/{agent_id}/rules:
     get:
       operationId: getRules
@@ -1263,6 +1525,1337 @@ paths:
           schema:
             type: integer
           description: Webhook ID.
+  /api/stores:
+    get:
+      operationId: listStores
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: The demo stores with their signed Store Policy and GuardPooch verdict
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stores:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        store_trust:
+                          type: object
+                          description: "What the shopper should think of the store: GuardPooch's verdict plus this shopper's own orders there. A heuristic, not a public rating. See docs/TRUST-SCORE.md."
+                          properties:
+                            badge:
+                              type: string
+                              enum:
+                                - trusted
+                                - careful
+                                - danger
+                            word:
+                              type: string
+                              description: Trusted store, Be careful or Danger
+                            score:
+                              type: integer
+                              minimum: 0
+                              maximum: 100
+                            factors:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  label:
+                                    type: string
+                                  delta:
+                                    type: integer
+                                  detail:
+                                    type: string
+                            kind:
+                              type: string
+                              enum:
+                                - heuristic
+                            note:
+                              type: string
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: agent_id
+          in: query
+          schema:
+            type: integer
+          description: Defaults to the demo shopper, Scout, or the first agent.
+  /api/stores/{store_id}/policy:
+    put:
+      operationId: putStorePolicy
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: Change a store's rules for AI shoppers (re-signed)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "415":
+          description: "Send JSON with Content-Type: application/json."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_order_no_human:
+                  type: number
+                categories:
+                  type: array
+                  items:
+                    type: string
+                min_trust:
+                  type: integer
+                require_evidence:
+                  type: boolean
+                blocked_agents:
+                  type: array
+                  items:
+                    type: string
+                mode:
+                  type: string
+                  enum:
+                    - auto
+                    - review
+                    - closed
+                  description: "auto accepts in-policy orders; review needs a person for each; closed refuses all"
+            example:
+              max_order_no_human: 150
+      parameters:
+        - name: store_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: harbor, pinepost, brightside, tidepool or fakeharbor.
+  /.well-known/lowtides-store-policy.json:
+    get:
+      operationId: getStorePolicyDocument
+      tags:
+        - Consent Shopping
+      security: []
+      summary: A store's signed Store Policy (public)
+      parameters:
+        - name: store_id
+          in: query
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      description: Check the signature with the public keys at /.well-known/lowtides-pass-keys.json.
+  /api/catalog:
+    get:
+      operationId: matchFinder
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: "Match Finder: every item with its Handshake signal for this shopper (green first)"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        store_trust:
+                          type: object
+                          properties:
+                            badge:
+                              type: string
+                              enum:
+                                - trusted
+                                - careful
+                                - danger
+                            score:
+                              type: integer
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: max_price
+          in: query
+          schema:
+            type: number
+        - name: agent_id
+          in: query
+          schema:
+            type: integer
+          description: Defaults to the demo shopper, Scout, or the first agent.
+        - name: store_id
+          in: query
+          schema:
+            type: string
+  /api/handshake:
+    post:
+      operationId: doHandshake
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: "Run a Handshake (Pass vs Store Policy vs GuardPooch); with execute:true a match pays"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  signal:
+                    type: string
+                    enum:
+                      - match
+                      - needs_yes
+                      - no_match
+                  headline:
+                    type: string
+                  shopper_checks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+                        ok:
+                          type: boolean
+                        level:
+                          type: string
+                          enum:
+                            - ok
+                            - ask
+                            - fail
+                        detail:
+                          type: string
+                  store_checks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+                        ok:
+                          type: boolean
+                        level:
+                          type: string
+                          enum:
+                            - ok
+                            - ask
+                            - fail
+                        detail:
+                          type: string
+                  guardpooch:
+                    type: object
+                    properties:
+                      verdict:
+                        type: string
+                        enum:
+                          - safe
+                          - caution
+                          - danger
+                      score:
+                        type: integer
+                      reasons:
+                        type: array
+                        items:
+                          type: string
+                      checks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            label:
+                              type: string
+                            ok:
+                              type: boolean
+                            level:
+                              type: string
+                              enum:
+                                - ok
+                                - ask
+                                - fail
+                            detail:
+                              type: string
+                  trust:
+                    type: object
+                    properties:
+                      score:
+                        type: integer
+                  store_trust:
+                    type: object
+                    description: "What the shopper should think of the store: GuardPooch's verdict plus this shopper's own orders there. A heuristic, not a public rating. See docs/TRUST-SCORE.md."
+                    properties:
+                      badge:
+                        type: string
+                        enum:
+                          - trusted
+                          - careful
+                          - danger
+                      word:
+                        type: string
+                        description: Trusted store, Be careful or Danger
+                      score:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      factors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label:
+                              type: string
+                            delta:
+                              type: integer
+                            detail:
+                              type: string
+                      kind:
+                        type: string
+                        enum:
+                          - heuristic
+                      note:
+                        type: string
+                  receipt:
+                    type: object
+                    description: "Signed with Ed25519 (kid, alg, signature); also written to the audit log."
+                  order:
+                    type:
+                      - object
+                      - "null"
+                    description: PayPal sandbox payout (paypal_order_id is the payout batch id) or a labeled simulation.
+                  approval_id:
+                    type:
+                      - string
+                      - "null"
+                  at:
+                    type: string
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "415":
+          description: "Send JSON with Content-Type: application/json."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - store_id
+              properties:
+                agent_id:
+                  type: integer
+                store_id:
+                  type: string
+                item_id:
+                  type: string
+                amount:
+                  type: number
+                category:
+                  type: string
+                title:
+                  type: string
+                execute:
+                  type: boolean
+                  default: false
+            example:
+              store_id: harbor
+              item_id: harbor-hammer
+              execute: false
+      description: "match: both sides said yes. needs_yes: a person must approve (a normal held approval). no_match: no money moved. execute:true pays through the normal spend path, with a PayPal sandbox payout when keys are set and a labeled simulation otherwise."
+  /api/handshakes:
+    get:
+      operationId: listHandshakes
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: Recent Handshakes, newest first
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  handshakes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        signal:
+                          type: string
+                          enum:
+                            - match
+                            - needs_yes
+                            - no_match
+                        headline:
+                          type: string
+                        shopper_checks:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              label:
+                                type: string
+                              ok:
+                                type: boolean
+                              level:
+                                type: string
+                                enum:
+                                  - ok
+                                  - ask
+                                  - fail
+                              detail:
+                                type: string
+                        store_checks:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              label:
+                                type: string
+                              ok:
+                                type: boolean
+                              level:
+                                type: string
+                                enum:
+                                  - ok
+                                  - ask
+                                  - fail
+                              detail:
+                                type: string
+                        guardpooch:
+                          type: object
+                          properties:
+                            verdict:
+                              type: string
+                              enum:
+                                - safe
+                                - caution
+                                - danger
+                            score:
+                              type: integer
+                            reasons:
+                              type: array
+                              items:
+                                type: string
+                            checks:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  label:
+                                    type: string
+                                  ok:
+                                    type: boolean
+                                  level:
+                                    type: string
+                                    enum:
+                                      - ok
+                                      - ask
+                                      - fail
+                                  detail:
+                                    type: string
+                        trust:
+                          type: object
+                          properties:
+                            score:
+                              type: integer
+                        store_trust:
+                          type: object
+                          description: "What the shopper should think of the store: GuardPooch's verdict plus this shopper's own orders there. A heuristic, not a public rating. See docs/TRUST-SCORE.md."
+                          properties:
+                            badge:
+                              type: string
+                              enum:
+                                - trusted
+                                - careful
+                                - danger
+                            word:
+                              type: string
+                              description: Trusted store, Be careful or Danger
+                            score:
+                              type: integer
+                              minimum: 0
+                              maximum: 100
+                            factors:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  label:
+                                    type: string
+                                  delta:
+                                    type: integer
+                                  detail:
+                                    type: string
+                            kind:
+                              type: string
+                              enum:
+                                - heuristic
+                            note:
+                              type: string
+                        receipt:
+                          type: object
+                          description: "Signed with Ed25519 (kid, alg, signature); also written to the audit log."
+                        order:
+                          type:
+                            - object
+                            - "null"
+                          description: PayPal sandbox payout (paypal_order_id is the payout batch id) or a labeled simulation.
+                        approval_id:
+                          type:
+                            - string
+                            - "null"
+                        at:
+                          type: string
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - name: agent_id
+          in: query
+          schema:
+            type: integer
+          description: Defaults to the demo shopper, Scout, or the first agent.
+        - name: store_id
+          in: query
+          schema:
+            type: string
+  /api/handshakes/{handshake_id}/proof:
+    get:
+      operationId: getHandshakeProof
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: "Proof pack: Pass, Store Policy, signed receipt, approval, PayPal ids, audit entry"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: handshake_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Handshake id (hs_...).
+      description: Verifiable with public keys only.
+  /api/agents/{agent_id}/trust:
+    get:
+      operationId: getTrust
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: Agent trust score (0-100), a heuristic from its own history
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  score:
+                    type: integer
+                  grade:
+                    type: string
+                  factors:
+                    type: array
+                    items:
+                      type: object
+                  history:
+                    type: array
+                    items:
+                      type: object
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Agent ID.
+  /api/merchant/kpis:
+    get:
+      operationId: merchantKpis
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: Store KPIs computed from real Handshakes and payments
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: store_id
+          in: query
+          schema:
+            type: string
+  /api/merchant/opportunities:
+    get:
+      operationId: merchantOpportunities
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: Rule-based suggestions from the store's own orders (what-if re-runs of the Handshake)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  findings:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        kind:
+                          type: string
+                          enum:
+                            - grow
+                            - protect
+                        title:
+                          type: string
+                        detail:
+                          type: string
+                        impact_usd:
+                          type: number
+                          nullable: true
+                        action:
+                          type: object
+                          nullable: true
+                          properties:
+                            label:
+                              type: string
+                            policy_patch:
+                              type: object
+                  note:
+                    type: string
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: store_id
+          in: query
+          schema:
+            type: string
+          required: true
+      description: Apply a suggestion by sending its policy_patch to PUT /api/stores/{store_id}/policy.
+  /api/handshakes/{handshake_id}/rating:
+    post:
+      operationId: rateHandshake
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: "Was this what you wanted? Thumbs up or down for a paid purchase (changeable)"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  rating:
+                    type: string
+                    enum:
+                      - up
+                      - down
+                  store_trust:
+                    type: object
+                    description: "What the shopper should think of the store: GuardPooch's verdict plus this shopper's own orders there. A heuristic, not a public rating. See docs/TRUST-SCORE.md."
+                    properties:
+                      badge:
+                        type: string
+                        enum:
+                          - trusted
+                          - careful
+                          - danger
+                      word:
+                        type: string
+                        description: Trusted store, Be careful or Danger
+                      score:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      factors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label:
+                              type: string
+                            delta:
+                              type: integer
+                            detail:
+                              type: string
+                      kind:
+                        type: string
+                        enum:
+                          - heuristic
+                      note:
+                        type: string
+                  agent_trust:
+                    type: object
+                    properties:
+                      score:
+                        type: integer
+                      grade:
+                        type: string
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "415":
+          description: "Send JSON with Content-Type: application/json."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rating
+              properties:
+                rating:
+                  type: string
+                  enum:
+                    - up
+                    - down
+            example:
+              rating: up
+      parameters:
+        - name: handshake_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Handshake id (hs_...).
+      description: Thumbs down lowers the agent's trust score (see docs/TRUST-SCORE.md) and feeds satisfaction_rate in the store KPIs.
+  /api/shopper/agents:
+    get:
+      operationId: listShopperAgents
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: "The shopper's AI shoppers: mode, Pass state, trust, today's spend, PayPal on file"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      type: object
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+    post:
+      operationId: addShopperAgent
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: "Add an AI shopper from a preset (everyday, bargain, restock); issues its Pass"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent:
+                    type: object
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "415":
+          description: "Send JSON with Content-Type: application/json."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - preset
+              properties:
+                preset:
+                  type: string
+                  enum:
+                    - everyday
+                    - bargain
+                    - restock
+                name:
+                  type: string
+            example:
+              preset: bargain
+  /api/shopper/prefs:
+    get:
+      operationId: getShopperPrefs
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: A shopper's preferences in plain terms
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  daily_cap:
+                    type: number
+                  per_item_cap:
+                    type: number
+                  ask_above:
+                    type: number
+                  guard_strictness:
+                    type: string
+                    enum:
+                      - relaxed
+                      - balanced
+                      - strict
+                  deal_mode:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  mode:
+                    type: string
+                    enum:
+                      - autopilot
+                      - assist
+                      - "off"
+                    description: "autopilot buys greens alone; assist asks before any money moves; off buys nothing"
+                  categories_allowed:
+                    type: array
+                    items:
+                      type: string
+                  never_buy:
+                    type: array
+                    items:
+                      type: string
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      parameters:
+        - name: agent_id
+          in: query
+          schema:
+            type: integer
+          description: Defaults to the demo shopper, Scout, or the first agent.
+    put:
+      operationId: putShopperPrefs
+      tags:
+        - Consent Shopping
+      security:
+        - adminToken: []
+        - adminCookie: []
+        - {}
+      summary: "Change preferences: rewrites the agent's enforced rules and re-issues its Pass"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  daily_cap:
+                    type: number
+                  per_item_cap:
+                    type: number
+                  ask_above:
+                    type: number
+                  guard_strictness:
+                    type: string
+                    enum:
+                      - relaxed
+                      - balanced
+                      - strict
+                  deal_mode:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  mode:
+                    type: string
+                    enum:
+                      - autopilot
+                      - assist
+                      - "off"
+                    description: "autopilot buys greens alone; assist asks before any money moves; off buys nothing"
+                  categories_allowed:
+                    type: array
+                    items:
+                      type: string
+                  never_buy:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          description: "Bad request: the reason is in `error`."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "401":
+          description: Missing or unknown key (or admin password).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "403":
+          description: Refused (cross-site request, or turned off in the public demo).
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "404":
+          description: Not found.
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "409":
+          description: "Conflict: the request is no longer in a state that allows this."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        "415":
+          description: "Send JSON with Content-Type: application/json."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                daily_cap:
+                  type: number
+                per_item_cap:
+                  type: number
+                ask_above:
+                  type: number
+                guard_strictness:
+                  type: string
+                  enum:
+                    - relaxed
+                    - balanced
+                    - strict
+                deal_mode:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                mode:
+                  type: string
+                  enum:
+                    - autopilot
+                    - assist
+                    - "off"
+                  description: "autopilot buys greens alone; assist asks before any money moves; off buys nothing"
+                categories_allowed:
+                  type: array
+                  items:
+                    type: string
+                never_buy:
+                  type: array
+                  items:
+                    type: string
+            example:
+              guard_strictness: balanced
+      parameters:
+        - name: agent_id
+          in: query
+          schema:
+            type: integer
+          description: Defaults to the demo shopper, Scout, or the first agent.
 webhooks:
   spend.needs_approval:
     post:
@@ -1342,7 +2935,7 @@ webhooks:
   agent.killed:
     post:
       operationId: on_agent_killed
-      summary: "An agent was killed: stopped, pending buys denied, holds voided, unclaimed payouts cancelled."
+      summary: "An agent was shut off: stopped, pending buys denied, holds voided, unclaimed payouts canceled."
       parameters:
         - name: X-Lowtides-Signature
           in: header
@@ -1804,6 +3397,31 @@ components:
           type: array
           items:
             type: string
+    AskAnswer:
+      type: object
+      properties:
+        answer:
+          type: string
+        source:
+          type: string
+          enum:
+            - claude
+            - scripted
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              kind:
+                type: string
+              params:
+                type: object
+        cost_usd:
+          type: number
     StopAllResult:
       type: object
       properties:

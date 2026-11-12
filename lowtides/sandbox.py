@@ -3,12 +3,17 @@
 Every browser that opens the public demo gets a signed `lt_demo` cookie. The first
 dashboard call carrying it builds that visitor's own sandbox: an in-memory SQLite
 store and its own engine, spend governor, money and outside watch (an App built on
-them), seeded with the runaway-agent story. STOP ALL, KILL, Reset and the guided
+them), seeded with the runaway-agent story. STOP ALL, Stop all, Reset and the guided
 replay then touch only that visitor's sandbox.
 
 Agent calls (/v1/...) carry an agent key, not a cookie; a key -> sandbox index sends
 them to the sandbox that made the key. Requests with no cookie at all (curl, the
 scenario CLI) keep using the shared server-wide demo, exactly as before.
+
+Lowtides Passes: every sandbox signs with the root App's one key (the key published at
+/.well-known/lowtides-pass-keys.json), and each new pass's id is indexed -> sandbox, so
+a cookie-less POST /v1/pass/verify (a merchant, the /pass/ page) is answered by the
+sandbox that issued the pass, with that sandbox's live Stop all / revoke state.
 
 Bounds: at most `cap` live sandboxes (least recently used is evicted), each dropped
 after `idle` seconds without a request, and at most `per_ip_hour` new sandboxes per
@@ -24,11 +29,13 @@ import secrets
 import threading
 import time
 
+from . import accounts
 from .config import Config
 from .store import Store
 
 COOKIE = "lt_demo"
 SANDBOX_DB_MB = 8          # most a single sandbox's database may grow to
+PASSES_PER_SANDBOX = 200   # pass ids remembered per sandbox; older ones verify as gone
 INTERNAL_HEADER = "X-Lowtides-Internal"
 
 
@@ -90,6 +97,8 @@ class Sandboxes:
         self.seen = {}                                 # sid -> last request time
         self.ready = {}                                # sid -> Event set once the story is seeded
         self.keys = {}                                 # agent key -> sid
+        self.pass_ids = {}                             # pass jti -> sid
+        self.pass_order = collections.defaultdict(collections.deque)  # sid -> its jtis, oldest first
         self.made = collections.defaultdict(collections.deque)  # ip -> creation times (last hour)
         self._thread = None
         self._stop = threading.Event()
@@ -119,6 +128,9 @@ class Sandboxes:
         """The sandbox for `sid`, building (and seeding) it on first use."""
         now = time.time()
         built = False
+        saved, read_ok, acct = None, True, accounts.is_account(sid)
+        if create and acct and (sid not in self.live or now - self.seen.get(sid, now) > self.idle):
+            read_ok, saved = accounts.fetch2(sid)   # a signed-in account: its saved state, read before taking the lock
         with self.lock:
             app = self.live.get(sid)
             if app is not None and now - self.seen.get(sid, now) > self.idle:
@@ -140,15 +152,31 @@ class Sandboxes:
                 while len(self.live) >= self.cap:
                     self._drop(next(iter(self.live)))
                 self._fit_budget(keep=0)
-                app = self._build(sid)
+                app, restored = self._build(sid, saved)
+                if acct:                           # decided here, under the lock, by the one request that builds
+                    if read_ok and (restored or not saved):
+                        accounts.unblock(sid)
+                    else:
+                        accounts.block(sid)        # storage unreadable: a temporary copy that is never saved over the real one
                 self.live[sid] = app
+                if restored:                   # its agents' keys and Passes route to this sandbox again
+                    for row in app.store.q("SELECT key FROM agents"):
+                        self.keys[row["key"]] = sid
+                    try:
+                        for row in app.store.q("SELECT jti FROM passes ORDER BY issued DESC LIMIT %d" % PASSES_PER_SANDBOX):
+                            self.pass_ids[row["jti"]] = sid
+                            self.pass_order[sid].appendleft(row["jti"])
+                    except Exception:
+                        pass
                 self.seen[sid] = now
                 ev = self.ready[sid] = threading.Event()
                 built = True
         if built:
             try:  # seeded outside the lock; other requests for this sid wait on `ev`
-                if self.seed:
+                if self.seed and not restored:
                     app.reset_demo(seed_story=True)
+                if accounts.is_account(sid) and not restored:
+                    accounts.touch(sid)        # a new account: store its starting state
             finally:
                 ev.set()
         elif wait and ev is not None:
@@ -166,13 +194,36 @@ class Sandboxes:
                 self.seen[sid] = time.time()
             return app
 
-    def _build(self, sid):
+    def by_pass(self, jti):
+        """The live sandbox that issued pass `jti`, or None. A merchant checking a pass does
+        not count as the visitor using their sandbox, so this doesn't keep it alive."""
+        with self.lock:
+            sid = self.pass_ids.get(jti)
+            app = self.live.get(sid) if sid else None
+            if app is not None and time.time() - self.seen.get(sid, 0) > self.idle:
+                return None  # idle past its time; the sweeper is about to drop it
+            return app
+
+    def _build(self, sid, saved=None):
+        """A new sandbox App. With `saved` (an account's snapshot) it starts from that state. Returns (app, restored)."""
+        from . import passport
         from .server import App
         root = self.root
+        shared_key = dict(passport.book(root)._key())  # one signing key for the whole demo
         store = _IndexedStore(lambda key, sid=sid: self._index(key, sid))
-        app = App(Config(copy.deepcopy(self.base_data)), store, paypal=root.paypal, config_path=None,
+        data = copy.deepcopy(self.base_data)
+        conf = accounts.load_into(store, saved) if saved else None
+        restored = conf is not None
+        if restored:
+            for k in accounts.CONFIG_KEYS:
+                if k in conf:
+                    data[k] = conf[k]
+        app = App(Config(data), store, paypal=root.paypal, config_path=None,
                   public_demo=True)
         app.sandbox_id = sid
+        app.demo_root = root                         # pass verify and keys are answered via the root
+        app.pass_key = shared_key
+        app.on_pass = lambda jti, sid=sid: self._index_pass(jti, sid)
         app.self_url = root.self_url
         app.loopback = root.loopback
         app.admin_token = ""
@@ -181,7 +232,7 @@ class Sandboxes:
         app.seed_headers = {"Cookie": "%s=%s.%s" % (COOKIE, sid, self._sig(sid)), INTERNAL_HEADER: self.internal}
         app.on_reset = lambda sid=sid: self._forget_keys(sid)
         app.next_outside = time.time() + 60
-        return app
+        return app, restored
 
     def _fit_budget(self, keep=1):
         """Evict least recently used sandboxes while their databases together exceed the budget."""
@@ -201,10 +252,23 @@ class Sandboxes:
             if sid in self.live:
                 self.keys[key] = sid
 
+    def _index_pass(self, jti, sid):
+        with self.lock:
+            if sid not in self.live:
+                return
+            self.pass_ids[jti] = sid
+            q = self.pass_order[sid]
+            q.append(jti)
+            while len(q) > PASSES_PER_SANDBOX:
+                self.pass_ids.pop(q.popleft(), None)
+
     def _forget_keys(self, sid):
+        """Forget the sandbox's agent keys and pass ids (on reset and when it is dropped)."""
         with self.lock:
             for k in [k for k, s in self.keys.items() if s == sid]:
                 del self.keys[k]
+            for jti in self.pass_order.pop(sid, ()):
+                self.pass_ids.pop(jti, None)
 
     def _drop(self, sid):
         app = self.live.pop(sid, None)
@@ -213,6 +277,8 @@ class Sandboxes:
         if ev:
             ev.set()
         self._forget_keys(sid)
+        if app is not None and accounts.is_account(sid):
+            accounts.save_dropped(sid, app)    # a signed-in account's unsaved changes are stored before it leaves memory
         if app is not None:
             # Closed a little later, not now: a request already in flight may still be using it.
             # Closing explicitly matters: SQLite gives its memory back far sooner than via GC.

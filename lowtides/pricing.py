@@ -34,7 +34,7 @@ def text_of(obj):
 
 # Non-text content (images, PDFs, audio, files). text_of() skips these, so count them
 # separately and conservatively: base64 payloads at len/4 tokens, a bare image URL at a
-# fixed allowance, anything unrecognised by its JSON size.
+# fixed allowance, anything unrecognized by its JSON size.
 IMAGE_URL_TOKENS = 1600
 FILE_REF_TOKENS = 1600  # a URL or file id we can't measure
 MEDIA_TYPES = {"image", "document", "image_url", "input_image", "input_audio", "file", "input_file"}

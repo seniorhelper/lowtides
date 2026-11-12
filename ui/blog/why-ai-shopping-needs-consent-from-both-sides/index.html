@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why AI Shopping Needs a Yes From Both Sides | Lowtides</title>
+<meta name="description" content="AI agents are starting to buy things, but nothing makes you, the AI and the store agree first. Here is the gap, who it hurts, and a two-sided fix.">
+<link rel="canonical" href="https://lowtides.ai/blog/why-ai-shopping-needs-consent-from-both-sides/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#0A1B1E">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/blog/why-ai-shopping-needs-consent-from-both-sides/">
+<meta property="og:title" content="Why AI Shopping Needs a Yes From Both Sides | Lowtides">
+<meta property="og:description" content="AI agents are starting to buy things, but nothing makes you, the AI and the store agree first. Here is the gap, who it hurts, and a two-sided fix.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/cc.css">
+<link rel="stylesheet" href="/blog/blog.css">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "BlogPosting",
+   "@id": "https://lowtides.ai/blog/why-ai-shopping-needs-consent-from-both-sides/#post",
+   "headline": "Why AI Shopping Needs a Yes From Both Sides",
+   "description": "AI agents are starting to buy things, but nothing makes you, the AI and the store agree first. Here is the gap, who it hurts, and a two-sided fix.",
+   "url": "https://lowtides.ai/blog/why-ai-shopping-needs-consent-from-both-sides/",
+   "mainEntityOfPage": "https://lowtides.ai/blog/why-ai-shopping-needs-consent-from-both-sides/",
+   "datePublished": "2026-11-11",
+   "dateModified": "2026-11-11",
+   "inLanguage": "en-US",
+   "image": "https://lowtides.ai/brand/og.png",
+   "author": {
+    "@type": "Organization",
+    "@id": "https://lowtides.ai/#org",
+    "name": "Lowtides",
+    "url": "https://lowtides.ai/",
+    "logo": "https://lowtides.ai/brand/favicon-180.png"
+   },
+   "publisher": {
+    "@type": "Organization",
+    "@id": "https://lowtides.ai/#org",
+    "name": "Lowtides",
+    "url": "https://lowtides.ai/",
+    "logo": "https://lowtides.ai/brand/favicon-180.png"
+   }
+  },
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "Lowtides",
+     "item": "https://lowtides.ai/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "Blog",
+     "item": "https://lowtides.ai/blog/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 3,
+     "name": "Why AI shopping needs a yes from both sides",
+     "item": "https://lowtides.ai/blog/why-ai-shopping-needs-consent-from-both-sides/"
+    }
+   ]
+  },
+  {
+   "@type": "FAQPage",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "Why does AI shopping need consent from both the shopper and the store?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "A sale has two parties. The shopper needs limits so the AI does not overspend or buy from a fake store. The store needs rules so it is not hit with bot orders it never wanted. A check that needs both to say yes protects each side before money moves."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What is the Pass and the Store Policy?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "The Pass is a signed set of rules the person gives their AI shopper, such as spending limits and things never to buy. The Store Policy is a signed set of rules a store publishes for AI shoppers, such as the largest order allowed with no person involved. The Handshake checks both."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What do the green, yellow and red lights mean?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Green means both sides said yes and the payment goes through (PayPal sandbox in the demo). Yellow means a person must decide, so nothing is paid until they say yes. Red means a rule said no, so no money moves."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Is Lowtides making real payments?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. Lowtides is a demo. The stores are fictional and the money is PayPal sandbox test money. Without sandbox keys, the demo runs a labeled simulation. Every receipt says which one happened."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What does Stop all do?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Stop all revokes the shopper's Pass at every store at once, so every check turns red. It also cancels open holds and payouts that have not gone through. It is the off switch for the AI shopper."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
+</head>
+<body class="lt-page cc">
+<a class="cc-skip" href="#main">Skip to content</a>
+<header class="lt-header">
+  <div class="lt-header-in">
+    <a class="lt-logo" href="/" aria-label="Lowtides home">
+      <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+      <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+    </a>
+    <nav class="lt-nav" aria-label="Main">
+      <a href="/#how">How it works</a>
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+    </nav>
+    <a class="lt-btn lt-btn--primary lt-header-cta" href="/shop/">Try the demo</a>
+  </div>
+</header>
+<main id="main" class="bl-main">
+<article class="bl-post lt-wrap">
+<nav class="bl-crumbs" aria-label="Breadcrumb"><a href="/">Lowtides</a> / <a href="/blog/">Blog</a></nav>
+<h1>Why AI shopping needs a yes from both sides</h1>
+<p class="bl-meta">By Lowtides &middot; <time datetime="2026-11-11">November 11, 2026</time></p>
+<p class="bl-lede">AI shopping needs a yes from both sides because today a buyer's limits and a store's rules live in different places and never meet before money moves. A two-sided consent check puts both sets of rules in one test, so a purchase goes through only when the person and the store both agree.</p>
+<h2>Key takeaways</h2>
+<ul>
+<li>AI shopping is growing fast from a small base, and people are still unsure about letting AI pay.</li>
+<li>Right now, the person's limits and the store's rules are not checked against each other before money moves.</li>
+<li>Shoppers risk an agent that buys too much or buys from a fake store. Stores risk unwanted agent orders, false declines and disputes.</li>
+<li>Rules on one side only leave the other side guessing. A check that needs both sides to say yes closes that gap.</li>
+<li>Lowtides is a demo of this idea. The stores are fictional and the money is PayPal sandbox test money.</li>
+</ul>
+
+<h2>AI agents are starting to shop for us</h2>
+<p>For a long time, an online purchase had a simple shape. A person looked at a page, clicked a button and typed in a card number. The store knew a human was on the other end, or at least acted like it did.</p>
+<p>That shape is changing. More people now ask an AI to compare products, find a deal or build a cart. Adobe tracks visits to U.S. retail sites that come from clicks on links in generative AI tools. For the 2025 holiday season, it reported that this traffic rose <a href="https://news.adobe.com/news/2026/01/adobe-holiday-shopping-season" rel="noopener">693.4% over the year before</a> (Adobe, 2026). Adobe also said the base of users is still modest, so a big percentage can sit on top of a small number. Still, the direction is clear.</p>
+<p>Looking is one step. Buying is the next one. When the AI stops pointing at a product and starts paying for it, the stakes change. Now a mistake costs real money, and someone has to answer for it.</p>
+<p>People notice this. A Visa survey run by The Harris Poll in May 2026 asked 2,065 U.S. consumers about AI and payments. It found that <a href="https://corporate.visa.com/en/sites/visa-perspectives/press-releases/visa-trust-index-consumer-insights-into-ai-shopping-payments.html" rel="noopener">72% of consumers have used an AI assistant</a>, but only 23% of U.S. consumers trust generative AI to handle payments for them (Visa, 2026). People are happy to ask AI for help. Many are not ready to hand it the wallet.</p>
+
+<figure class="bl-fig"><svg viewBox="0 0 640 320" role="img" aria-label="Bar chart from a 2026 Visa and Harris Poll survey of 2,065 U.S. consumers. 72 percent have used an AI assistant. 23 percent of U.S. consumers trust generative AI to handle payments on their behalf.">
+<line x1="60" y1="255" x2="600" y2="255" stroke="#16302b" stroke-width="2"/>
+<rect x="140" y="111" width="140" height="144" fill="#1f6f5c"/>
+<rect x="360" y="209" width="140" height="46" fill="#8fd0bd"/>
+<text x="210" y="98" text-anchor="middle" font-family="inherit" font-size="22" font-weight="700" fill="#16302b">72%</text>
+<text x="430" y="196" text-anchor="middle" font-family="inherit" font-size="22" font-weight="700" fill="#16302b">23%</text>
+<text x="210" y="280" text-anchor="middle" font-family="inherit" font-size="15" fill="#16302b">Have used an</text>
+<text x="210" y="300" text-anchor="middle" font-family="inherit" font-size="15" fill="#16302b">AI assistant</text>
+<text x="430" y="280" text-anchor="middle" font-family="inherit" font-size="15" fill="#16302b">Trust AI to handle</text>
+<text x="430" y="300" text-anchor="middle" font-family="inherit" font-size="15" fill="#16302b">payments for them</text>
+<text x="320" y="30" text-anchor="middle" font-family="inherit" font-size="16" font-weight="700" fill="#16302b">Using AI is common. Trusting it with payments is not.</text>
+</svg><figcaption>U.S. consumers, May 2026: 72% have used an AI assistant, 23% trust generative AI to handle payments. Source: <a href="https://corporate.visa.com/en/sites/visa-perspectives/press-releases/visa-trust-index-consumer-insights-into-ai-shopping-payments.html" rel="noopener">Visa and The Harris Poll, 2026</a>.</figcaption></figure>
+
+<h2>What goes wrong for shoppers</h2>
+<p>Let's start with the person who owns the money. Giving an AI a shopping job sounds easy. In practice, there are three ways it can go wrong.</p>
+<h3>The agent buys too much</h3>
+<p>You ask for a pair of running shoes. The agent finds a bundle that looks like a better deal, adds socks and a water bottle, and pays. Each choice seemed smart to the agent. None of it was what you asked for.</p>
+<p>Security teams have a name for this. The OWASP project lists "excessive agency" as a risk for AI systems. It says the problem grows from three things: the AI has more tools than it needs, it has more permissions than the job needs, and it can take big actions without anyone checking. OWASP's advice includes asking a person to confirm high-impact actions and giving the AI only the access the task needs (<a href="https://genai.owasp.org/llmrisk/llm062025-excessive-agency/" rel="noopener">OWASP, 2025</a>). Spending money is a high-impact action.</p>
+<h3>The agent buys from a fake store</h3>
+<p>Fake stores copy real ones. They use a name that is one letter off, a new web address and prices that look too good. A person might spot this. A fast agent that is just trying to finish the job might not.</p>
+<p>The wider fraud numbers show why this matters. The Federal Trade Commission said people reported losing more than $12.5 billion to fraud in 2024, up 25% from the year before. The FTC also said online shopping problems were the <a href="https://www.ftc.gov/news-events/news/press-releases/2025/03/new-ftc-data-show-big-jump-reported-losses-fraud-125-billion-2024" rel="noopener">second most commonly reported</a> kind of fraud (FTC, 2025). That is a count of reports, not dollars, and reported losses are only part of the picture. But it tells us that bad stores are not rare.</p>
+<p>The same FTC release said 38% of people who reported fraud in 2024 said they lost money, up from 27% in 2023. More reports now end in a real loss.</p>
+
+<figure class="bl-fig"><svg viewBox="0 0 640 320" role="img" aria-label="Horizontal bar chart from the FTC. Among people who reported fraud, 27 percent said they lost money in 2023 and 38 percent said they lost money in 2024.">
+<text x="320" y="36" text-anchor="middle" font-family="inherit" font-size="16" font-weight="700" fill="#16302b">Reported fraud that ended in a loss</text>
+<text x="30" y="125" font-family="inherit" font-size="18" font-weight="700" fill="#16302b">2023</text>
+<rect x="100" y="95" width="216" height="50" fill="#8fd0bd"/>
+<text x="328" y="128" font-family="inherit" font-size="20" font-weight="700" fill="#16302b">27%</text>
+<text x="30" y="215" font-family="inherit" font-size="18" font-weight="700" fill="#16302b">2024</text>
+<rect x="100" y="185" width="304" height="50" fill="#1f6f5c"/>
+<text x="416" y="218" font-family="inherit" font-size="20" font-weight="700" fill="#16302b">38%</text>
+<line x1="100" y1="80" x2="100" y2="250" stroke="#16302b" stroke-width="2"/>
+<text x="320" y="292" text-anchor="middle" font-family="inherit" font-size="14" fill="#16302b">Share of people who reported fraud and said they lost money</text>
+</svg><figcaption>Among people who reported fraud to the FTC, 27% said they lost money in 2023 and 38% in 2024. Source: <a href="https://www.ftc.gov/news-events/news/press-releases/2025/03/new-ftc-data-show-big-jump-reported-losses-fraud-125-billion-2024" rel="noopener">Federal Trade Commission, 2025</a>.</figcaption></figure>
+
+<h3>No one can say what you agreed to</h3>
+<p>Say an order goes wrong. Did you tell the agent to buy it? Was it allowed to spend that much? Did the store know a bot placed the order? Today the answers are scattered across chat logs, app settings and card statements. That makes it hard to fix a mistake and even harder to prove what happened.</p>
+<p>Shoppers have told researchers what would help. In a Salesforce study of 8,350 shoppers across 21 countries, fielded in late 2024, people ranked what would raise their trust in AI agents. Privacy and security protections came first, an easy on and off switch was second, and a rule that the agent must get approval before any purchase was third (<a href="https://www.salesforce.com/news/stories/ai-agent-retail-trends-2025/" rel="noopener">Salesforce, 2025</a>). Notice the pattern. People want control, and they want it in plain terms.</p>
+<p>Pew Research Center found something similar about AI in general. In a June 2025 survey of 5,023 U.S. consumers, <a href="https://www.pewresearch.org/science/2025/09/17/how-americans-view-ai-and-its-impact-on-people-and-society/" rel="noopener">50% said they were more concerned than excited</a> about AI in daily life, up from 37% in 2021. Pew also reported that about six in ten want more control over how AI is used in their lives (Pew Research Center, 2025).</p>
+
+<h2>What goes wrong for stores</h2>
+<p>Stores have their own list of worries, and it is easy to forget them. Most AI shopping talk is about the buyer. But a store is the other half of every sale.</p>
+<h3>Orders it never wanted</h3>
+<p>A store may be fine with a person shopping through an AI helper. It may not be fine with any bot buying anything. Maybe it does not want bots buying limited-edition items that sell out in seconds. Maybe it does not want an AI placing a very large order with no person looking. Maybe it wants to block one agent that has caused trouble before.</p>
+<p>Today, a store has few clean ways to say this. It can add checkout puzzles, rate limits or blocks. Those tools are blunt. They treat a helpful agent and a bad bot the same way.</p>
+<h3>False declines</h3>
+<p>The blunt tools cause a second problem. When a store cannot tell a good agent from a bad one, it plays it safe and turns away orders that look odd. An AI agent does look odd. It may not move a mouse or pause on a page. A real customer with a real wish to buy gets a "declined" message and leaves. That is a lost sale and an annoyed customer.</p>
+<h3>Disputes after the fact</h3>
+<p>The third problem comes later. A customer sees a charge and says, "I never agreed to that." The store has a record that a payment went through, but no clear proof that the person approved it, set a limit or knew what the agent was doing. Now the store is stuck in a dispute with weak evidence.</p>
+<p>Notice what is missing in all three cases. The store never got to state its rules for AI shoppers ahead of time, and it never got a signed record of the buyer's rules in return. Each side is guessing about the other.</p>
+
+<h2>Why rules on one side are not enough</h2>
+<p>Many tools today put limits on the buyer's side. You can set a daily cap, pick allowed categories or require approval over a set amount. Those are good ideas, and they help. But they only answer one question: "Is the shopper willing?"</p>
+<p>The store has a question too: "Are we willing to sell to this agent, this way, at this size?" If nothing checks that, the store finds out when the order lands.</p>
+<p>The reverse is also true. If a store sets rules for bots but the buyer's limits never reach the store, the store cannot tell whether the person truly approved the order. Here is how the two approaches compare.</p>
+<div class="bl-tablewrap"><table>
+<thead>
+<tr><th>Question</th><th>Rules on one side only</th><th>A yes from both sides</th></tr>
+</thead>
+<tbody>
+<tr><td>Who sets the limits?</td><td>The buyer, or the store, but not both</td><td>The buyer and the store, each in writing</td></tr>
+<tr><td>When are they checked?</td><td>Often after the order, or never against each other</td><td>Before any money moves</td></tr>
+<tr><td>Fake store?</td><td>The agent may not notice</td><td>A store check runs first, and a store with no signed rules is refused</td></tr>
+<tr><td>Order too big for a bot?</td><td>The store finds out at checkout</td><td>The store's limit is part of the test, so the order waits for a person</td></tr>
+<tr><td>If there is a dispute</td><td>Weak proof of what was agreed</td><td>A signed receipt shows both sides' rules and the result</td></tr>
+<tr><td>If the shopper panics</td><td>Hunt through settings, one store at a time</td><td>One off switch turns everything off at once</td></tr>
+</tbody>
+</table></div>
+<p>The point is simple. A sale has two parties, so a safe sale needs both of them to agree.</p>
+
+<h2>How a two-sided consent check works</h2>
+<p>Lowtides is built around this idea. We call it Consent Shopping. It has three parts.</p>
+<ol>
+<li><strong>The Pass.</strong> The person writes rules in plain words, such as "never buy gift cards" or "ask me over $50." The rules are turned into a Pass that the AI shopper carries. The Pass is digitally signed, so it cannot be quietly changed.</li>
+<li><strong>The Store Policy.</strong> Each store publishes its own signed rules for AI shoppers. It can set the largest order allowed with no person involved, which categories are open, the minimum trust it wants and which agents are blocked.</li>
+<li><strong>The Handshake.</strong> One check reads both documents. It asks whether the Pass allows this purchase and whether the Store Policy allows this buyer. Both must say yes.</li>
+</ol>
+<p>The answer comes back as a light:</p>
+<ul>
+<li><strong>Green:</strong> both sides said yes. The payment goes through. In the demo, that means PayPal sandbox.</li>
+<li><strong>Yellow:</strong> something needs a person. The order waits for the shopper's yes before any money moves.</li>
+<li><strong>Red:</strong> a rule said no. Nothing moves.</li>
+</ul>
+
+<figure class="bl-fig"><svg viewBox="0 0 640 320" role="img" aria-label="Diagram. The shopper's Pass and the store's Store Policy both feed into the Handshake. The Handshake gives one of three results: green means pay, yellow means wait for the person's yes, red means no money moves.">
+<rect x="20" y="50" width="170" height="70" rx="10" fill="#8fd0bd"/>
+<text x="105" y="82" text-anchor="middle" font-family="inherit" font-size="16" font-weight="700" fill="#16302b">Pass</text>
+<text x="105" y="104" text-anchor="middle" font-family="inherit" font-size="14" fill="#16302b">the person's rules</text>
+<rect x="20" y="200" width="170" height="70" rx="10" fill="#8fd0bd"/>
+<text x="105" y="232" text-anchor="middle" font-family="inherit" font-size="16" font-weight="700" fill="#16302b">Store Policy</text>
+<text x="105" y="254" text-anchor="middle" font-family="inherit" font-size="14" fill="#16302b">the store's rules</text>
+<line x1="190" y1="85" x2="260" y2="150" stroke="#16302b" stroke-width="3"/>
+<line x1="190" y1="235" x2="260" y2="170" stroke="#16302b" stroke-width="3"/>
+<rect x="260" y="115" width="130" height="90" rx="10" fill="#1f6f5c"/>
+<text x="325" y="152" text-anchor="middle" font-family="inherit" font-size="18" font-weight="700" fill="#ffffff">Handshake</text>
+<text x="325" y="177" text-anchor="middle" font-family="inherit" font-size="14" fill="#ffffff">checks both</text>
+<line x1="390" y1="145" x2="450" y2="75" stroke="#16302b" stroke-width="3"/>
+<line x1="390" y1="160" x2="450" y2="160" stroke="#16302b" stroke-width="3"/>
+<line x1="390" y1="175" x2="450" y2="245" stroke="#16302b" stroke-width="3"/>
+<rect x="450" y="45" width="170" height="60" rx="10" fill="#1f6f5c"/>
+<text x="535" y="70" text-anchor="middle" font-family="inherit" font-size="16" font-weight="700" fill="#ffffff">Green</text>
+<text x="535" y="91" text-anchor="middle" font-family="inherit" font-size="14" fill="#ffffff">both yes, pay</text>
+<rect x="450" y="130" width="170" height="60" rx="10" fill="#f2d16b"/>
+<text x="535" y="155" text-anchor="middle" font-family="inherit" font-size="16" font-weight="700" fill="#16302b">Yellow</text>
+<text x="535" y="176" text-anchor="middle" font-family="inherit" font-size="14" fill="#16302b">wait for a person</text>
+<rect x="450" y="215" width="170" height="60" rx="10" fill="#e8a09a"/>
+<text x="535" y="240" text-anchor="middle" font-family="inherit" font-size="16" font-weight="700" fill="#16302b">Red</text>
+<text x="535" y="261" text-anchor="middle" font-family="inherit" font-size="14" fill="#16302b">no money moves</text>
+</svg><figcaption>The Pass and the Store Policy go into one Handshake. The result is green, yellow or red.</figcaption></figure>
+
+<p>Two more parts support this. GuardPooch is a store watchdog. It looks at the store before a purchase and flags warning signs such as a copycat name, a very new web address, no signed policy or prices that are far too low. And the whole thing follows one rule: the AI can propose, but plain code decides. The Handshake can only make a payment harder than the shopper's own rules, never easier.</p>
+<p>You can see it work on the <a href="/handshake/">Handshake page</a>, which shows both sides checked side by side.</p>
+
+<h2>What this fixes for shoppers and for stores</h2>
+<h3>For shoppers</h3>
+<ul>
+<li><strong>It stops overspending.</strong> If an order is over your line, it turns yellow and waits for you. The agent cannot stretch your rules.</li>
+<li><strong>It blocks fake stores.</strong> A copycat store with no signed policy gets a red light before any money moves.</li>
+<li><strong>It gives you a clear record.</strong> Each check produces a signed receipt that shows what was asked, what the rules were and what happened.</li>
+<li><strong>It gives you an off switch.</strong> Press Stop all and your Pass is revoked at every store at once. Every check then turns red.</li>
+</ul>
+<p>You can try these on the <a href="/shop/">shopper control panel</a> in the demo.</p>
+<h3>For stores</h3>
+<ul>
+<li><strong>It lets you say no to bot orders you do not want.</strong> You set a limit for orders with no person involved, choose categories and block agents.</li>
+<li><strong>It cuts false declines.</strong> Instead of turning away anything that looks like a bot, you can accept the AI shoppers whose rules fit yours, and send the rest to a person.</li>
+<li><strong>It gives you better proof.</strong> A signed receipt that shows the buyer's rules and your own helps if a customer later disputes an order.</li>
+<li><strong>It treats your rules as equal.</strong> In the demo, lower the "max order without a person" limit and sign the policy again, and the same purchase that was green turns yellow.</li>
+</ul>
+<p>Stores can try this on the <a href="/merchants/">store control center</a>. For a deeper look at the thinking behind it, read our post on <a href="/blog/agentic-commerce-consent/">consent in agentic commerce</a>.</p>
+<p>One more point is worth saying plainly. Disputes are a real cost for sellers, and we are not claiming a number for how much a two-sided check would cut. We could not verify a figure we were willing to print, so we leave it out. What we can say is how the design helps: a clear, signed record on both sides gives a seller and a buyer something solid to look at when a payment is questioned.</p>
+
+<h2>Beyond shopping, and what this demo is not</h2>
+<p>AI agents will not only buy things. They will also book tables, schedule visits, make calls, sign up for lists and send messages. The same problem shows up there. The agent can do more than you meant, and the business on the other end may not want an AI doing it.</p>
+<p>Lowtides covers this with Action Muzzle. You give the AI a job in plain words, and it may do only that job. Each business publishes its own signed rules. Anything outside the job has to ask. Things that cannot be undone, like canceling or sharing personal details, ask by default. Private items such as a Social Security number, a password or a card number are never shared, whatever the settings say. If a booking carries a deposit, it is paid only after both sides say yes. You can <a href="/shop/#muzzle">try Action Muzzle</a> in the demo. You can also pick a stop word, and saying it freezes everything.</p>
+<p>Now the honest part. Lowtides is a hackathon demo, and patent pending. Here is what that means:</p>
+<ul>
+<li>The stores are fictional. We have no real store partners, and nothing real is contacted.</li>
+<li>The money is PayPal sandbox test money. With sandbox keys set on the server, a green match makes a PayPal sandbox payment. Without them, the demo runs a labeled simulation. Every receipt says which one it was.</li>
+<li>We do not claim any link to a card network, and no live payments happen.</li>
+<li>Turning a job into a scope in Action Muzzle uses fixed rules. No AI model reads the job. Live phone calls with checks during the call are part of the design but are not built.</li>
+<li>A two-sided check does not make fraud vanish. It makes the rules clear and checked before money moves.</li>
+</ul>
+<p>The idea matters more than any one tool. As AI agents buy more, someone has to decide who may do what, and both the person and the store should have a say. If you want to see it for yourself, start with the <a href="/shop/">shopper demo</a> and press Stop all at the end to watch every store turn red.</p>
+
+<h2>Sources</h2>
+<ul>
+<li><a href="https://news.adobe.com/news/2026/01/adobe-holiday-shopping-season" rel="noopener">Adobe, 2026. Holiday shopping season release (generative AI traffic to U.S. retail sites rose 693.4% year over year, Nov. 1 to Dec. 31, 2025).</a></li>
+<li><a href="https://corporate.visa.com/en/sites/visa-perspectives/press-releases/visa-trust-index-consumer-insights-into-ai-shopping-payments.html" rel="noopener">Visa and The Harris Poll, 2026. Consumer trust and agentic commerce (72% used an AI assistant; 23% trust generative AI with payments; 2,065 U.S. consumers, May 26 to 28, 2026).</a></li>
+<li><a href="https://www.ftc.gov/news-events/news/press-releases/2025/03/new-ftc-data-show-big-jump-reported-losses-fraud-125-billion-2024" rel="noopener">Federal Trade Commission, 2025. Fraud losses over $12.5 billion in 2024, up 25%; 38% of reporters lost money versus 27% in 2023; online shopping second most reported.</a></li>
+<li><a href="https://www.pewresearch.org/science/2025/09/17/how-americans-view-ai-and-its-impact-on-people-and-society/" rel="noopener">Pew Research Center, 2025. How Americans view AI (50% more concerned than excited versus 37% in 2021; about six in ten want more control; 5,023 adults, June 9 to 15, 2025).</a></li>
+<li><a href="https://www.salesforce.com/news/stories/ai-agent-retail-trends-2025/" rel="noopener">Salesforce, 2025. AI agent retail trends (8,350 shoppers; factors that raise trust include on/off control and approval before purchase).</a></li>
+<li><a href="https://genai.owasp.org/llmrisk/llm062025-excessive-agency/" rel="noopener">OWASP GenAI Security Project, 2025. LLM06: Excessive Agency.</a></li>
+</ul>
+<h2>Common questions</h2>
+<details><summary>Why does AI shopping need consent from both the shopper and the store?</summary><p>A sale has two parties. The shopper needs limits so the AI does not overspend or buy from a fake store. The store needs rules so it is not hit with bot orders it never wanted. A check that needs both to say yes protects each side before money moves.</p></details>
+<details><summary>What is the Pass and the Store Policy?</summary><p>The Pass is a signed set of rules the person gives their AI shopper, such as spending limits and things never to buy. The Store Policy is a signed set of rules a store publishes for AI shoppers, such as the largest order allowed with no person involved. The Handshake checks both.</p></details>
+<details><summary>What do the green, yellow and red lights mean?</summary><p>Green means both sides said yes and the payment goes through (PayPal sandbox in the demo). Yellow means a person must decide, so nothing is paid until they say yes. Red means a rule said no, so no money moves.</p></details>
+<details><summary>Is Lowtides making real payments?</summary><p>No. Lowtides is a demo. The stores are fictional and the money is PayPal sandbox test money. Without sandbox keys, the demo runs a labeled simulation. Every receipt says which one happened.</p></details>
+<details><summary>What does Stop all do?</summary><p>Stop all revokes the shopper&#x27;s Pass at every store at once, so every check turns red. It also cancels open holds and payouts that have not gone through. It is the off switch for the AI shopper.</p></details>
+
+<p class="bl-cta"><a class="lt-btn lt-btn--primary" href="/shop/">Try Consent Shopping</a> <a class="lt-btn" href="/blog/">More from the blog</a></p>
+</article>
+</main>
+<footer class="cc-foot">
+  <div class="lt-wrap cc-foot-in">
+    <p>Demo only: PayPal sandbox, test money, fictional demo stores. Open source under AGPL-3.0. <span class="pat-pend">Patent Pending.</span></p>
+    <nav aria-label="Footer">
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/">For stores</a>
+      <a href="/handshake/">See both sides</a>
+      <a href="/pass/">Check a Pass</a>
+      <a href="/why/">Why Lowtides</a>
+      <a href="/blog/">Blog</a>
+      <a href="/sitemap/">Site map</a>
+      <a href="/privacy/">Privacy</a>
+    </nav>
+    <div class="cc-heart"><span aria-hidden="true">&#10084;</span><a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a></div>
+  </div>
+</footer>
+<link rel="stylesheet" href="/ask.css">
+<script src="/ask.js" defer></script>
+</body>
+</html>

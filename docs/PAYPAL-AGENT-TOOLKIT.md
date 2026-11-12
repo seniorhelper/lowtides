@@ -16,7 +16,7 @@ Read-only tools pass straight through. If Lowtides can't be reached, or the guar
 
 ## Why it matters
 
-- **One policy for every agent.** The same per-agent rules apply whether an agent pays through Lowtides' own spend API or through PayPal's toolkit. That covers the daily limit, ask-over-$X, blocked categories, new-merchant checks, the kill switch, and the hash-chained audit log.
+- **One policy for every agent.** The same per-agent rules apply whether an agent pays through Lowtides' own spend API or through PayPal's toolkit. That covers the daily limit, ask-over-$X, blocked categories, new-merchant checks, the stop switch, and the hash-chained audit log.
 - **No agent rewrite.** The guard wraps the toolkit's single `PayPalAPI.run` call, which every adapter uses (OpenAI Agents SDK, LangChain, CrewAI, Bedrock). Agents keep the tools they already have.
 - **Real amounts, not claimed ones.** Before a capture, the guard reads the order from PayPal and sends that total to Lowtides. A prompt-injected agent can't pass a $5,000 capture off as $5.
 

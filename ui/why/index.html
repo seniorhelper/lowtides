@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Cost Governor: Spending Limits &amp; a Kill Switch for AI Agents | Lowtides</title>
-<meta name="description" content="Lowtides gives AI agents one budget for what they cost to run and what they buy: plain-English rules, approvals over your limit, a STOP ALL switch and PayPal settlement. Free, open source.">
+<title>Why Lowtides: Consent Shopping for AI Agents</title>
+<meta name="description" content="Consent Shopping: your AI shopper and the store both say yes, or no money moves. Plain-English rules, approvals, a Stop all switch. PayPal sandbox.">
 <link rel="canonical" href="https://lowtides.ai/why/">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta name="theme-color" content="#0A1B1E">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lowtides">
 <meta property="og:url" content="https://lowtides.ai/why/">
-<meta property="og:title" content="Lowtides: the AI cost governor for agents">
-<meta property="og:description" content="One budget and a STOP button for AI agents: cap their AI bill and their purchases, approve the risky ones, settle through PayPal.">
+<meta property="og:title" content="Lowtides: Consent Shopping for AI agents">
+<meta property="og:description" content="Your AI shopper and the store both say yes, or no money moves. One budget, a Stop all switch, PayPal sandbox settlement.">
 <meta property="og:image" content="https://lowtides.ai/brand/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
@@ -25,14 +25,14 @@
 <noscript><link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
- {"@type":"WebPage","@id":"https://lowtides.ai/why/#page","url":"https://lowtides.ai/why/","name":"AI Cost Governor: Spending Limits and a Kill Switch for AI Agents","isPartOf":{"@id":"https://lowtides.ai/#site"},"about":{"@id":"https://lowtides.ai/#app"},"breadcrumb":{"@id":"https://lowtides.ai/why/#crumbs"}},
+ {"@type":"WebPage","@id":"https://lowtides.ai/why/#page","url":"https://lowtides.ai/why/","name":"Why Lowtides: Consent Shopping for AI Agents","isPartOf":{"@id":"https://lowtides.ai/#site"},"about":{"@id":"https://lowtides.ai/#app"},"breadcrumb":{"@id":"https://lowtides.ai/why/#crumbs"}},
  {"@type":"BreadcrumbList","@id":"https://lowtides.ai/why/#crumbs","itemListElement":[{"@type":"ListItem","position":1,"name":"Lowtides","item":"https://lowtides.ai/"},{"@type":"ListItem","position":2,"name":"Why Lowtides","item":"https://lowtides.ai/why/"}]},
  {"@type":"SoftwareApplication","@id":"https://lowtides.ai/#app","name":"Lowtides","url":"https://lowtides.ai/","applicationCategory":"FinanceApplication","operatingSystem":"Web, Windows, macOS, Linux","license":"https://www.gnu.org/licenses/agpl-3.0.html","codeRepository":"https://github.com/seniorhelper/lowtides","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}},
  {"@type":"FAQPage","@id":"https://lowtides.ai/why/#faq","mainEntity":[
   {"@type":"Question","name":"What is an AI cost governor?","acceptedAnswer":{"@type":"Answer","text":"An AI cost governor sits between AI agents and your money and enforces limits while the agent runs. Lowtides governs both sides of agent spending: what the agent costs to run (model calls) and what it buys (purchases), under one daily budget with a STOP button."}},
   {"@type":"Question","name":"How do I set a spending limit for an AI agent?","acceptedAnswer":{"@type":"Answer","text":"Type the rules in plain English, for example: Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto. Lowtides turns them into strict rules you review, and the agent must ask Lowtides before every purchase."}},
-  {"@type":"Question","name":"Does the AI decide whether a payment goes through?","acceptedAnswer":{"@type":"Answer","text":"No. Claude only helps turn your plain-English rules into structured rules that you approve. Every payment decision is made by plain code against those rules, and anything risky waits for a person."}},
-  {"@type":"Question","name":"What happens when I press STOP ALL?","acceptedAnswer":{"@type":"Answer","text":"Every agent stops, pending purchases are denied, open PayPal authorization holds are voided and PayPal payouts that haven't been claimed yet are cancelled. The model proxy refuses further calls until a person turns the agent back on."}},
+  {"@type":"Question","name":"Does the AI decide whether a payment goes through?","acceptedAnswer":{"@type":"Answer","text":"No. The AI only helps turn your plain-English rules into structured rules that you approve. Every payment decision is made by plain code against those rules, and anything risky waits for a person."}},
+  {"@type":"Question","name":"What happens when I press STOP ALL?","acceptedAnswer":{"@type":"Answer","text":"Every agent stops, pending purchases are denied, open PayPal authorization holds are voided and PayPal payouts that haven't been claimed yet are canceled. The model proxy refuses further calls until a person turns the agent back on."}},
   {"@type":"Question","name":"How does Lowtides stop a runaway agent loop?","acceptedAnswer":{"@type":"Answer","text":"The loop guard notices when an agent keeps sending the same or growing request and pauses it before it burns more money. Per-call cost caps, prompt-size limits and a combined daily budget catch the rest."}},
   {"@type":"Question","name":"Which PayPal APIs does Lowtides use?","acceptedAnswer":{"@type":"Answer","text":"Orders v2 for wallet top-ups and authorize-then-capture holds, Payouts to pay merchants for approved purchases, Invoicing v2 to bill clients for agent usage, and Webhooks with signature verification. It can also guard the PayPal Agent Toolkit."}},
   {"@type":"Question","name":"Does it work with my existing agents?","acceptedAnswer":{"@type":"Answer","text":"Yes. Point your agent at Lowtides instead of the OpenAI or Anthropic API, or connect Lowtides as an MCP server. Agents ask before buying through a simple spend API."}},
@@ -41,7 +41,7 @@
 ]}
 </script>
 <style>
-:root{--bg:#F4F8F7;--card:#fff;--ink:#0D2A2E;--ink-2:#33504F;--line:#D5E3E0;--tide:#16A285;--tide-l:#E3F5F0;--amber:#E39A2D;--stop:#B8352A;--deep:#0A1B1E;--deep-2:#10272B;--deep-line:#24434A;--deep-ink:#E6F4F1;--deep-muted:#9DB5B1;--deep-tide:#3FD6B5;
+:root{--bg:#F4F8F7;--card:#fff;--ink:#0D2A2E;--ink-2:#33504F;--line:#D5E3E0;--tide:#16A285;--tide-l:#E3F5F0;--amber:#E39A2D;--stop:#B3261E;--deep:#0A1B1E;--deep-2:#10272B;--deep-line:#24434A;--deep-ink:#E6F4F1;--deep-muted:#9DB5B1;--deep-tide:#3FD6B5;
 --font:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--head:"Sora","Instrument Sans",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--font);-webkit-font-smoothing:antialiased}
@@ -59,7 +59,7 @@ header.top{background:#fff;border-bottom:1px solid var(--line);position:sticky;t
 .top nav a:hover{background:var(--tide-l);color:var(--ink)}
 .btn{display:inline-flex;align-items:center;gap:.5rem;justify-content:center;font:700 1rem var(--font);text-decoration:none;border-radius:10px;padding:.85rem 1.25rem;border:2px solid transparent;min-height:48px}
 .btn.go{background:#0E7A64;color:#fff}.btn.go:hover{background:#0A5C4B;color:#fff}
-.btn.red{background:var(--stop);color:#fff}.btn.red:hover{background:#962a21;color:#fff}
+.btn.red{background:var(--stop);color:#fff}.btn.red:hover{background:#8F1D17;color:#fff}
 .btn.line{border-color:var(--deep-line);color:var(--deep-ink)}.btn.line:hover{border-color:var(--deep-tide);color:#fff}
 .btn.line-l{border-color:var(--ink);color:var(--ink);background:#fff}.btn.line-l:hover{background:var(--ink);color:#fff}
 .top .btn{padding:.55rem 1rem;min-height:42px;font-size:.95rem}
@@ -126,12 +126,12 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap top-in">
-    <a class="brand" href="/" aria-label="Lowtides live demo"><img src="/brand/lowtides-mark-animated.svg" width="32" height="32" alt="">lowtides</a>
+    <a class="brand" href="/" aria-label="Lowtides home"><img src="/brand/lowtides-mark-animated.svg" width="32" height="32" alt="">lowtides</a>
     <nav aria-label="Page">
       <a href="#how" class="hide-s">How it works</a>
       <a href="#paypal" class="hide-s">PayPal</a>
       <a href="#faq">FAQ</a>
-      <a class="btn go" href="/">Live demo</a>
+      <a class="btn go" href="/app/">Live demo</a>
     </nav>
   </div>
 </header>
@@ -140,11 +140,11 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
 <section class="hero">
   <div class="wrap hero-g">
     <div>
-      <p class="eyebrow">The AI cost governor</p>
-      <h1>One budget and a <b>STOP button</b> for your AI agents.</h1>
-      <p class="lead">Lowtides caps what your agents cost to run <em>and</em> what they buy. Set the rules in plain English, approve the risky purchases with one tap, and settle everything through PayPal.</p>
+      <p class="eyebrow">Why Lowtides</p>
+      <h1>Consent Shopping: <b>both sides say yes</b>, or no money moves.</h1>
+      <p class="lead">Your AI shopper carries a signed Pass with your rules. Each store publishes a signed Store Policy, and GuardPooch checks the store is real. Behind it, Lowtides caps what agents cost to run <em>and</em> what they buy, and settles through PayPal (sandbox in this demo).</p>
       <div class="cta">
-        <a class="btn red" href="/">&#9654; Watch a runaway agent get stopped</a>
+        <a class="btn red" href="/app/">&#9654; Watch a runaway agent get stopped</a>
         <a class="btn line" href="https://github.com/seniorhelper/lowtides">See the open-source code</a>
       </div>
       <p class="trust">No login &middot; PayPal sandbox &middot; Open source (AGPL-3.0)</p>
@@ -181,7 +181,7 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
       <div class="card stat"><div class="n">$31.43</div><p>spent on eggs by an AI shopping agent that was only asked to find them.</p><a class="src" href="https://www.adn.com/alaska-life/2025/02/09/i-let-chatgpts-new-agent-manage-my-life-it-spent-31-on-a-dozen-eggs/" rel="noopener">Washington Post, 2025</a></div>
       <div class="card stat"><div class="n">31%</div><p>of US consumers would allow no autonomous AI spending at all.</p><a class="src" href="https://www.techwyse.com/news/ai-search/ai-shopping-adoption-consumer-distrust-autonomous-spending-2026" rel="noopener">Exploding Topics via TechWyse, 2026</a></div>
       <div class="card stat"><div class="n">6 in 10</div><p>UK adults would stop using an AI shopping agent after a single mistake.</p><a class="src" href="https://glenbrook.com/payments_news/six-in-ten-uk-consumers-would-stop-using-an-ai-shopping-agent-after-one-mistake-aci-survey-finds/" rel="noopener">ACI Worldwide / YouGov</a></div>
-      <div class="card stat"><div class="n">40%+</div><p>of agentic AI projects are predicted to be cancelled by 2027, citing costs and weak risk controls.</p><a class="src" href="https://www.gartner.com/en/newsroom/press-releases/2025-06-25-gartner-predicts-over-40-percent-of-agentic-ai-projects-will-be-canceled-by-end-of-2027" rel="noopener">Gartner, 2025</a></div>
+      <div class="card stat"><div class="n">40%+</div><p>of agentic AI projects are predicted to be canceled by 2027, citing costs and weak risk controls.</p><a class="src" href="https://www.gartner.com/en/newsroom/press-releases/2025-06-25-gartner-predicts-over-40-percent-of-agentic-ai-projects-will-be-canceled-by-end-of-2027" rel="noopener">Gartner, 2025</a></div>
     </div>
   </div>
 </section>
@@ -191,9 +191,9 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
     <h2>How it works</h2>
     <p class="sub">Your agents don't change. Point them at Lowtides instead of the model provider, or connect it as an MCP server.</p>
     <div class="g3">
-      <div class="card step"><div class="k">STEP 1</div><h3>Type your rules in plain English</h3><p>Claude turns them into strict rules you review before saving.</p><div class="quote">Max $100 a day. Ask me over $25. Never buy gift cards or crypto.</div></div>
+      <div class="card step"><div class="k">STEP 1</div><h3>Type your rules in plain English</h3><p>AI turns them into strict rules you review before saving.</p><div class="quote">Max $100 a day. Ask me over $25. Never buy gift cards or crypto.</div></div>
       <div class="card step"><div class="k">STEP 2</div><h3>Agents ask before they spend</h3><p>Every model call and every purchase is checked against the rules in the request path, before the money moves. Code decides. The AI never approves a payment.</p></div>
-      <div class="card step"><div class="k">STEP 3</div><h3>You approve, or press STOP</h3><p>Risky purchases wait for one tap. STOP ALL halts every agent, voids PayPal holds and cancels payouts that haven't landed.</p></div>
+      <div class="card step"><div class="k">STEP 3</div><h3>You approve, or press Stop all</h3><p>Risky purchases wait for one tap. Stop all halts agents, revokes their Passes, voids PayPal holds and cancels payouts that haven't landed.</p></div>
     </div>
   </div>
 </section>
@@ -207,7 +207,7 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></div><h3>Loop guard</h3><p>Pauses an agent repeating itself before it burns more money.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 8v5M12 16h.01"/></svg></div><h3>Prompt-injection hold</h3><p>New payees and instruction-like text wait for a person.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M8 7h8M8 12h8M8 17h5"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg></div><h3>Burst-proof limits</h3><p>Simultaneous requests are decided one at a time, so a burst can't overspend.</p></div>
-      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg></div><h3>Real kill switch</h3><p>Stops agents, pulls back money that hasn't landed yet and revokes their saved PayPal.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg></div><h3>Real stop switch</h3><p>Stops agents, pulls back money that hasn't landed yet and revokes their saved PayPal.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></div><h3>One-tap approvals</h3><p>Small, known, in-budget buys go through. Only the risky ones wait.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></div><h3>Tamper-evident log</h3><p>A hash-chained audit trail and a dispute evidence pack per purchase.</p></div>
       <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Receipt in dollars</h3><p>"Would have cost $X. You paid $Y." Honest, strict math.</p></div>
@@ -224,9 +224,9 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
       <tbody>
         <tr><td><code>Orders v2</code> capture</td><td>Prepaid agent wallets: agents can only spend what you've topped up.</td></tr>
         <tr><td><code>Orders v2</code> authorize, capture, void</td><td>Quote and hold: PayPal holds the quote, Lowtides captures only the real cost and releases the rest. STOP voids open holds.</td></tr>
-        <tr><td><code>Payouts</code></td><td>Pays merchants for approved agent purchases. The kill switch cancels payouts that haven't been claimed.</td></tr>
+        <tr><td><code>Payouts</code></td><td>Pays merchants for approved agent purchases. The stop switch cancels payouts that haven't been claimed.</td></tr>
         <tr><td><code>Invoicing v2</code></td><td>Agencies bill clients for the AI their agents ran, with the savings receipt in the memo.</td></tr>
-        <tr><td><code>Vault v3</code></td><td>PayPal on file for each agent. KILL and STOP ALL delete the saved payment token at PayPal, so it can't be charged again until you reconnect it (simulated in the public demo).</td></tr>
+        <tr><td><code>Vault v3</code></td><td>PayPal on file for each agent. Stop all delete the saved payment token at PayPal, so it can't be charged again until you reconnect it (simulated in the public demo).</td></tr>
         <tr><td><code>Webhooks</code></td><td>Signature-verified events credit top-ups and reversals exactly once.</td></tr>
         <tr><td>Agent Toolkit</td><td>Lowtides can guard the PayPal Agent Toolkit, checking each tool call against your rules first.</td></tr>
       </tbody>
@@ -250,8 +250,8 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
     <h2>Questions</h2>
     <details open><summary>What is an AI cost governor?</summary><p>An AI cost governor sits between AI agents and your money and enforces limits while the agent runs. Lowtides governs both sides of agent spending: what the agent costs to run (model calls) and what it buys (purchases), under one daily budget with a STOP button.</p></details>
     <details><summary>How do I set a spending limit for an AI agent?</summary><p>Type the rules in plain English, for example: "Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto." Lowtides turns them into strict rules you review, and the agent must ask Lowtides before every purchase.</p></details>
-    <details><summary>Does the AI decide whether a payment goes through?</summary><p>No. Claude only helps turn your plain-English rules into structured rules that you approve. Every payment decision is made by plain code against those rules, and anything risky waits for a person.</p></details>
-    <details><summary>What happens when I press STOP ALL?</summary><p>Every agent stops, pending purchases are denied, open PayPal authorization holds are voided and PayPal payouts that haven't been claimed yet are cancelled. The model proxy refuses further calls until a person turns the agent back on.</p></details>
+    <details><summary>Does the AI decide whether a payment goes through?</summary><p>No. The AI only helps turn your plain-English rules into structured rules that you approve. Every payment decision is made by plain code against those rules, and anything risky waits for a person.</p></details>
+    <details><summary>What happens when I press STOP ALL?</summary><p>Every agent stops, pending purchases are denied, open PayPal authorization holds are voided and PayPal payouts that haven't been claimed yet are canceled. The model proxy refuses further calls until a person turns the agent back on.</p></details>
     <details><summary>How does Lowtides stop a runaway agent loop?</summary><p>The loop guard notices when an agent keeps sending the same or growing request and pauses it before it burns more money. Per-call cost caps, prompt-size limits and a combined daily budget catch the rest.</p></details>
     <details><summary>Which PayPal APIs does Lowtides use?</summary><p>Orders v2 for wallet top-ups and authorize-then-capture holds, Payouts to pay merchants for approved purchases, Invoicing v2 to bill clients for agent usage, and Webhooks with signature verification. It can also guard the PayPal Agent Toolkit.</p></details>
     <details><summary>Does it work with my existing agents?</summary><p>Yes. Point your agent at Lowtides instead of the OpenAI or Anthropic API, or connect Lowtides as an MCP server. Agents ask before buying through a simple spend API (<code>POST /v1/spend</code>).</p></details>
@@ -262,8 +262,8 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
 <section class="band final">
   <div class="wrap">
     <h2>Keep AI spend at low tide.</h2>
-    <p>See a runaway agent get caught in under a minute: a poisoned payment held, a $480 GPU rental blocked, a retry loop paused, and the kill switch pulling money back.</p>
-    <div class="cta"><a class="btn red" href="/">&#9654; Open the live demo</a><a class="btn line" href="https://github.com/seniorhelper/lowtides">Get the code</a></div>
+    <p>See a runaway agent get caught in under a minute: a poisoned payment held, a $480 GPU rental blocked, a retry loop paused, and the stop switch pulling money back.</p>
+    <div class="cta"><a class="btn red" href="/app/">&#9654; Open the live demo</a><a class="btn line" href="https://github.com/seniorhelper/lowtides">Get the code</a></div>
   </div>
 </section>
 </main>
@@ -271,8 +271,8 @@ footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
 <footer>
   <div class="wrap">
     <div class="foot-g">
-      <span>&copy; 2026 Lowtides &middot; Open source under AGPL-3.0</span>
-      <span><a href="/">Live demo</a> &middot; <a href="https://github.com/seniorhelper/lowtides">GitHub</a> &middot; <a href="/llms.txt">llms.txt</a></span>
+      <span>&copy; 2026 Lowtides &middot; Open source under AGPL-3.0 &middot; <span class="pat-pend">Patent Pending</span> &middot; <a href="/blog/">Blog</a> &middot; <a href="/tools/">Free tools</a> &middot; <a href="/sitemap/">Site map</a> &middot; <a href="/privacy/">Privacy</a></span>
+      <span><a href="/">Home</a> &middot; <a href="/app/">Live demo</a> &middot; <a href="https://github.com/seniorhelper/lowtides">GitHub</a> &middot; <a href="/llms.txt">llms.txt</a></span>
     </div>
     <div class="heart-line"><span class="heart" aria-hidden="true">&#10084;</span><a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a></div>
   </div>

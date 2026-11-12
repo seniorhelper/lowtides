@@ -4,7 +4,7 @@ Used for these money flows:
   * Wallet top-ups       Orders API, intent CAPTURE
   * Quote & hold tasks   Orders API, intent AUTHORIZE, then capture only the real cost and void the rest
   * Agent purchases      Payouts API
-  * PayPal on file       Vault v3 payment tokens per agent; the kill switch deletes them
+  * PayPal on file       Vault v3 payment tokens per agent; the stop switch deletes them
   * Client invoices      Invoicing API v2 (business side)
 plus webhook signature verification.
 

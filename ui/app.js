@@ -137,7 +137,7 @@
     if (q.indexOf("vault=1") >= 0) flash("PayPal on file is connected for this agent.");
     if (q.indexOf("canceled=1") >= 0) flash("PayPal checkout was canceled. Nothing was charged.", true);
     if (q.indexOf("try=1") >= 0) {
-      flash("Your turn: approve or deny the held purchases. Then on Home: press Resume, check its Rules, and hit KILL.");
+      flash("Your turn: approve or deny the held purchases. Then on Home: open the agent's Pass, press Resume, and press Shut off.");
       if (history.replaceState) history.replaceState(null, "", location.pathname + location.search + "#" + t);
       setTimeout(function () { var s = $("tab-" + t); if (s) s.scrollIntoView({ block: "start" }); }, 350);  // skip past the banner on a phone
     }
@@ -190,11 +190,11 @@
       b.id = "demo-banner";
       b.className = "demo-banner";
       b.setAttribute("role", "note");
-      b.innerHTML = '<span><strong class="demo-pitch">Lowtides puts one budget, your rules and a kill switch between AI agents and your money: ' +
+      b.innerHTML = '<span><strong class="demo-pitch">Lowtides puts one budget, your rules and a stop switch between AI agents and your money: ' +
         'their AI bills and what they buy through PayPal.</strong> ' +
         '<strong>Public demo:</strong> PayPal <strong>sandbox</strong> (test money) and simulated AI models, so nothing here costs ' +
         'real money. A runaway agent is already loaded: check <a href="#approvals">Approvals</a>, open an ' +
-        "agent's <strong>Rules</strong>, or hit <strong>KILL</strong>.</span>" +
+        "agent's <strong>Pass</strong> or <strong>Rules</strong>, or press <strong>Shut off</strong>.</span>" +
         '<button type="button" class="btn ghost" id="demo-reset">Reset demo</button>';
       var top = document.querySelector("header.top");
       top.parentNode.insertBefore(b, top.nextSibling);
@@ -233,7 +233,7 @@
 
   function render() {
     if (!S) return;
-    document.title = S.app;
+    document.title = "Agent bills & controls | " + S.app;
     $("app-name").textContent = S.app === "Lowtides" ? "lowtides" : S.app;  // brand wordmark is lowercase
     document.body.classList.toggle("biz", S.mode === "business");
     document.querySelectorAll(".mode-btn").forEach(function (b) {
@@ -301,7 +301,7 @@
       }
       var nm = esc(a.name);
       var kill = a.status === "stopped" ? "" :
-        '<button class="btn kill sm" data-act="kill" data-id="' + a.id + '" aria-label="Kill ' + nm + '">KILL</button>';
+        '<button class="btn kill sm" data-act="kill" data-id="' + a.id + '" aria-label="Shut off ' + nm + '">SHUT OFF</button>';
       var rules = FEAT.rules ? '<button class="btn ghost sm" data-act="rules" data-id="' + a.id + '" aria-label="Rules for ' + nm + '">Rules</button>' : "";
       return '<div class="agent">' +
         '<div class="light ' + a.light + '" role="img" aria-label="' + esc(a.light) + ' light"><i></i><i></i><i></i></div>' +
@@ -438,8 +438,8 @@
         'print(llm.invoke("Hello!").content)',
         "# CrewAI, LlamaIndex and most agent frameworks take the same base_url + api_key."
       ].join("\n"),
-      // Pure JSON so it pastes cleanly into Claude Desktop, Claude Code, Cursor or any MCP app's config.
-      // Runs from the Lowtides repo folder; the agent gets request_spend, check_spend and get_budget.
+      // Pure JSON so it pastes cleanly into any MCP app's config.
+      // Runs from the Lowtides repo folder; the agent gets list_stores, handshake, get_pass, get_budget, request_spend and check_spend.
       "mcp": [
         "{",
         '  "mcpServers": {',
@@ -702,6 +702,57 @@
   });
 
   // ---------- ledger ----------
+  var ledgerRows = [];
+  var LEDGER_CSV_NAME = "lowtides-every-call.csv";
+  var LEDGER_CSV_COLS = [
+    ["when", "When"], ["agent", "Agent"], ["task", "Task"], ["asked", "Asked for"], ["used", "Answered by"], ["how", "How"],
+    ["tokens_in", "Tokens in"], ["tokens_out", "Tokens out"], ["cost", "Paid"], ["would_have", "Would have cost"],
+    ["saved", "Saved (+/-)"], ["estimated", "Estimated"], ["note", "Note"]
+  ];
+  // Spreadsheet formula guard: text starting with = + - @ (or tab / return) gets a leading single quote.
+  // Real numbers (like a negative "saved" amount) are left as numbers.
+  function csvSafe(v) {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "number" && isFinite(v)) return v;
+    var s = String(v);
+    return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+  }
+  function csvField(v) {
+    return '"' + String(csvSafe(v)).replace(/"/g, '""') + '"';
+  }
+  function updateLedgerTools() {
+    var btn = $("ledger-export"), sum = $("ledger-summary");
+    var n = ledgerRows.length, total = 0, blocked = 0;
+    ledgerRows.forEach(function (x) {
+      total += Number(x.cost) || 0;
+      if (x.how === "blocked") blocked++;
+    });
+    if (sum) sum.textContent = n + (n === 1 ? " call" : " calls") + " · $" + (total > 0 && total < 0.01 ? total.toFixed(4) : total.toFixed(2)) + " AI cost · " + blocked + " blocked";
+    if (btn) {
+      btn.disabled = !n;
+      btn.title = n ? "Download these calls as a CSV file" : "No calls to export yet";
+    }
+  }
+  function exportLedgerCsv() {
+    if (!ledgerRows.length) return;
+    if (grid && typeof grid.exportDataAsCsv === "function") {
+      grid.exportDataAsCsv({ fileName: LEDGER_CSV_NAME, processCellCallback: function (p) { return csvSafe(p.value); } });
+      return;
+    }
+    var lines = [LEDGER_CSV_COLS.map(function (c) { return csvField(c[1]); }).join(",")];
+    ledgerRows.forEach(function (x) {
+      lines.push(LEDGER_CSV_COLS.map(function (c) { return csvField(x[c[0]]); }).join(","));
+    });
+    var url = URL.createObjectURL(new Blob([lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }));
+    var a = document.createElement("a");
+    a.href = url; a.download = LEDGER_CSV_NAME; a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  if ($("ledger-export")) $("ledger-export").addEventListener("click", exportLedgerCsv);
+
   function loadLedger() {
     api("GET", "/api/ledger?limit=1000").then(function (r) {
       var rows = r.rows.map(function (x) {
@@ -713,6 +764,8 @@
           estimated: x.usage_estimated ? "yes" : "", note: x.note
         };
       });
+      ledgerRows = rows;
+      updateLedgerTools();
       var el = $("grid");
       if (window.agGrid && agGrid.createGrid) {
         var moneyFmt = function (p) { return money4(p.value); };
@@ -852,7 +905,7 @@
     }
     svg += '<g class="t-pace" hidden><line x1="0" y1="0" x2="240" y2="0"></line></g></svg>';
     card.innerHTML =
-      '<header class="tcard-head"><h3 class="tcard-name"></h3><span class="tstat"></span></header>' +
+      '<header class="tcard-head"><h2 class="tcard-name"></h2><span class="tstat"></span></header>' +
       '<div class="tfield">' + svg + "</div>" +
       '<p class="tnums"><span class="tspent" data-v="">$0.00</span> <span class="tof"></span></p>' +
       '<div class="tsplit" hidden><div class="tsplit-bar" role="img"><i class="ai"></i><i class="buy"></i></div>' +
@@ -1107,13 +1160,13 @@
 
   var STATUS = {
     paid: ["Paid", "ok", "&#10003;"], approved: ["Approved", "ok", "&#10003;"], pending: ["Waiting for you", "warn", "&#8230;"],
-    denied: ["Denied", "bad", "&#10005;"], cancelled: ["Cancelled", "neutral", "&#8211;"], failed: ["Payment failed", "bad", "!"]
+    denied: ["Denied", "bad", "&#10005;"], cancelled: ["Canceled", "neutral", "&#8211;"], failed: ["Payment failed", "bad", "!"]
   };
   function decidedBy(x) {
     if (!x.decided_by) return "";
     var d = String(x.decided_by).toLowerCase();
     if (d === "rules") return "Decided by your rules.";
-    if (d.indexOf("kill") >= 0 || d.indexOf("stop") >= 0) return "Ended by the kill switch.";
+    if (d.indexOf("kill") >= 0 || d.indexOf("stop") >= 0) return "Ended by the stop switch.";
     if (/dashboard|person|admin|owner|human|you/.test(d)) return "Decided by you on the dashboard.";
     return "Decided by: " + x.decided_by + ".";
   }
@@ -1160,16 +1213,16 @@
     }).catch(soft("audit", true));
   }
 
-  // ---------- kill switch ----------
+  // ---------- stop switch ----------
   var killTarget = null, killReturn = null;
   function askKill(a, from) {
     killTarget = a;
     killReturn = from || $("stop-all");
-    $("kill-h").textContent = a ? "Kill " + a.name + "?" : "Stop every agent?";
+    $("kill-h").textContent = a ? "Shut off " + a.name + "?" : "Stop every agent?";
     $("kill-text").textContent = (a ? "This stops " + a.name + " right now. " : "This stops all your agents right now. ") +
       "Lowtides denies " + (a ? "its" : "their") + " waiting purchases, voids open PayPal holds, cancels payouts nobody has claimed yet and revokes " +
       (a ? "its" : "their") + " saved PayPal payment method. You can start " + (a ? "it" : "them") + " again later.";
-    $("kill-yes").textContent = a ? "Kill it now" : "Stop all now";
+    $("kill-yes").textContent = a ? "Shut it off now" : "Stop all now";
     var dlg = $("kill-dlg");
     if (dlg.showModal) { dlg.showModal(); $("kill-yes").focus(); }
     else LT.confirm({ tone: "stop", title: $("kill-h").textContent, body: $("kill-text").textContent, ok: $("kill-yes").textContent, cancel: "Keep it running" })
@@ -1181,7 +1234,7 @@
     var bits = [];
     if (r.denied) bits.push("denied " + plural(r.denied, "pending purchase", "pending purchases"));
     if (r.holds_voided) bits.push("voided " + plural(r.holds_voided, "PayPal hold", "PayPal holds"));
-    if (r.payouts_cancelled) bits.push("cancelled " + plural(r.payouts_cancelled, "payout", "payouts"));
+    if (r.payouts_cancelled) bits.push("canceled " + plural(r.payouts_cancelled, "payout", "payouts"));
     if (r.tokens_revoked) bits.push("revoked " + (r.tokens_revoked === 1 ? "the saved PayPal payment method" : r.tokens_revoked + " saved PayPal payment methods"));
     if (!bits.length) return "Nothing else was waiting.";
     var s = bits.length > 1 ? bits.slice(0, -1).join(", ") + " and " + bits[bits.length - 1] : bits[0];
@@ -1326,8 +1379,8 @@
       draftRules = r.rules || {};
       $("rules-new").innerHTML = ruleItems(draftRules, r.plain);
       var src = $("rules-source");
-      if (r.source === "claude") { src.className = "rules-source claude"; src.textContent = "Translated by Claude. Claude only writes the rules: every purchase is checked by plain code, never by the AI."; }
-      else { src.className = "rules-source offline"; src.textContent = "Translated by the built-in offline parser (no Claude key set). Check each line."; }
+      if (r.source === "claude") { src.className = "rules-source claude"; src.textContent = "Translated by AI. The AI only writes the rules: every purchase is checked by plain code."; }
+      else { src.className = "rules-source offline"; src.textContent = "Translated by the built-in offline parser (no AI key set). Check each line."; }
       $("rules-notes").innerHTML = (r.notes || []).map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("");
       $("rules-preview").hidden = false;
       $("rules-preview").querySelector("h3").setAttribute("tabindex", "-1");

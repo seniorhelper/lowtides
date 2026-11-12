@@ -1,0 +1,19 @@
+/* "Report this store": the button and the saved-report panel on /shop/ (purchases and Action Muzzle). */
+.rp { margin-top: var(--lt-s4, 16px); text-align: left; }
+.rp-btn { min-height: 44px; }
+.rp-btn:focus-visible, .rp-link:focus-visible { outline: 3px solid var(--lt-focus, #0B6656); outline-offset: 3px; }
+.rp-panel { border: 1px solid var(--lt-line, #D9E6E3); border-radius: var(--lt-r-sm, 12px); background: var(--lt-bg, #fff); color: var(--lt-ink, #0D2A2E);
+  padding: var(--lt-s4, 16px); }
+.rp-panel:focus-visible { outline: 3px solid var(--lt-focus, #0B6656); outline-offset: 3px; }
+.rp-panel > * { margin: 0 0 var(--lt-s3, 12px); }
+.rp-panel > *:last-child { margin-bottom: 0; }
+.rp-saved { font-weight: 700; font-size: 1.05rem; }
+.rp-demo { padding: 12px 14px; border-radius: var(--lt-r-sm, 12px); border: 2px solid var(--lt-limit, #E39A2D); background: #FFF7E8;
+  color: var(--lt-ink, #0D2A2E); font-weight: 700; line-height: 1.45; }
+.rp-h { font-size: 1rem; font-weight: 700; }
+.rp-reasons, .rp-official { padding-left: 1.2em; line-height: 1.5; }
+.rp-reasons li, .rp-official li { margin: 0 0 4px; overflow-wrap: anywhere; }
+.rp-links { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.rp-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--lt-primary, #0B6656); font-weight: 700; text-decoration: underline; }
+.rp-err { color: var(--lt-revoked-ink, #B3261E); font-weight: 600; }
+.rp-err:empty { display: none; }

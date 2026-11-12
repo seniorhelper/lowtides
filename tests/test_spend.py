@@ -52,7 +52,7 @@ class TestRules(unittest.TestCase):
         out = compile_rules("ask me over $10")
         self.assertEqual(out["source"], "offline")
         self.assertEqual(out["rules"]["approval_over"], 10)
-        self.assertIn("No ANTHROPIC_API_KEY", out["notes"][0])
+        self.assertIn("built-in rule reader", out["notes"][0])
 
     def test_compile_with_claude(self):
         llm, url = fakes.start(fakes.FakeLLMHandler, fakes.llm_state())
@@ -77,6 +77,32 @@ class TestRules(unittest.TestCase):
             self.assertEqual(out["rules"]["approval_over"], 10)
         finally:
             llm.shutdown()
+
+    def test_offline_parser_reads_each_clause_on_its_own(self):
+        out = compile_rules("never buy gift cards, ask me over $50")
+        self.assertEqual(out["set"], ["approval_over", "blocked_categories"])      # no default caps sneak in
+        self.assertEqual(out["rules"]["blocked_categories"], ["gift cards"])
+        self.assertEqual(out["rules"]["approval_over"], 50)
+        self.assertEqual(out["plain_set"], ["Purchases over $50.00 need a person to approve them.", "Never: gift cards."])
+        out = compile_rules("Max $100 a day. No more than $60 per purchase. Ask me over $25. Never buy gift cards or crypto.")
+        r = out["rules"]
+        self.assertEqual((r["daily_purchase_limit"], r["max_per_purchase"], r["approval_over"]), (100, 60, 25))
+        self.assertEqual(r["blocked_categories"], ["crypto", "gift cards"])
+        self.assertEqual(len(out["set"]), 4)
+        out = compile_rules("only buy hardware and pet supplies")
+        self.assertEqual(out["set"], ["allowed_categories"])
+        self.assertEqual(out["rules"]["allowed_categories"], ["hardware", "pet supplies"])
+        out = compile_rules("ask me before anything over 40 dollars")
+        self.assertEqual((out["set"], out["rules"]["approval_over"]), (["approval_over"], 40))
+        out = compile_rules("never buy gift cards and ask me over $50 and only buy tools, paint")
+        self.assertEqual(out["rules"]["blocked_categories"], ["gift cards"])
+        self.assertEqual(out["rules"]["allowed_categories"], ["paint", "tools"])
+        self.assertEqual(compile_rules("blah blah")["set"], [])
+
+    def test_shop_apply_sends_only_the_rules_the_text_mentioned(self):
+        js = open("ui/shop/shop.js", encoding="utf-8").read()
+        self.assertIn("r.plain_set", js)
+        self.assertIn("given.forEach", js)
 
     def test_plain_english(self):
         lines = describe_rules(validate_rules({"daily_total_limit": 9}))
@@ -353,6 +379,18 @@ class TestPayoutErrors(unittest.TestCase):
         self.assertEqual(r["status"], "failed")
         self.assertIn("INSUFFICIENT_FUNDS", r["note"])
 
+    def test_public_demo_settles_as_a_labeled_simulation_when_the_sandbox_balance_is_empty(self):
+        self.pp.state["payout_error"] = (422, {"name": "INSUFFICIENT_FUNDS", "message": "Sender has insufficient funds."})
+        self.g.demo_fallback = True
+        try:
+            r = self.g.request(self.a, buy(5))
+        finally:
+            self.g.demo_fallback = False
+        self.assertEqual((r["status"], r["payout_status"], bool(r["simulated"])), ("paid", "SIMULATED", True))
+        self.assertTrue(r["payout_batch_id"].startswith("SIM-"))
+        self.assertIn("sandbox balance was empty", r["note"])
+        self.assertIn("nothing was sent to PayPal", r["note"])
+
     def test_failed_payout_on_approval_and_wallet_untouched(self):
         self.s.update_agent(self.a["id"], use_wallet=1)
         self.s.wallet_move(self.a["id"], 100, "topup", ref="t1")
@@ -397,7 +435,7 @@ class TestPayoutErrors(unittest.TestCase):
         r = self.g.request(self.a, buy(5))
         out = self.g.kill(self.a["id"])
         self.assertEqual(out["payouts_cancelled"], 0)
-        self.assertTrue(any("can't be cancelled" in p for p in out["problems"]), out)
+        self.assertTrue(any("can't be canceled" in p for p in out["problems"]), out)
         self.assertEqual(self.s.spend(r["id"])["status"], "paid")
 
     def test_refresh_turns_returned_payout_into_failed_and_refunds_wallet(self):
@@ -433,6 +471,30 @@ class TestSpendHTTP(ServerCase):
     def test_needs_a_key(self):
         s, r, _ = http("POST", self.url + "/v1/spend", buy(5), {"Authorization": "Bearer lt-nope"})
         self.assertEqual(s, 401)
+
+    def test_shopper_modes_apply_on_the_direct_spend_route(self):
+        from lowtides import trust
+        self.api("POST", "/api/merchants", {"name": "Acme Data", "paypal_email": "acme@example.com", "category": "data"})
+        aid = self.agent["id"]
+        s, _, _ = self.api("PUT", "/api/shopper/prefs", {"agent_id": aid, "mode": "autopilot"})
+        self.assertEqual(s, 200)
+        s, r, _ = self.spend(amount=3)                                  # default mode changes nothing
+        self.assertEqual((s, r["decision"]), (200, "approved"))
+        self.api("PUT", "/api/shopper/prefs", {"agent_id": aid, "mode": "assist"})
+        s, r, _ = self.spend(amount=4)                                  # Assist holds a small purchase for approval
+        self.assertEqual((s, r["decision"], r["status"]), (200, "needs_approval", "pending"))
+        self.assertIn("Assist mode", " ".join(r["reasons"]))
+        self.api("PUT", "/api/shopper/prefs", {"agent_id": aid, "mode": "off"})
+        before = trust.compute(self.app.store, aid)["score"]
+        count = len(self.app.store.q("SELECT id FROM spend_requests WHERE agent_id=?", (aid,)))
+        s, r, _ = self.spend(amount=5)                                  # Off refuses with a clear reason, records nothing
+        self.assertEqual(s, 403)
+        self.assertIn("switched Off", r["error"])
+        self.assertEqual(len(self.app.store.q("SELECT id FROM spend_requests WHERE agent_id=?", (aid,))), count)
+        self.assertEqual(trust.compute(self.app.store, aid)["score"], before)
+        self.api("PUT", "/api/shopper/prefs", {"agent_id": aid, "mode": "autopilot"})
+        s, r, _ = self.spend(amount=6)
+        self.assertEqual((s, r["decision"]), (200, "approved"))
 
     def test_paid_through_paypal_payouts(self):
         self.api("POST", "/api/merchants", {"name": "Acme Data", "paypal_email": "acme@example.com", "category": "data"})

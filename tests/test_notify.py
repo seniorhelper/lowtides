@@ -375,10 +375,12 @@ class TestWebhooksHTTP(ServerCase):
         self.api("POST", "/api/agents/%d/kill" % r["agent"]["id"], {})
         self.api("POST", "/api/stop-all", {})
         self.assertTrue(self.app.notify.drain())
-        kinds = [e["type"] for e in self.h.events()]
-        self.assertEqual(kinds, ["agent.killed", "stop_all"])
-        self.assertEqual(self.h.events()[0]["data"]["agent_name"], r["agent"]["name"])
-        self.assertIn("payouts_cancelled", self.h.events()[1]["data"])
+        # Several workers deliver at once, so two events can arrive in either order. Check by type.
+        by_type = {e["type"]: e for e in self.h.events()}
+        self.assertEqual(sorted(by_type), ["agent.killed", "stop_all"])
+        self.assertEqual(len(self.h.events()), 2)
+        self.assertEqual(by_type["agent.killed"]["data"]["agent_name"], r["agent"]["name"])
+        self.assertIn("payouts_cancelled", by_type["stop_all"]["data"])
 
 
 if __name__ == "__main__":

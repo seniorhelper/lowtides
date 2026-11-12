@@ -144,7 +144,8 @@ class TestServedSpecAndPostman(ServerCase):
     def test_every_documented_route_is_routed(self):
         _, r, _ = self.api("POST", "/api/agents", {"name": "Route check %f" % time.time()})
         key, aid = r["agent"]["key"], r["agent"]["id"]
-        fill = {"id": "sp_0000000000000000", "agent_id": str(aid), "webhook_id": "999999"}
+        fill = {"id": "sp_0000000000000000", "agent_id": str(aid), "webhook_id": "999999",
+                "store_id": "harbor", "handshake_id": "hs_0000000000000000"}
         for template, ops in openapi.SPEC["paths"].items():
             if template == "/api/stop-all":
                 continue  # covered by the Postman replay; would stop every agent here

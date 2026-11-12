@@ -2,11 +2,11 @@
 
 /* Call to action inside the demo banner */
 .demo-banner .tour-cta {
-  background: var(--stop-strong, #B8352A); border-color: var(--stop-strong, #B8352A); color: #fff;
+  background: var(--stop-strong, #B3261E); border-color: var(--stop-strong, #B3261E); color: #fff;
   font-size: 1.05rem; min-height: 48px; padding: .6rem 1.15rem; flex: 0 0 auto;
   box-shadow: 0 2px 0 rgba(10, 27, 30, .25);
 }
-.demo-banner .tour-cta:hover { background: #962A21; border-color: #962A21; }
+.demo-banner .tour-cta:hover { background: var(--lt-revoked-strong-hover, #8F1D17); border-color: var(--lt-revoked-strong-hover, #8F1D17); }
 .demo-banner .tour-cta:focus-visible { outline: 3px solid var(--focus, #0F7F6A); outline-offset: 3px; }
 @media (max-width: 560px) { .demo-banner .tour-cta { width: 100%; } }
 
@@ -50,7 +50,7 @@ html.tour-open { overflow: hidden; }
 .tour-verdict.wait { background: transparent; color: var(--deep-muted, #9DB5B1); border: 1px dashed var(--deep-line, #24434A); font-weight: 600; letter-spacing: 0; }
 .tour-verdict.ok { background: var(--deep-tide, #3FD6B5); color: #0A1B1E; }
 .tour-verdict.hold { background: var(--deep-limit, #F2B24D); color: #0A1B1E; }
-.tour-verdict.bad { background: var(--stop-strong, #B8352A); color: #fff; }
+.tour-verdict.bad { background: var(--stop-strong, #B3261E); color: #fff; }
 .tour-why { margin: 0; font-size: 1rem; line-height: 1.45; }
 .tour-why:empty { display: none; }
 

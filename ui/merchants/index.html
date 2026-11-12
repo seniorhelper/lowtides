@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>For Stores: Know Which AI Shoppers to Trust | Lowtides Store Control Center</title>
+<meta name="description" content="Publish signed rules for AI shoppers, see each agent's trust score and orders, and check a Pass before you capture. Demo: PayPal sandbox, test money.">
+<link rel="canonical" href="https://lowtides.ai/merchants/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#FFFFFF">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lowtides">
+<meta property="og:url" content="https://lowtides.ai/merchants/">
+<meta property="og:title" content="For stores: know which AI shoppers to trust">
+<meta property="og:description" content="Publish a signed Store Policy for AI shoppers, see trust scores and outcomes, and check a Pass before capture. PayPal sandbox demo.">
+<meta property="og:image:alt" content="lowtides.ai logo">
+<meta name="twitter:title" content="For stores: know which AI shoppers to trust">
+<meta name="twitter:description" content="Publish signed rules for AI shoppers and only take money both sides agreed to.">
+<meta property="og:image" content="https://lowtides.ai/brand/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lowtides.ai/brand/og.png">
+<link rel="icon" href="/brand/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="apple-touch-icon" href="/brand/favicon-180.png">
+<link rel="stylesheet" href="/brand.css">
+<link rel="stylesheet" href="/cc.css">
+<link rel="modulepreload" href="/merchants/lowtides-pass-check.js">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"WebPage","@id":"https://lowtides.ai/merchants/#page","url":"https://lowtides.ai/merchants/","name":"For merchants: check an AI agent's Pass before you take its money","description":"How a merchant checks an AI agent's Lowtides Pass right before a PayPal capture, with a live checkout simulator and copy-paste code.","isPartOf":{"@id":"https://lowtides.ai/#site"},"about":{"@id":"https://lowtides.ai/#app"},"breadcrumb":{"@id":"https://lowtides.ai/merchants/#crumbs"}},
+ {"@type":"BreadcrumbList","@id":"https://lowtides.ai/merchants/#crumbs","itemListElement":[{"@type":"ListItem","position":1,"name":"Lowtides","item":"https://lowtides.ai/"},{"@type":"ListItem","position":2,"name":"For merchants","item":"https://lowtides.ai/merchants/"}]},
+ {"@type":"HowTo","@id":"https://lowtides.ai/merchants/#howto","name":"Check an AI agent's Lowtides Pass before a PayPal capture","step":[
+  {"@type":"HowToStep","position":1,"name":"Ask for the pass","text":"The AI agent sends its Lowtides Pass with the order."},
+  {"@type":"HowToStep","position":2,"name":"Check it for the real amount","text":"Right before capture, call POST /v1/pass/verify with the pass, the PayPal order's amount, your merchant name and the category. Optionally check the Ed25519 signature offline too."},
+  {"@type":"HowToStep","position":3,"name":"Capture, hold or refuse","text":"Capture when Lowtides says allowed. Hold when the owner must approve. Refuse when the pass is revoked, expired, forged or the purchase is denied, and void the PayPal authorization if you placed one."}]},
+ {"@type":"FAQPage","@id":"https://lowtides.ai/merchants/#faq","mainEntity":[
+  {"@type":"Question","name":"Why should a merchant check an AI agent's pass?","acceptedAnswer":{"@type":"Answer","text":"A PayPal approval only proves the buyer approved the order at that moment. The Lowtides Pass tells you whether the agent is still allowed to spend this amount at your store right now, and whether its owner pressed Stop all. That cuts disputes and chargebacks from runaway or hijacked agents."}},
+  {"@type":"Question","name":"When should I check the pass?","acceptedAnswer":{"@type":"Answer","text":"Right before you capture the PayPal order or authorization, using the amount from the order itself, not a number the agent tells you."}},
+  {"@type":"Question","name":"What if Lowtides is down?","acceptedAnswer":{"@type":"Answer","text":"The checker fails closed: the answer is hold, so nothing is captured until the check succeeds."}},
+  {"@type":"Question","name":"Does checking a pass cost money or record anything?","acceptedAnswer":{"@type":"Answer","text":"No. POST /v1/pass/verify is free, needs no login and records nothing. It runs the same checks a real spend request would and reports what would happen."}}
+ ]}
+]}
+</script>
+<style>
+:root{--bg:#F4F8F7;--card:#fff;--ink:#0D2A2E;--ink-2:#33504F;--line:#D5E3E0;--tide:#16A285;--tide-d:#0E7A64;--tide-l:#E3F5F0;--amber:#E39A2D;--stop:var(--lt-revoked-strong,#B3261E);
+--ok-bg:#E3F5F0;--ok-ink:#0B5E4D;--ok-line:#16A285;--bad-bg:var(--lt-revoked-bg,#FDECEA);--bad-ink:var(--lt-revoked-ink,#B3261E);--bad-line:var(--lt-revoked-line,#D9483B);--warn-bg:#FFF3DC;--warn-ink:#704600;--warn-line:#E39A2D;
+--font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--head:var(--font);--mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--font);-webkit-font-smoothing:antialiased}
+a{color:var(--tide-d)}a:hover{color:var(--ink)}
+h1,h2,h3{font-family:var(--head);font-weight:800;letter-spacing:-.025em;line-height:1.15;margin:0 0 .6rem}
+h1{font-size:clamp(2rem,5.4vw,3.3rem)}h2{font-size:clamp(1.5rem,3.8vw,2.2rem)}h3{font-size:1.1rem}
+code{font:500 .9em var(--mono)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+.skip{position:absolute;left:-999px}.skip:focus{left:12px;top:12px;z-index:9;background:#fff;padding:.5rem 1rem}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+header.top{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.top-in{display:flex;align-items:center;gap:16px;height:66px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font:600 1.35rem var(--head);letter-spacing:-.04em}
+.top nav{margin-left:auto;display:flex;gap:6px;align-items:center}
+.top nav a{text-decoration:none;color:var(--ink-2);font-weight:600;padding:.5rem .7rem;border-radius:8px}
+.top nav a:hover{background:var(--tide-l);color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:.5rem;justify-content:center;font:700 1rem var(--font);text-decoration:none;border-radius:10px;padding:.8rem 1.2rem;border:2px solid transparent;min-height:48px;cursor:pointer;background:none}
+.btn.go{background:var(--tide-d);color:#fff}.btn.go:hover{background:#0A5C4B;color:#fff}
+.btn.line{border-color:var(--ink);color:var(--ink);background:#fff}.btn.line:hover{background:var(--ink);color:#fff}
+.btn.red{background:var(--stop);color:#fff}.btn.red:hover{background:var(--lt-revoked-strong-hover,#8F1D17);color:#fff}
+.btn.sm{min-height:40px;padding:.45rem .85rem;font-size:.92rem}
+.btn[disabled]{opacity:.6;cursor:wait}
+.top .btn{padding:.55rem 1rem;min-height:42px;font-size:.95rem}
+.hero{padding:clamp(40px,7vw,80px) 0 clamp(28px,4vw,44px)}
+.hero-g{display:grid;grid-template-columns:1.2fr 1fr;gap:44px;align-items:center}
+.eyebrow{font:500 .82rem var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--tide-d);margin:0 0 .8rem}
+h1 b{color:var(--tide-d);font-weight:inherit}
+.lead{font-size:1.15rem;color:var(--ink-2);max-width:36em;margin:0 0 1.5rem}
+.cta{display:flex;flex-wrap:wrap;gap:12px}
+.trust{margin:1.1rem 0 0;font:500 .86rem var(--mono);color:var(--ink-2)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:clamp(16px,3vw,24px)}
+.card p{margin:0;color:var(--ink-2)}
+.seq{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.seq li{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.seq .n{width:34px;height:34px;border-radius:50%;background:var(--tide-l);color:var(--tide-d);display:grid;place-items:center;font:600 .95rem var(--mono)}
+.seq b{display:block;font-family:var(--head);font-size:1rem}
+.seq span.t{color:var(--ink-2);font-size:.95rem}
+.who{font:600 .74rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--tide-d)}
+section.band{padding:clamp(44px,6vw,76px) 0}
+.alt{background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sub{color:var(--ink-2);font-size:1.06rem;max-width:44em;margin:0 0 1.8rem}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+/* simulator */
+.sim{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.shop{border-top:5px solid var(--tide)}
+.shop-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:.8rem}
+.shop-h .m{font:600 1.15rem var(--head)}
+.pill{font:600 .74rem var(--mono);padding:3px 8px;border-radius:6px;background:var(--tide-l);color:var(--ok-ink)}
+fieldset{border:0;margin:0 0 14px;padding:0}
+legend{font-weight:700;margin-bottom:.45rem;padding:0}
+.cart{display:grid;gap:8px}
+.cart label{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:2px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;background:#fff}
+.cart label:has(input:checked){border-color:var(--tide);background:var(--tide-l)}
+.cart input{width:18px;height:18px;accent-color:var(--tide-d);margin:0}
+.cart .what{font-weight:600}.cart .what small{display:block;font-weight:400;color:var(--ink-2);font-size:.88rem}
+.cart .amt{font:600 1rem var(--mono)}
+.agentline{background:var(--bg);border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:.95rem;color:var(--ink)}
+.agentline strong{font-family:var(--head)}
+label.f{font-weight:700;display:block;margin:0 0 .35rem}
+textarea{width:100%;font:500 .82rem/1.45 var(--mono);color:var(--ink);background:#fff;border:2px solid var(--line);border-radius:10px;padding:.65rem .75rem;min-height:92px;resize:vertical;word-break:break-all}
+textarea:focus{border-color:var(--tide);outline:none}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+.hint{color:var(--ink-2);font-size:.9rem;margin:.45rem 0 0}
+.err{color:var(--bad-ink);font-weight:600}
+.paybar{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--line);margin-top:16px;padding-top:14px;flex-wrap:wrap}
+.paybar .tot{font:600 1.35rem var(--head)}.paybar .tot small{display:block;font:500 .8rem var(--mono);color:var(--ink-2)}
+.owner{margin-top:14px;border:1px dashed var(--line);border-radius:12px;padding:12px 14px;background:#FBFDFC}
+.owner h3{font-size:.98rem;margin:0 0 .3rem}.owner p{font-size:.9rem;margin:0 0 .6rem;color:var(--ink-2)}
+.panel{position:sticky;top:84px}
+.steps{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:8px}
+.steps li{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start;font-size:.95rem}
+.steps .s{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 .8rem var(--mono);background:var(--bg);color:var(--ink-2);border:1px solid var(--line)}
+.steps li.ok .s{background:var(--ok-bg);color:var(--ok-ink);border-color:var(--ok-line)}
+.steps li.bad .s{background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad-line)}
+.steps li.warn .s{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-line)}
+.steps li.run .s{border-color:var(--tide);animation:pulse 1s ease-in-out infinite}
+.steps b{display:block}.steps small{color:var(--ink-2);display:block;line-height:1.45}
+@keyframes pulse{50%{transform:scale(1.12)}}
+.verdict{border-radius:14px;padding:16px 18px;border:2px solid;margin-bottom:12px}
+.verdict h3{display:flex;align-items:center;gap:.55rem;margin:0 0 .3rem;font-size:1.45rem;color:inherit}
+.verdict ul{margin:.3rem 0 0;padding-left:1.15rem}.verdict li{margin:.15rem 0}
+.v-ok{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok-ink)}
+.v-bad{background:var(--bad-bg);border-color:var(--bad-line);color:var(--ink)}.v-bad h3{color:var(--bad-ink)}
+.v-warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn-ink)}
+.v-idle{background:#fff;border-color:var(--line);color:var(--ink-2)}
+.pp{font:500 .84rem/1.5 var(--mono);background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 12px;word-break:break-word}
+.pp .k{color:var(--tide-d);font-weight:600}
+details.lim{font-size:.92rem}details.lim summary{cursor:pointer;font-weight:600}
+details.lim ul{margin:.4rem 0 0;padding-left:1.15rem;color:var(--ink-2)}
+/* code */
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:-1px}
+.tabs button{font:600 .95rem var(--font);border:1px solid var(--line);border-bottom:0;background:var(--bg);color:var(--ink-2);padding:.6rem 1rem;border-radius:10px 10px 0 0;cursor:pointer;min-height:44px}
+.tabs button[aria-selected="true"]{background:#fff;color:var(--ink)}
+pre{margin:0;background:#fff;border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:14px 16px;overflow-x:auto;font:500 .84rem/1.55 var(--mono);color:var(--ink)}
+pre .c{color:#4A6663}
+.ic{width:38px;height:38px;border-radius:10px;background:var(--tide-l);display:grid;place-items:center;margin-bottom:.8rem}
+.ic svg{width:22px;height:22px;stroke:var(--tide-d);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.note{background:var(--tide-l);border-radius:10px;padding:12px 14px;color:var(--ink);margin:18px 0 0}
+details.q{background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 18px;margin-bottom:10px}
+details.q summary{cursor:pointer;font-weight:700;padding:16px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
+details.q summary::after{content:"+";font:600 1.3rem var(--mono);color:var(--tide-d)}
+details.q[open] summary::after{content:"\2013"}
+details.q p{margin:0 0 16px;color:var(--ink-2)}
+footer{padding:28px 0 22px;color:var(--ink-2);font-size:.92rem}
+.foot-g{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center}
+.heart-line{display:flex;align-items:center;justify-content:center;gap:.45rem;padding-top:1.2rem;font-weight:600}
+.heart{color:var(--stop);display:inline-block;animation:beat 1.4s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.25)}30%{transform:scale(1)}45%{transform:scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.heart,.steps li.run .s{animation:none}html{scroll-behavior:auto}}
+@media (max-width:900px){.hero-g,.sim,.g2{grid-template-columns:1fr}.g4{grid-template-columns:1fr 1fr}.panel{position:static}.top nav a.hide-s{display:none}}
+@media (max-width:560px){.g4{grid-template-columns:1fr}.top-in{gap:8px}.top nav{gap:2px}.top nav a{padding:.45rem .5rem;font-size:.92rem}.brand{font-size:1.2rem}.top .btn{padding:.5rem .75rem}.cta .btn,.paybar .btn{width:100%}.row .btn{flex:1 1 auto}}
+details.dev-more{max-width:1200px;margin:32px auto 0;padding:0 16px}
+details.dev-more>summary{cursor:pointer;font-weight:700;font-size:1.1rem;padding:16px 20px;border:1px solid #D9E6E3;border-radius:16px;background:#fff;min-height:44px}
+details.dev-more>summary:focus-visible{outline:3px solid #0B6E5B;outline-offset:2px}
+details.dev-more[open]>summary{margin-bottom:8px}
+</style>
+</head>
+<body class="lt-page cc">
+<a class="skip" href="#main">Skip to content</a>
+<header class="lt-header">
+  <div class="lt-header-in">
+    <a class="lt-logo" href="/" aria-label="Lowtides home">
+      <img class="lt-logo-mark" src="/brand/lowtides-mark-animated.svg" width="64" height="64" alt="">
+      <svg class="lt-logo-word" viewBox="0 0 150 40" aria-hidden="true" focusable="false"><text x="0" y="31" textLength="148" lengthAdjust="spacingAndGlyphs">lowtides</text></svg>
+    </a>
+    <nav class="lt-nav" aria-label="Main">
+      <a href="/#how">How it works</a>
+      <a href="/shop/">For shoppers</a>
+      <a href="/merchants/" aria-current="page">For stores</a>
+      <a href="/handshake/">See both sides</a>
+    </nav>
+    <a class="lt-btn lt-btn--primary lt-header-cta" href="#policy">Set your rules</a>
+  </div>
+</header>
+
+<main id="main">
+<section class="cc-hero" aria-labelledby="h1">
+  <div class="lt-wrap">
+    <p class="lt-eyebrow">For stores</p>
+    <h1 class="lt-h1" id="h1">Know which AI shoppers to trust.</h1>
+    <p class="lt-lead">Publish your rules for AI shoppers once, as a signed Store Policy. Every AI order is checked against them, and against the shopper’s own Pass, before PayPal takes a cent.</p>
+    <p class="cc-demo">Demo: PayPal sandbox, test money, fictional demo stores. You are editing a demo store in your own sandbox.</p>
+    <p class="cc-tour-cta"><a class="lt-btn lt-btn--ghost" href="/handshake/?tour=1"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>Play the 90-second tour</a><span>See it first: the store side, live</span></p>
+  </div>
+</section>
+
+<section class="cc-band" id="policy" aria-labelledby="pick-h">
+  <div class="lt-wrap">
+    <div class="lt-card cc-card">
+      <div class="cc-card-h">
+        <h2 id="pick-h">Pick your demo store</h2>
+        <a href="#" class="cc-ask" data-ask="What is a Store Policy?">Ask about this</a>
+        <p>Four fictional stores. The fifth, a lookalike scam store, can’t sign a policy, so it isn’t here.</p>
+      </div>
+      <div class="cc-stores" id="stores" role="radiogroup" aria-label="Demo store" style="min-height:72px"></div>
+    </div>
+  </div>
+</section>
+
+<section class="cc-band" aria-labelledby="smode-h">
+  <div class="lt-wrap">
+    <div class="lt-card cc-card">
+      <div class="cc-card-h">
+        <h2 id="smode-h">How <span class="smode-name">your store</span> treats AI shoppers</h2>
+        <a href="#" class="cc-ask" data-ask="What do the store modes do?">Ask about this</a>
+      </div>
+      <fieldset class="cc-fieldset" style="margin:0">
+        <legend class="cc-sr">Store mode</legend>
+        <div class="cc-seg cc-seg--big" id="smode">
+          <label><input type="radio" name="smode" value="auto" checked><b>Full Autopilot</b><small>Auto-accept: AI orders inside your rules go straight through.</small></label>
+          <label><input type="radio" name="smode" value="review"><b>AI Assist</b><small>Review every order: each AI order waits for a person at your store.</small></label>
+          <label><input type="radio" name="smode" value="closed"><b>Off</b><small>Closed to AI shoppers: every AI order is refused, with a plain reason.</small></label>
+        </div>
+      </fieldset>
+      <p class="cc-status" id="smode-status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
+<section class="cc-band" aria-label="Store Policy">
+  <div class="lt-wrap cc-grid-2">
+    <form class="lt-card cc-card" id="pol" novalidate>
+      <div class="cc-card-h">
+        <h2 id="pol-h">Your rules for AI shoppers</h2>
+        <p>Change anything, then press Sign and publish. AI shoppers see the new rules at once.</p>
+      </div>
+      <div class="cc-sliders">
+        <div class="lt-slider" data-prefix="$">
+          <div class="lt-slider-head"><label for="max_order_no_human">Max order without a person</label><output for="max_order_no_human">$150</output></div>
+          <input id="max_order_no_human" type="range" min="0" max="500" step="5" value="150" aria-describedby="mo-help">
+          <p class="cc-slider-help" id="mo-help">Bigger AI orders wait for a person to say yes.</p>
+        </div>
+        <div class="lt-slider">
+          <div class="lt-slider-head"><label for="min_trust">Minimum trust score</label><output for="min_trust">60</output></div>
+          <input id="min_trust" type="range" min="0" max="100" step="1" value="60" aria-describedby="mt-help">
+          <p class="cc-slider-help" id="mt-help">AI shoppers below this are refused.</p>
+        </div>
+      </div>
+      <fieldset class="cc-fieldset">
+        <legend>Categories you sell to AI shoppers</legend>
+        <div class="cc-chips" id="cats" role="group" aria-label="Categories"></div>
+      </fieldset>
+      <div class="cc-field">
+        <label class="cc-switch"><input type="checkbox" id="require_evidence"><span class="cc-track" aria-hidden="true"></span>Require proof (signed receipt and proof pack) with every AI order</label>
+      </div>
+      <fieldset class="cc-fieldset">
+        <legend>Blocked AI shoppers</legend>
+        <div class="cc-chips" id="blocked" aria-live="polite"></div>
+        <div class="cc-inline" style="margin-top:10px">
+          <label class="cc-sr" for="block-in">Block an AI shopper by name</label>
+          <input class="cc-input" id="block-in" type="text" maxlength="60" placeholder="Agent name, like “scout”" autocomplete="off" style="flex:1 1 180px">
+          <button type="button" class="lt-btn lt-btn--ghost" id="block-add">Block</button>
+        </div>
+      </fieldset>
+      <div class="cc-inline" style="margin-top:24px">
+        <button type="submit" class="lt-btn lt-btn--primary lt-btn--lg" id="publish">Sign and publish</button>
+      </div>
+      <p class="cc-status" id="pol-status" role="status" aria-live="polite"></p>
+    </form>
+
+    <div class="cc-stack">
+      <div class="lt-card cc-card">
+        <div class="cc-card-h"><h2>Published policy</h2></div>
+        <div id="pub" style="min-height:150px"></div>
+      </div>
+      <div class="lt-card cc-card">
+        <div class="cc-card-h">
+          <h2>Test it with Scout</h2>
+          <p>Run a real check (no money moves) of Scout, the demo AI shopper, against your rules.</p>
+        </div>
+        <label class="cc-label" for="test-item">Item</label>
+        <div class="cc-inline" style="margin-top:8px">
+          <select class="cc-select" id="test-item" style="flex:1 1 200px;max-width:100%"></select>
+          <button type="button" class="lt-btn lt-btn--primary" id="test-go">Check both sides</button>
+        </div>
+        <div id="test-out" aria-live="polite" style="min-height:90px;margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cc-band" id="opps" aria-labelledby="opp-h">
+  <div class="lt-wrap">
+    <div class="lt-card cc-card">
+      <div class="cc-card-h">
+        <h2 id="opp-h">Opportunities</h2>
+        <a href="#" class="cc-ask" data-ask="How are the store opportunities worked out?">Ask about this</a>
+        <p>Rule-based suggestions from your own orders. Each one re-runs your past AI orders against a small rule change and shows what would have happened. Nothing changes until you press Apply.</p>
+      </div>
+      <ul class="cc-opps" id="opp-list" aria-live="polite" style="min-height:96px"></ul>
+      <p class="cc-status" id="opp-status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
+<section class="cc-band" aria-labelledby="kpi-h">
+  <div class="lt-wrap">
+    <div class="lt-card cc-card">
+      <div class="cc-card-h">
+        <h2 id="kpi-h">How AI shoppers are doing at <span id="kpi-store">your store</span></h2>
+        <div class="cc-inline" role="group" aria-label="Show numbers for">
+          <button type="button" class="cc-chip" id="scope-store" aria-pressed="false">This store</button>
+          <button type="button" class="cc-chip" id="scope-all" aria-pressed="true">All demo stores</button>
+        </div>
+        <p>Live numbers from your demo sandbox’s Handshakes.</p>
+      </div>
+      <p class="cc-status" id="kpi-empty" role="status" aria-live="polite" style="margin:0 0 12px !important"></p>
+      <p class="cc-inline" id="kpi-actions" hidden><a class="lt-btn lt-btn--primary" href="#test-go" id="kpi-go-test">Test it with Scout</a><a class="lt-btn lt-btn--ghost" href="/shop/">Open the shopper page</a></p>
+      <dl class="cc-kpis" id="kpis"></dl>
+      <p class="cc-note" id="kpi-note"><b>What this means for you:</b> loading…</p>
+    </div>
+  </div>
+</section>
+
+<section class="cc-band" aria-label="AI shoppers and recent orders">
+  <div class="lt-wrap cc-stack">
+    <div class="lt-card cc-card">
+      <div class="cc-card-h">
+        <h2>Outcomes by day</h2>
+        <p>Green: both said yes. Yellow: waited for a person. Red: refused, no money moved.</p>
+      </div>
+      <div class="cc-chart" id="chart"></div>
+      <ul class="cc-legend"><li class="sig--match"><i></i>Both said yes</li><li class="sig--needs_yes"><i></i>Needs a yes</li><li class="sig--no_match"><i></i>Refused</li></ul>
+    </div>
+    <div class="lt-card cc-card">
+      <div class="cc-card-h">
+        <h2>AI shoppers at your store</h2>
+        <a href="#" class="cc-ask" data-ask="How is the trust score worked out?">How is trust worked out?</a>
+        <p>Trust is a 0 to 100 heuristic from each agent’s own history on this server, not a network reputation.</p>
+      </div>
+      <div class="cc-grid-tools">
+        <label class="cc-sr" for="ag-q">Filter AI shoppers</label>
+        <input class="cc-input" id="ag-q" type="search" placeholder="Filter…" autocomplete="off">
+        <button type="button" class="lt-btn lt-btn--ghost" id="ag-csv">Export CSV</button>
+      </div>
+      <div class="cc-grid-box ag-theme-quartz" id="grid-agents" style="height:260px"></div>
+    </div>
+    <div class="lt-card cc-card">
+      <div class="cc-card-h"><h2>Recent AI orders</h2><p>Every row has a proof pack: the Pass, your signed policy, the signed receipt and the PayPal sandbox ids.</p></div>
+      <div class="cc-grid-tools">
+        <label class="cc-sr" for="hs-q">Filter orders</label>
+        <input class="cc-input" id="hs-q" type="search" placeholder="Filter…" autocomplete="off">
+        <button type="button" class="lt-btn lt-btn--ghost" id="hs-csv">Export CSV</button>
+      </div>
+      <div class="cc-grid-box ag-theme-quartz" id="grid-hs"></div>
+    </div>
+  </div>
+</section>
+
+<details class="dev-more" id="dev-more">
+<summary>For developers: verify a Pass in your checkout</summary>
+<section class="hero alt" id="verify" aria-labelledby="verify-h">
+  <div class="wrap hero-g">
+    <div>
+      <p class="eyebrow">For merchants</p>
+      <h2 id="verify-h" style="font-size:clamp(1.8rem,4.6vw,3rem)">Check an AI agent's Pass <b>before you take its money.</b></h2>
+      <p class="lead">An AI agent wants to pay you through PayPal. Is it still allowed to? One call, right before you capture, tells you if this amount is inside its owner's limits, or if the owner pressed Stop all a minute ago.</p>
+      <div class="cta">
+        <a class="btn go" href="#try">Try the checkout simulator</a>
+        <a class="btn line" href="https://github.com/seniorhelper/lowtides/tree/main/integrations/merchant-check">Get the code (JS + Python)</a>
+      </div>
+      <p class="trust">Free &middot; No login &middot; Checks record nothing &middot; Fails closed</p>
+    </div>
+    <ol class="seq" id="flow" aria-label="The merchant flow, step by step">
+      <li><span class="n">1</span><span><span class="who">AI agent &rarr; you</span><b>Sends its order and its Lowtides Pass</b><span class="t">A signed spending permission from the Lowtides server that governs it.</span></span></li>
+      <li><span class="n">2</span><span><span class="who">You &rarr; PayPal</span><b>Reads the order's real amount</b><span class="t">From the PayPal order, never from what the agent says.</span></span></li>
+      <li><span class="n">3</span><span><span class="who">You &rarr; Lowtides</span><b>Checks the pass for that amount</b><span class="t">Signature offline, revocation and limits online: <code>POST /v1/pass/verify</code>.</span></span></li>
+      <li><span class="n">4</span><span><span class="who">You &rarr; PayPal</span><b>Capture, hold or refuse</b><span class="t">Refused? Void the authorization so the buyer's money is released.</span></span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="band alt" id="try">
+  <div class="wrap">
+    <h2>Live checkout simulator</h2>
+    <p class="sub">A real check against this Lowtides server with a real pass. Only the PayPal step is simulated, so no money moves on this page.</p>
+    <div class="sim">
+      <form class="card shop" id="shop" novalidate>
+        <div class="shop-h"><span class="m">Acme Data &middot; checkout</span><span class="pill">PayPal &middot; AUTHORIZE</span></div>
+        <p class="agentline" id="agentline">AI agent wants to buy: <strong>$45.00 dataset from Acme Data</strong>. PayPal is holding the money until you capture.</p>
+        <fieldset>
+          <legend>What the agent is buying</legend>
+          <div class="cart" id="cart">
+            <label><input type="radio" name="item" value="0" checked><span class="what">Ocean temperature dataset<small>Acme Data &middot; data</small></span><span class="amt">$45.00</span></label>
+            <label><input type="radio" name="item" value="1"><span class="what">API credits<small>Acme Data &middot; data</small></span><span class="amt">$8.00</span></label>
+            <label><input type="radio" name="item" value="2"><span class="what">GPU hour<small>Nimbus Compute (new) &middot; compute</small></span><span class="amt">$19.99</span></label>
+            <label><input type="radio" name="item" value="3"><span class="what">GPU cluster rental<small>Acme Data &middot; compute</small></span><span class="amt">$480.00</span></label>
+          </div>
+        </fieldset>
+        <label class="f" for="pass-in">The agent's Lowtides Pass</label>
+        <textarea id="pass-in" spellcheck="false" autocomplete="off" aria-describedby="pass-hint" placeholder="eyJhbGciOiJFZERTQSIs..."></textarea>
+        <p class="hint" id="pass-hint">Paste one from the dashboard (open the <a href="/app/">dashboard</a>, press <b>Pass</b> on an agent, then <b>Copy pass</b>), or load the demo agent's.</p>
+        <div class="row">
+          <button class="btn line sm" type="button" id="demo-btn">Use the demo agent's pass</button>
+          <button class="btn line sm" type="button" id="tamper-btn" disabled>Tamper with it</button>
+        </div>
+        <p class="err" id="load-err" role="alert"></p>
+        <div class="paybar">
+          <span class="tot" id="total">$45.00<small>Order 0 &middot; intent AUTHORIZE</small></span>
+          <button class="btn go" type="submit" id="check-btn">Check Pass and capture</button>
+        </div>
+        <div class="owner" id="owner" hidden>
+          <h3>Play the agent's owner</h3>
+          <p>This is the public demo, so you can press the owner's buttons. Press Stop all, then check again: the same pass is refused.</p>
+          <div class="row" style="margin-top:0">
+            <button class="btn red sm" type="button" id="kill-btn">Press Stop all</button>
+            <button class="btn line sm" type="button" id="resume-btn">Resume and get a fresh pass</button>
+          </div>
+          <p class="hint" id="owner-msg" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+
+      <div class="panel" aria-live="polite" id="panel">
+        <div class="card">
+          <h3 style="margin-bottom:.9rem">What your checkout does</h3>
+          <ol class="steps" id="steps">
+            <li data-k="read"><span class="s">1</span><span><b>Read the pass</b><small>Three base64url parts, EdDSA, type lowtides-pass+jws.</small></span></li>
+            <li data-k="sig"><span class="s">2</span><span><b>Signature, offline</b><small>Ed25519 with Web Crypto in your browser, keys from /.well-known.</small></span></li>
+            <li data-k="online"><span class="s">3</span><span><b>Revocation and limits, online</b><small>POST /v1/pass/verify for this amount and merchant.</small></span></li>
+            <li data-k="paypal"><span class="s">4</span><span><b>PayPal</b><small>Capture, keep holding, or void.</small></span></li>
+          </ol>
+          <div class="verdict v-idle" id="verdict"><h3>Waiting</h3><p style="margin:0">Load or paste a pass, then press <b>Check Pass and capture</b>.</p></div>
+          <p class="pp" id="pp" hidden></p>
+          <details class="lim" id="lim" hidden><summary>This agent's limits, from its pass</summary><ul id="lim-list"></ul></details>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="code">
+  <div class="wrap">
+    <h2>Add it to your checkout</h2>
+    <p class="sub">Put the check right before your PayPal capture call. Use the amount from the PayPal order, and the Lowtides server you trust, never the URL written inside the pass.</p>
+    <div class="tabs" role="tablist" aria-label="Code examples">
+      <button role="tab" id="t-js" aria-controls="p-js" aria-selected="true">JavaScript</button>
+      <button role="tab" id="t-py" aria-controls="p-py" aria-selected="false" tabindex="-1">Python</button>
+      <button role="tab" id="t-curl" aria-controls="p-curl" aria-selected="false" tabindex="-1">curl</button>
+    </div>
+<pre role="tabpanel" id="p-js" aria-labelledby="t-js" tabindex="0"><code><span class="c">// npm-free ES module: integrations/merchant-check/lowtides-pass-check.js</span>
+import { checkPass } from "./lowtides-pass-check.js";
+
+const order = await paypal.getOrder(orderId);              <span class="c">// your PayPal client</span>
+const v = await checkPass({
+  pass: req.body.lowtidesPass,                             <span class="c">// sent by the agent</span>
+  amount: Number(order.purchase_units[0].amount.value),     <span class="c">// from PayPal, not the agent</span>
+  merchant: "Acme Data", category: "data",
+  verifyUrl: "https://lowtides.ai/v1/pass/verify",          <span class="c">// the server you trust</span>
+});
+if (v.decision === "capture") await paypal.captureOrder(orderId);
+else if (v.decision === "refuse") await paypal.voidAuthorization(authId);
+<span class="c">// "hold": keep the order open until the owner approves in Lowtides</span>
+console.log(v.label, v.reasons);</code></pre>
+<pre role="tabpanel" id="p-py" aria-labelledby="t-py" tabindex="0" hidden><code><span class="c"># Standard library only: integrations/merchant-check/paypal_capture_guard.py</span>
+from paypal_capture_guard import CaptureGuard, PayPalOrders
+
+guard = CaptureGuard(PayPalOrders(CLIENT_ID, SECRET),     <span class="c"># sandbox by default</span>
+                     merchant="Acme Data", category="data",
+                     verify_url="https://lowtides.ai/v1/pass/verify")
+result = guard.capture(order_id, agent_pass)
+<span class="c"># result["action"]: "captured" | "held" | "refused" (refused AUTHORIZE orders are voided)</span>
+print(result["action"], result["reasons"])</code></pre>
+<pre role="tabpanel" id="p-curl" aria-labelledby="t-curl" tabindex="0" hidden><code>curl -s -X POST https://lowtides.ai/v1/pass/verify \
+  -H "Content-Type: application/json" \
+  -d '{"pass": "PASTE_THE_PASS", "amount": 45.00, "merchant": "Acme Data", "category": "data"}'
+
+<span class="c"># {"valid": true, "revoked": false, "would_allow": "needs_owner_approval",</span>
+<span class="c">#  "reasons": ["$45.00 is over the $25.00 auto-approve limit."], ...}</span>
+<span class="c"># allowed -> capture   needs_owner_approval -> hold   denied / invalid -> refuse</span></code></pre>
+    <p class="hint">Public keys for the offline check: <a href="/.well-known/lowtides-pass-keys.json">/.well-known/lowtides-pass-keys.json</a>. The JS module on this page is the same file: <a href="/merchants/lowtides-pass-check.js">lowtides-pass-check.js</a>.</p>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap">
+    <h2>What one check covers</h2>
+    <p class="sub">A PayPal approval proves the buyer said yes once. The pass tells you the agent is still allowed to, right now.</p>
+    <div class="g4">
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>Genuine</h3><p>Ed25519 signature, checked offline. A changed limit or forged pass is refused.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg></div><h3>Not revoked</h3><p>Stop all, STOP, a loop-guard pause or the owner's Revoke show up at once.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Inside the limits</h3><p>Per purchase, today's total, approval line, blocked categories and merchants, hours.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></div><h3>Fails closed</h3><p>Lowtides unreachable? The answer is hold, so nothing is captured on a guess.</p></div>
+    </div>
+    <p class="note"><strong>Why merchants care:</strong> a runaway or hijacked agent turns into refunds, disputes and chargebacks for you. Checking the pass first means you only take money its owner still allows, and you have a signed record of the permission you relied on.</p>
+  </div>
+</section>
+
+<section class="band" id="faq">
+  <div class="wrap" style="max-width:860px">
+    <h2>Questions</h2>
+    <details class="q" open><summary>Why should a merchant check an AI agent's pass?</summary><p>A PayPal approval only proves the buyer approved the order at that moment. The Lowtides Pass tells you whether the agent is still allowed to spend this amount at your store right now, and whether its owner pressed Stop all. That cuts disputes and chargebacks from runaway or hijacked agents.</p></details>
+    <details class="q"><summary>When should I check the pass?</summary><p>Right before you capture the PayPal order or authorization, using the amount from the order itself, not a number the agent tells you.</p></details>
+    <details class="q"><summary>What if Lowtides is down?</summary><p>The checker fails closed: the answer is hold, so nothing is captured until the check succeeds.</p></details>
+    <details class="q"><summary>Does checking a pass cost money or record anything?</summary><p>No. <code>POST /v1/pass/verify</code> is free, needs no login and records nothing. It runs the same checks a real spend request would and reports what would happen. More on the format: <a href="https://github.com/seniorhelper/lowtides/blob/main/docs/LOWTIDES-PASS.md">LOWTIDES-PASS.md</a>, or paste a pass into the <a href="/pass/">pass checker</a>.</p></details>
+  </div>
+</section>
+</details>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-g">
+      <span>&copy; 2026 Lowtides &middot; Demo: PayPal sandbox, test money, fictional demo stores &middot; Open source under AGPL-3.0 &middot; <span class="pat-pend">Patent Pending</span> &middot; <a href="/blog/">Blog</a> &middot; <a href="/tools/">Free tools</a> &middot; <a href="/sitemap/">Site map</a> &middot; <a href="/privacy/">Privacy</a></span>
+      <span><a href="/shop/">Shopper demo</a> &middot; <a href="/handshake/">See both sides</a> &middot; <a href="/app/">Dashboard</a> &middot; <a href="/why/">Why Lowtides</a> &middot; <a href="/pass/">Check a pass</a> &middot; <a href="https://github.com/seniorhelper/lowtides">GitHub</a> &middot; <a href="/llms.txt">llms.txt</a></span>
+    </div>
+    <div class="heart-line"><span class="heart" aria-hidden="true">&#10084;</span><a href="https://www.eyetoad.com/" target="_blank" rel="noopener">Need a website?</a></div>
+  </div>
+</footer>
+
+<script>
+(function(){function o(){var d=document.getElementById("dev-more"),h=location.hash&&document.getElementById(location.hash.slice(1));if(d&&h&&d.contains(h)){d.open=true;h.scrollIntoView();}}window.addEventListener("hashchange",o);o();})();
+</script>
+<script type="module">
+import { checkPass, decodePass, hasWebCryptoEd25519 } from "/merchants/lowtides-pass-check.js";
+
+const $ = (id) => document.getElementById(id);
+const VERIFY = location.origin + "/v1/pass/verify";
+const ITEMS = [
+  { what: "dataset", merchant: "Acme Data", category: "data", amount: 45 },
+  { what: "API credits", merchant: "Acme Data", category: "data", amount: 8 },
+  { what: "GPU hour", merchant: "Nimbus Compute", category: "compute", amount: 19.99 },
+  { what: "GPU cluster rental", merchant: "Acme Data", category: "compute", amount: 480 },
+];
+const orderId = "8" + Math.random().toString(36).slice(2, 12).toUpperCase() + "X";
+const authId = "4" + Math.random().toString(36).slice(2, 12).toUpperCase() + "A";
+let agentName = "", demoAgent = null;
+
+const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = (n) => "$" + Number(n).toFixed(2);
+const item = () => ITEMS[Number((document.querySelector('input[name="item"]:checked') || {}).value || 0)];
+
+function renderCart() {
+  const it = item();
+  $("agentline").innerHTML = (agentName ? "<strong>" + esc(agentName) + "</strong> wants to buy: " : "AI agent wants to buy: ") +
+    "<strong>" + usd(it.amount) + " " + esc(it.what) + " from " + esc(it.merchant) + "</strong>. PayPal is holding the money until you capture.";
+  $("total").innerHTML = usd(it.amount) + "<small>Order " + orderId + " &middot; intent AUTHORIZE</small>";
+}
+document.querySelectorAll('input[name="item"]').forEach((r) => r.addEventListener("change", () => { renderCart(); resetPanel(); }));
+
+function step(k, cls, text) {
+  const li = document.querySelector('#steps li[data-k="' + k + '"]');
+  li.className = cls || "";
+  li.querySelector(".s").textContent = { ok: "✓", bad: "✕", warn: "!", run: "…" }[cls] || li.dataset.n || "";
+  if (text != null) li.querySelector("small").textContent = text;
+}
+const DEFAULTS = {};
+document.querySelectorAll("#steps li").forEach((li, i) => { li.dataset.n = String(i + 1); DEFAULTS[li.dataset.k] = li.querySelector("small").textContent; });
+function resetPanel() {
+  Object.keys(DEFAULTS).forEach((k) => step(k, "", DEFAULTS[k]));
+  $("verdict").className = "verdict v-idle";
+  $("verdict").innerHTML = '<h3>Waiting</h3><p style="margin:0">Press <b>Check Pass and capture</b>.</p>';
+  $("pp").hidden = true;
+}
+
+function setPass(token) {
+  $("pass-in").value = token || "";
+  $("tamper-btn").disabled = !token;
+  try { const p = decodePass(token).payload; agentName = (p.agent && p.agent.name) || ""; } catch (e) { agentName = ""; }
+  renderCart();
+  resetPanel();
+}
+$("pass-in").addEventListener("input", () => setPass($("pass-in").value.trim()));
+
+async function api(method, path) {
+  const r = await fetch(path, { method, headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: method === "POST" ? "{}" : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || "HTTP " + r.status); e.status = r.status; throw e; }
+  return j;
+}
+async function findDemoAgent() {
+  const st = await api("GET", "/api/state");
+  const agents = st.agents || [];
+  demoAgent = agents.find((a) => a.simulated) || agents.find((a) => a.status === "on") || agents[0] || null;
+  $("owner").hidden = !(st.public_demo && demoAgent);
+  return demoAgent;
+}
+async function loadDemoPass() {
+  $("load-err").textContent = "";
+  $("demo-btn").disabled = true;
+  try {
+    const a = demoAgent || await findDemoAgent();
+    if (!a) throw new Error("No agents on this server yet.");
+    const r = await api("GET", "/api/agents/" + a.id + "/pass");
+    const p = r.pass;
+    if (!p || !p.token) throw new Error(a.name + " has no pass yet. It gets one while it is running.");
+    setPass(p.token);
+    if (!p.valid) $("owner-msg").textContent = "Heads up: this pass is " + (p.revoked ? "revoked (" + (p.revoked_reason || "") + ")" : "not valid") + ". Press Resume for a fresh one, or check it to see the refusal.";
+  } catch (e) {
+    $("load-err").textContent = e.status === 401 || e.status === 403
+      ? "This server's dashboard is password-protected, so paste a pass instead: open the dashboard, press Pass on an agent, then Copy pass."
+      : "Couldn't load the demo agent's pass: " + e.message;
+  } finally { $("demo-btn").disabled = false; }
+}
+$("demo-btn").addEventListener("click", loadDemoPass);
+
+$("tamper-btn").addEventListener("click", () => {
+  const t = $("pass-in").value.trim();
+  try {
+    const [h, p, s] = t.split(".");
+    const d = decodePass(t).payload;
+    d.limits = Object.assign({}, d.limits, { max_per_purchase: 99999, daily_purchase_limit: 99999, approval_over: 99999 });
+    const b = btoa(unescape(encodeURIComponent(JSON.stringify(d)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    $("pass-in").value = h + "." + b + "." + s;
+    $("load-err").textContent = "";
+    $("owner-msg").textContent = "";
+    resetPanel();
+    $("verdict").innerHTML = "<h3>Tampered</h3><p style=\"margin:0\">The limits inside the pass now say $99,999, but the signature is the original. Check it.</p>";
+  } catch (e) { $("load-err").textContent = "Load a pass first."; }
+});
+
+async function owner(action) {
+  if (!demoAgent) return;
+  $("owner-msg").textContent = "Working...";
+  try {
+    if (action === "kill") {
+      await api("POST", "/api/agents/" + demoAgent.id + "/kill");
+      $("owner-msg").textContent = "Stop all pressed. " + demoAgent.name + " is stopped and its pass is revoked. Check the same pass again.";
+    } else {
+      await api("POST", "/api/agents/" + demoAgent.id + "/resume");
+      const r = await api("POST", "/api/agents/" + demoAgent.id + "/pass");
+      setPass(r.pass.token);
+      $("owner-msg").textContent = demoAgent.name + " is running again with a fresh pass.";
+    }
+  } catch (e) { $("owner-msg").textContent = "That didn't work: " + e.message; }
+}
+$("kill-btn").addEventListener("click", () => owner("kill"));
+$("resume-btn").addEventListener("click", () => owner("resume"));
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ms));
+$("shop").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const token = $("pass-in").value.trim();
+  $("load-err").textContent = "";
+  if (!token) { $("load-err").textContent = "Paste a pass or load the demo agent's first."; $("pass-in").focus(); return; }
+  const it = item();
+  resetPanel();
+  $("check-btn").disabled = true;
+  try {
+    step("read", "run");
+    let decoded = null;
+    try { decoded = decodePass(token); } catch (err) { /* reported below */ }
+    await sleep(250);
+    step("read", decoded ? "ok" : "bad", decoded ? "Readable: " + ((decoded.payload.agent || {}).name || "agent") + ", key " + (decoded.header.kid || "?") + "." : "Not a Lowtides Pass.");
+    step("sig", "run");
+    step("online", "run");
+    const v = await checkPass({ pass: token, amount: it.amount, merchant: it.merchant, category: it.category, verifyUrl: VERIFY });
+    await sleep(250);
+    const off = v.offline;
+    if (!decoded) step("sig", "bad", "Skipped: nothing to verify.");
+    else if (off.available) step("sig", off.signatureOk ? "ok" : "bad", off.signatureOk ? "Verified in your browser (Web Crypto Ed25519)." : (off.reason || "Signature doesn't match."));
+    else step("sig", "warn", "Your browser has no Ed25519 in Web Crypto, so the server checked it." + (v.signatureOk ? " It matches." : ""));
+    await sleep(200);
+    if (!decoded) step("online", "bad", "Skipped.");
+    else if (!v.online.reachable) step("online", "warn", "Couldn't reach Lowtides. Failing closed.");
+    else if (v.revoked) step("online", "bad", "REVOKED: " + (v.revokedReason || ""));
+    else if (v.expired) step("online", "bad", "Expired.");
+    else if (v.online.status !== 200 || !v.signatureOk) step("online", "bad", "Refused by Lowtides.");
+    else step("online", v.wouldAllow === "allowed" ? "ok" : v.wouldAllow === "denied" ? "bad" : "warn",
+      "Not revoked. Lowtides says: " + ({ allowed: "allowed", needs_owner_approval: "needs the owner's OK", denied: "denied" }[v.wouldAllow] || "nothing to check") + ".");
+    await sleep(200);
+    const L = {
+      capture: ["v-ok", "✅", "Capture", "ok", '<span class="k">POST</span> /v2/payments/authorizations/' + authId + '/capture &rarr; COMPLETED, ' + usd(it.amount) + ' (simulated)'],
+      hold: ["v-warn", "⏸️", "Hold for owner", "warn", "Nothing sent to PayPal. The authorization keeps holding " + usd(it.amount) + " until the owner approves in Lowtides; then check again."],
+      refuse: ["v-bad", "⛔", "Refuse", "bad", '<span class="k">POST</span> /v2/payments/authorizations/' + authId + "/void &rarr; VOIDED (simulated). The buyer's " + usd(it.amount) + " is released."],
+    }[v.decision];
+    step("paypal", L[3], { capture: "Captured.", hold: "Kept holding. Not captured.", refuse: "Voided. Not captured." }[v.decision]);
+    $("verdict").className = "verdict " + L[0];
+    $("verdict").innerHTML = '<h3 id="verdict-h" tabindex="-1"><span aria-hidden="true">' + L[1] + "</span> " + esc(L[2]) + "</h3><ul>" +
+      v.reasons.map((r) => "<li>" + esc(r) + "</li>").join("") + "</ul>";
+    $("pp").innerHTML = "PayPal: " + L[4];
+    $("pp").hidden = false;
+    if (v.limits.length) {
+      $("lim-list").innerHTML = v.limits.map((l) => "<li>" + esc(l) + "</li>").join("");
+      $("lim").hidden = false;
+    }
+    if (matchMedia("(max-width: 900px)").matches) $("panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    const h = $("verdict-h"); if (h) h.focus({ preventScroll: true });
+  } catch (err) {
+    $("load-err").textContent = "Something went wrong: " + err.message;
+  } finally { $("check-btn").disabled = false; }
+});
+
+// Tab widget for the code examples.
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+function pick(t) {
+  tabs.forEach((x) => { const on = x === t; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; $(x.getAttribute("aria-controls")).hidden = !on; });
+}
+tabs.forEach((t, i) => {
+  t.addEventListener("click", () => pick(t));
+  t.addEventListener("keydown", (e) => {
+    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (d) { const n = tabs[(i + d + tabs.length) % tabs.length]; pick(n); n.focus(); }
+  });
+});
+
+renderCart();
+hasWebCryptoEd25519().then((ok) => { if (!ok) step("sig", "", "Your browser has no Ed25519 in Web Crypto; the server checks the signature instead."); DEFAULTS.sig = document.querySelector('#steps li[data-k="sig"] small').textContent; });
+findDemoAgent().catch(() => {});
+</script>
+<script src="/cc.js" defer></script>
+<script src="/merchants/store.js" defer></script>
+<link rel="stylesheet" href="/ask.css">
+<script src="/ask.js" defer></script>
+</body>
+</html>

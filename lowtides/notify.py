@@ -43,7 +43,7 @@ EVENTS = {
     "spend.needs_approval": "A purchase is waiting for a person to approve or deny it.",
     "spend.paid": "A purchase was paid (PayPal Payouts, or simulated without PayPal keys).",
     "spend.denied": "A purchase was blocked by the rules or denied by a person.",
-    "agent.killed": "An agent was killed: stopped, pending buys denied, holds voided, unclaimed payouts cancelled.",
+    "agent.killed": "An agent was shut off: stopped, pending buys denied, holds voided, unclaimed payouts canceled.",
     "stop_all": "STOP ALL was pressed (by a person or the outside spend guard).",
     "loop_guard.paused": "The loop guard paused an agent that kept repeating itself.",
 }
@@ -475,7 +475,7 @@ def emit(store, kind, data, agent=None):
             if isinstance(data, dict) and agent and not data.get("agent_name"):
                 data["agent_name"] = agent.get("name")
         if kind == "spend.needs_approval" and isinstance(data, dict) and data.get("id") and n.base_url:
-            data["approve_url"] = n.base_url.rstrip("/") + "/#approvals"
+            data["approve_url"] = n.base_url.rstrip("/") + "/app/#approvals"
         return n.emit(kind, data)
     except Exception:
         return 0

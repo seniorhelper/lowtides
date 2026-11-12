@@ -29,6 +29,9 @@ from .engine import Engine
 from .money import Money, MoneyError
 from .openapi import SPEC as OPENAPI_SPEC
 from .outside import OutsideGuard
+from . import assistant
+from . import accounts, extras, muzzle, reports
+from . import handshake, passport
 from .paypal import PayPal, PayPalError
 from .pricing import money
 from .quote import quote as make_quote
@@ -106,6 +109,7 @@ class App:
         # demo, where strangers shouldn't be sent through a real PayPal vault approval.
         self.vault = Vault(store, self.paypal, base_url=lambda: self.money.base_url, simulate=self.public_demo)
         self.spend = SpendGovernor(store, self.paypal, self.money, vault=self.vault)
+        self.spend.demo_fallback = self.public_demo
         self.notify = notify.attach(store, public_demo=self.public_demo, base_url=pp_cfg.get("public_base_url", ""))  # outbound webhooks
         self.engine.sim_only = self.public_demo
         self.demo_policy = copy.deepcopy(config.data.get("policy", {})) if self.public_demo else None
@@ -141,7 +145,7 @@ class App:
             problems += [p if a["name"] in p else "%s: %s" % (a["name"], p) for p in r["problems"]]
         who = "STOP ALL pressed" if by == "STOP ALL" else by + " pressed STOP ALL"
         self.store.event(None, "control", "%s. Every agent is stopped, %d pending purchases denied, %d holds voided, "
-                                          "%d payouts cancelled, %d saved PayPal payment method%s revoked%s."
+                                          "%d payouts canceled, %d saved PayPal payment method%s revoked%s."
                          % (who, totals["denied"], totals["holds_voided"], totals["payouts_cancelled"], totals["tokens_revoked"],
                             "" if totals["tokens_revoked"] == 1 else "s",
                             (" (%d could not be revoked)" % totals["revoke_failed"]) if totals["revoke_failed"] else ""))
@@ -151,16 +155,19 @@ class App:
 
     def reset_demo(self, seed_story=True):
         """Public demo only: wipe everything and replay the runaway-agent story, stopping
-        before the KILL so visitors can approve, deny or kill for themselves. The in-page
+        before the Stop all so visitors can approve, deny or kill for themselves. The in-page
         replay passes seed_story=False: it tells the story itself on a clean slate."""
         if not self.public_demo:
             raise ValueError("Reset is only available in the public demo.")
+        passport.book(self)  # makes sure the pass tables exist before they are cleared
+        handshake.service(self)  # same for the Consent Shopping tables (cleared and re-seeded by handshake.reset below)
         with self.store.lock:
             for table in ("spend_requests", "merchants", "audit", "events", "ledger", "memory", "tasks",
                           "wallets", "wallet_tx", "topups", "shadow", "vault_tokens", "agents",
-                          "outbound_webhooks", "webhook_deliveries"):
+                          "outbound_webhooks", "webhook_deliveries", "passes", "pass_holds"):
                 self.store.db.execute("DELETE FROM " + table)
             self.store.db.commit()
+        handshake.reset(self)  # Consent Shopping: stores back to their seeded policies, no handshakes or preferences
         if self.on_reset:  # the deleted agents' keys no longer route here
             self.on_reset()
         if self.demo_policy is not None:  # undo any visitor's policy changes
@@ -176,7 +183,7 @@ class App:
                 seed(self.self_url, headers=self.seed_headers)
             except Exception as e:  # the demo still works empty; say why
                 self.store.event(None, "control", "Demo story could not load: %s" % e)
-        self.store.event(None, "control", "Public demo reset. The runaway-agent story is loaded: try Approvals, Rules and KILL.")
+        self.store.event(None, "control", "Public demo reset. The runaway-agent story is loaded: try Approvals, Rules and Stop all.")
 
     def save_config(self):
         with self.save_lock:
@@ -188,7 +195,7 @@ class App:
     # ---- dashboard state -------------------------------------------------
     def protected(self, since):
         """Money Lowtides kept from leaving since `since`, from real records only:
-        purchases denied (by rules, a person or the kill switch), injection-flagged
+        purchases denied (by rules, a person or the stop switch), injection-flagged
         purchases still held, payouts pulled back, and loop-guard stops. Purchases
         waiting on a person are reported separately, not counted as stopped."""
         rows = self.store.q("SELECT amount, status, flags FROM spend_requests WHERE ts>=?", (since,))
@@ -254,6 +261,46 @@ class App:
 AGENT_PATHS = ("/chat/completions", "/messages")
 
 
+# Explicit, so the answer does not depend on the operating system's type table.
+# Content-Security-Policy for the site as built: everything is served from this origin, plus the AG Grid script from
+# jsdelivr (the /merchants/ tables) and Google Fonts (a few pages). The pages use inline <script> and <style> blocks, so
+# 'unsafe-inline' is allowed for those two (hashes or nonces would break every edit to a page); framing, plugins, other
+# origins' forms and a changed <base> are all refused. connect-src is this origin only (the Ask mic uses the browser's
+# own speech service, which CSP does not govern). frame-src allows only YouTube's privacy-enhanced player, which the
+# landing page's video loads after a click (and only when data-video-id is set in ui/index.html).
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+       "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; media-src 'self' blob:; "
+       "connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+
+
+# Only when the optional Vapi voice is switched on (VAPI_PUBLIC_KEY and VAPI_ASSISTANT_ID): the browser may also reach
+# Vapi and its call network (Daily). With the switch off, the policy above is sent unchanged.
+# The call network loads its engine by evaluating a downloaded script, so 'unsafe-eval' is needed too. That is a real
+# loosening of the policy, which is why it happens only while the voice switch is on.
+VAPI_CSP_HOSTS = "https://api.vapi.ai https://*.vapi.ai wss://*.vapi.ai https://*.daily.co wss://*.daily.co"
+
+
+def csp():
+    if not assistant.vapi():
+        return CSP
+    out = CSP.replace("script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;",
+                      "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://*.daily.co; worker-src 'self' blob:;")
+    return out.replace("connect-src 'self';", "connect-src 'self' " + VAPI_CSP_HOSTS + ";")
+
+
+def security_headers(https=False):
+    h = [("Content-Security-Policy", csp()), ("Referrer-Policy", "strict-origin-when-cross-origin"),
+         ("Permissions-Policy", "microphone=(self), camera=(), geolocation=()"), ("X-Frame-Options", "DENY")]
+    if https:       # only over HTTPS (or behind the proxy that says so): a plain-http localhost must not pin HTTPS
+        h.append(("Strict-Transport-Security", "max-age=31536000; includeSubDomains"))
+    return h
+
+
+MEDIA_TYPES = {".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+               ".svg": "image/svg+xml", ".ico": "image/x-icon", ".webp": "image/webp"}
+
+
 def make_handler(app):
     root = app
 
@@ -292,6 +339,22 @@ def make_handler(app):
             # non-finite number can reach saved state (it would break JSON.parse in every browser).
             return json.loads(raw.decode("utf-8"), parse_constant=_reject_constant, parse_float=_finite_float)
 
+        _head = False
+
+        def end_headers(self):
+            # Security headers on EVERY response (pages, API, redirects, streams, errors).
+            for k, v in security_headers(https=self._is_https()):
+                self.send_header(k, v)
+            super().end_headers()
+
+        def _is_https(self):
+            return (self.headers.get("X-Forwarded-Proto", "") or "").split(",")[0].strip().lower() == "https"
+
+        def do_HEAD(self):
+            """Same status and headers as GET, no body."""
+            self._head = True
+            self.do_GET()
+
         def _send(self, status, body, headers=None, ctype="application/json"):
             data = body if isinstance(body, (bytes, bytearray)) else (
                 _dumps_strict(body).encode("utf-8") if ctype == "application/json" else str(body).encode("utf-8"))
@@ -320,7 +383,8 @@ def make_handler(app):
             if self._new_cookie:
                 self.send_header("Set-Cookie", self._demo_cookie(self._new_cookie))
             self.end_headers()
-            self.wfile.write(data)
+            if not self._head:
+                self.wfile.write(data)
 
         # ---- public demo: which sandbox is this request for? -------------------
         def _cookie(self, name):
@@ -368,7 +432,7 @@ def make_handler(app):
                         and self.client_address[0] in ("127.0.0.1", "::1"))
             ip = self._client_ip()
             agentish = path.startswith("/v1/") or path in AGENT_PATHS
-            if (self.command == "POST" and not internal and (agentish or path.startswith("/api/"))
+            if (self.command in ("POST", "PUT") and not internal and (agentish or path.startswith("/api/"))
                     and not root.limiter.allow(ip)):
                 self._too_many("Easy there: that's a lot of requests at once. Wait a few seconds and try again.")
                 return False
@@ -525,12 +589,21 @@ def make_handler(app):
             except Exception as e:  # keep the server alive, report plainly
                 self._send(500, {"error": "Server error: %s" % e})
 
+        def _changed(self):
+            """A write just ran: if this browser is signed in, its account is saved shortly (lowtides/accounts.py)."""
+            sid = getattr(self.app, "sandbox_id", None)
+            if sid and accounts.is_account(sid):
+                accounts.touch(sid)
+
         def do_POST(self):
             self._consumed = False
             try:
                 if not self._route():
                     return
+                if accounts.route(self, root, "POST", self._path()[0]):
+                    return
                 self._post()
+                self._changed()
             except LengthRequired:
                 self._send(411, {"error": "Send a Content-Length (chunked bodies are not supported)."})
             except json.JSONDecodeError:
@@ -542,12 +615,29 @@ def make_handler(app):
             except Exception as e:
                 self._send(500, {"error": "Server error: %s" % e})
 
+        def do_PUT(self):
+            # Consent Shopping only (lowtides/handshake.py): store policy and shopper preferences.
+            self._consumed = False
+            try:
+                if not self._route():
+                    return
+                if not handshake.route(self, self.app, "PUT", self._path()[0]):
+                    self._send(404, {"error": "Unknown endpoint"})
+                self._changed()
+            except LengthRequired:
+                self._send(411, {"error": "Send a Content-Length (chunked bodies are not supported)."})
+            except json.JSONDecodeError:
+                self._send(400, {"error": "Body must be valid JSON."})
+            except Exception as e:
+                self._send(500, {"error": "Server error: %s" % e})
+
         def do_DELETE(self):
             self._consumed = False
             try:
                 if not self._route():
                     return
                 self._delete()
+                self._changed()
             except Exception as e:
                 self._send(500, {"error": "Server error: %s" % e})
 
@@ -559,6 +649,21 @@ def make_handler(app):
             path, qs = self._path()
             if path == "/health":
                 return self._send(200, {"ok": True, "version": __version__})
+            if passport.route(self, self.app, "GET", path):  # Lowtides Pass (lowtides/passport.py)
+                return
+            if accounts.route(self, root, "GET", path):
+                return
+            if path == "/api/ask/voice":           # which voice the Talk button uses (lowtides/assistant.py)
+                v = assistant.vapi()
+                return self._send(200, {"vapi": {"key": v[0], "assistant": v[1]} if v else None})
+            if muzzle.route(self, self.app, "GET", path):       # Action Muzzle (lowtides/muzzle.py)
+                return
+            if reports.route(self, self.app, "GET", path):      # Report this store (lowtides/reports.py)
+                return
+            if extras.route(self, self.app, "GET", path):  # receipts, help inbox (lowtides/extras.py)
+                return
+            if handshake.route(self, self.app, "GET", path):  # Consent Shopping (lowtides/handshake.py)
+                return
             if path == "/openapi.json":
                 return self._send(200, OPENAPI_SPEC, {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"})
             if path == "/v1/models":
@@ -572,19 +677,19 @@ def make_handler(app):
                 try:
                     if kind == "topup":
                         self.app.money.topup_finish(order_id)
-                        return self._redirect("/#wallet?paid=1")
+                        return self._redirect("/app/#wallet?paid=1")
                     if kind == "hold":
                         self.app.money.hold_finish(order_id)
-                        return self._redirect("/#tasks?held=1")
+                        return self._redirect("/app/#tasks?held=1")
                     if kind == "vault":
                         # PayPal sends the approved setup token back (approval_token_id; token on some flows).
                         self.app.vault.connect_finish(qs.get("approval_token_id") or order_id)
-                        return self._redirect("/#wallet?vault=1")
+                        return self._redirect("/app/#wallet?vault=1")
                 except (MoneyError, PayPalError, VaultError) as e:
-                    return self._redirect("/#error?msg=" + urllib.parse.quote(str(e)))
-                return self._redirect("/")
+                    return self._redirect("/app/#error?msg=" + urllib.parse.quote(str(e)))
+                return self._redirect("/app/")
             if path == "/paypal/cancel":
-                return self._redirect("/#home?canceled=1")
+                return self._redirect("/app/#home?canceled=1")
             if path.startswith("/api/"):
                 if not self._api_allowed(write=False):
                     return
@@ -604,10 +709,28 @@ def make_handler(app):
                 full = os.path.join(full, "index.html")
             if not os.path.isfile(full):
                 return self._send(404, {"error": "Not found"})
-            ctype = mimetypes.guess_type(full)[0] or "application/octet-stream"
+            ext = os.path.splitext(full)[1].lower()
+            ctype = MEDIA_TYPES.get(ext) or mimetypes.guess_type(full)[0] or "application/octet-stream"
             with open(full, "rb") as f:
                 data = f.read()
-            self._send(200, data, {"Cache-Control": "no-cache"}, ctype=ctype)
+            # Brand images and video rarely change: let browsers keep them a day. Pages and scripts stay no-cache.
+            cache = "public, max-age=86400" if ext in MEDIA_TYPES else "no-cache"
+            hdrs = {"Cache-Control": cache}
+            if ext in (".mp4", ".webm"):
+                hdrs["Accept-Ranges"] = "bytes"           # Safari will not play a video without byte ranges
+                m = re.fullmatch(r"bytes=(\d*)-(\d*)", (self.headers.get("Range") or "").strip())
+                if m and (m.group(1) or m.group(2)):
+                    size = len(data)
+                    if m.group(1):
+                        lo, hi = int(m.group(1)), (int(m.group(2)) if m.group(2) else size - 1)
+                    else:
+                        lo, hi = max(0, size - int(m.group(2))), size - 1
+                    hi = min(hi, size - 1)
+                    if lo > hi or lo >= size:
+                        return self._send(416, {"error": "Range not satisfiable."}, {"Content-Range": "bytes */%d" % size})
+                    hdrs["Content-Range"] = "bytes %d-%d/%d" % (lo, hi, size)
+                    return self._send(206, data[lo:hi + 1], hdrs, ctype=ctype)
+            self._send(200, data, hdrs, ctype=ctype)
 
         def _api_get(self, path, qs):
             if path.startswith("/api/webhooks"):
@@ -679,7 +802,14 @@ def make_handler(app):
                 return
             try:
                 if method == "POST" and path == "/v1/spend":
-                    return self._send(200, self.app.spend.request(agent, self._json_in()))
+                    # Consent Shopping modes apply on this older route too (default Autopilot changes nothing).
+                    mode = passport._shopper_mode(self.app.store, agent["id"])
+                    if mode == "off":
+                        return self._send(403, {"error": "%s is switched Off by its owner, so it can't buy anything until it is switched "
+                                                         "back on. Nothing was recorded and no money moved." % agent["name"],
+                                                "mode": "off"})
+                    extra = ["Assist mode: %s asks its owner before any money moves." % agent["name"]] if mode == "assist" else None
+                    return self._send(200, self.app.spend.request(agent, self._json_in(), extra_ask=extra))
                 if method == "GET" and path.startswith("/v1/spend/"):
                     row = self.app.store.spend(path.rsplit("/", 1)[1])
                     if not row or row["agent_id"] != agent["id"]:
@@ -703,6 +833,20 @@ def make_handler(app):
 
         def _post(self):
             path, qs = self._path()
+            if passport.route(self, self.app, "POST", path):  # Lowtides Pass (lowtides/passport.py)
+                return
+            if muzzle.route(self, self.app, "POST", path):      # Action Muzzle (lowtides/muzzle.py)
+                return
+            if reports.route(self, self.app, "POST", path):     # Report this store (lowtides/reports.py)
+                return
+            if extras.route(self, self.app, "POST", path):  # autopilot ask, receipts, talk to a human (lowtides/extras.py)
+                return
+            if handshake.route(self, self.app, "POST", path):  # Consent Shopping (lowtides/handshake.py)
+                return
+            # Ask Lowtides (lowtides/assistant.py): POST /api/ask and /api/ask/confirm. It only suggests;
+            # a person's tap on Confirm is what runs anything, through the existing functions.
+            if assistant.route(self, self.app, "POST", path):
+                return
             if path == "/v1/spend":
                 return self._spend_api("POST", path)
             if path in ("/v1/chat/completions", "/v1/messages", "/chat/completions", "/messages"):
@@ -1045,6 +1189,7 @@ def serve(host=None, port=None):
     if app.public_demo:
         app.self_url = "http://127.0.0.1:%d" % port
         app.sandboxes.start()
+        accounts.start(app.sandboxes)
         print("PUBLIC DEMO: no password, PayPal sandbox only, simulated models only. Loading the demo story...")
         if not app.store.agents():
             threading.Thread(target=app.reset_demo, daemon=True).start()

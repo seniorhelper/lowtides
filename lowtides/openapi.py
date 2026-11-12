@@ -40,7 +40,9 @@ def _errors(*codes):
     text = {400: "Bad request: the reason is in `error`.", 401: "Missing or unknown key (or admin password).",
             403: "Refused (cross-site request, or turned off in the public demo).", 404: "Not found.",
             409: "Conflict: the request is no longer in a state that allows this.",
-            415: "Send JSON with Content-Type: application/json."}
+            410: "Gone: the suggestion expired.",
+            415: "Send JSON with Content-Type: application/json.",
+            501: "That part of Lowtides isn't available on this server yet."}
     return {str(c): _json(ERR, text[c]) for c in codes}
 
 
@@ -144,6 +146,11 @@ SCHEMAS = {
     "KillResult": {"type": "object", "properties": {
         "stopped": {"type": "boolean"}, "denied": {"type": "integer"}, "holds_voided": {"type": "integer"},
         "payouts_cancelled": {"type": "integer"}, "problems": {"type": "array", "items": {"type": "string"}}}},
+    "AskAnswer": {"type": "object", "properties": {
+        "answer": {"type": "string"}, "source": {"type": "string", "enum": ["claude", "scripted"]},
+        "actions": {"type": "array", "items": {"type": "object", "properties": {
+            "id": {"type": "string"}, "label": {"type": "string"}, "kind": {"type": "string"}, "params": {"type": "object"}}}},
+        "cost_usd": {"type": "number"}}},
     "StopAllResult": {"type": "object", "properties": {
         "ok": {"type": "boolean"}, "denied": {"type": "integer"}, "holds_voided": {"type": "integer"},
         "payouts_cancelled": {"type": "integer"}}},
@@ -238,6 +245,25 @@ def _spend_paths():
             "operationId": "getBudget", "tags": ["Agent: purchases"], "security": AGENT_AUTH,
             "summary": "What this agent may still spend today",
             "responses": dict({"200": _json(_ref("Budget"), "Budget and rules.")}, **_errors(401))}},
+        "/v1/stores": {"get": {
+            "operationId": "agentListStores", "tags": ["Agent: purchases"], "security": AGENT_AUTH,
+            "summary": "Stores, their signed policies for AI shoppers, and their items",
+            "responses": dict({"200": _json({"type": "object"}, "Stores with policy, store check and items.")}, **_errors(401))}},
+        "/v1/handshake": {"post": {
+            "operationId": "agentHandshake", "tags": ["Agent: purchases"], "security": AGENT_AUTH,
+            "summary": "Run a Handshake: the agent's Pass and the store's policy are checked both ways",
+            "description": "Same engine as the site's buttons. `signal` is match, needs_yes or no_match. With `execute: true` a "
+                           "match pays through PayPal Payouts (sandbox; simulated and labeled when the server has no keys) and "
+                           "needs_yes becomes a held request for the owner. Always 200 for an answer: read `signal` and `next`.",
+            "requestBody": _body({"type": "object", "required": ["store_id"], "properties": {
+                "store_id": {"type": "string"}, "item_id": {"type": "string"}, "amount": {"type": "number"},
+                "category": {"type": "string"}, "title": {"type": "string"}, "execute": {"type": "boolean"}}},
+                {"store_id": "harbor", "item_id": "harbor-tape", "execute": False}),
+            "responses": dict({"200": _json({"type": "object"}, "The Handshake answer.")}, **_errors(400, 401, 404))}},
+        "/v1/handshake/{id}": {"get": {
+            "operationId": "agentGetHandshake", "tags": ["Agent: purchases"], "security": AGENT_AUTH, "parameters": [PATH_ID],
+            "summary": "Read one of this agent's Handshakes again (a held one may have been approved)",
+            "responses": dict({"200": _json({"type": "object"}, "The Handshake answer.")}, **_errors(401, 404))}},
     }
 
 
@@ -322,12 +348,29 @@ def _dashboard_paths():
             "getEvidence", "Download the dispute evidence pack", {"200": _json({"type": "object"}, "Evidence pack (JSON).")},
             params=[PATH_ID], codes=(401, 403, 404))},
         "/api/agents/{agent_id}/kill": {"post": _dash(
-            "killAgent", "KILL one agent", {"200": _json(_ref("KillResult"))}, tags="Dashboard: kill switch",
+            "killAgent", "Shut off one agent", {"200": _json(_ref("KillResult"))}, tags="Dashboard: stop switch",
             body=_body({"type": "object"}, {}, required=False), params=[AGENT_ID], codes=(401, 403, 404),
             description="Stops the agent, denies its pending purchases, voids its open PayPal holds and cancels its unclaimed payouts.")},
+        "/api/ask": {"post": _dash(
+            "askLowtides", "Ask Lowtides (the talking guide)", {"200": _json(_ref("AskAnswer"))}, tags="Dashboard: assistant",
+            codes=(400, 401, 403),
+            body=_body({"type": "object", "required": ["question"], "properties": {
+                "question": {"type": "string", "maxLength": 500}, "page": {"type": "string", "description": "The page the person is on, like /shop/."}}},
+                {"question": "Why was my purchase held?", "page": "/shop/"}),
+            description="Answers from real data. `source` is `claude` or `scripted`, honestly. It can only suggest changes "
+                        "(`actions`); nothing happens until a person confirms one. Claude calls are metered into the ledger as the "
+                        "agent `Ask Lowtides`, under a hard daily dollar cap."),
+        },
+        "/api/ask/confirm": {"post": _dash(
+            "confirmAsk", "Confirm (or cancel) one suggestion from Ask Lowtides", {"200": _json({"type": "object"})},
+            tags="Dashboard: assistant", codes=(400, 401, 403, 404, 409, 410, 501),
+            body=_body({"type": "object", "required": ["action_id"], "properties": {
+                "action_id": {"type": "string"}, "cancel": {"type": "boolean"}}}, {"action_id": "act_example"}),
+            description="Runs the suggestion through the existing rules, once. The id belongs to the visitor it was shown to and "
+                        "expires after a few minutes.")},
         "/api/stop-all": {"post": _dash(
-            "stopAll", "STOP ALL", {"200": _json(_ref("StopAllResult"))}, tags="Dashboard: kill switch",
-            body=_body({"type": "object"}, {}, required=False), description="The kill, for every agent.")},
+            "stopAll", "STOP ALL", {"200": _json(_ref("StopAllResult"))}, tags="Dashboard: stop switch",
+            body=_body({"type": "object"}, {}, required=False), description="Stop all, for every agent.")},
         "/api/agents/{agent_id}/rules": {
             "get": _dash("getRules", "Read an agent's rules", {"200": _json(rules_out)}, tags="Dashboard: rules",
                          params=[AGENT_ID], codes=(401, 403, 404)),
@@ -371,6 +414,108 @@ def _dashboard_paths():
     }
 
 
+def _shopping_paths():
+    """Consent Shopping: store policies, the Handshake, trust scores, merchant KPIs, shopper preferences."""
+    obj = {"type": "object"}
+    check = {"type": "object", "properties": {"id": {"type": "string"}, "label": {"type": "string"}, "ok": {"type": "boolean"},
+                                              "level": {"type": "string", "enum": ["ok", "ask", "fail"]}, "detail": {"type": "string"}}}
+    guard = {"type": "object", "properties": {"verdict": {"type": "string", "enum": ["safe", "caution", "danger"]},
+                                              "score": {"type": "integer"}, "reasons": {"type": "array", "items": {"type": "string"}},
+                                              "checks": {"type": "array", "items": check}}}
+    store_trust = {"type": "object", "description": "What the shopper should think of the store: GuardPooch's verdict plus this shopper's own orders there. A heuristic, not a public rating. See docs/TRUST-SCORE.md.",
+                   "properties": {"badge": {"type": "string", "enum": ["trusted", "careful", "danger"]}, "word": {"type": "string", "description": "Trusted store, Be careful or Danger"},
+                                  "score": {"type": "integer", "minimum": 0, "maximum": 100},
+                                  "factors": {"type": "array", "items": {"type": "object", "properties": {"label": {"type": "string"}, "delta": {"type": "integer"}, "detail": {"type": "string"}}}},
+                                  "kind": {"type": "string", "enum": ["heuristic"]}, "note": {"type": "string"}}}
+    handshake = {"type": "object", "properties": {
+        "id": {"type": "string"}, "signal": {"type": "string", "enum": ["match", "needs_yes", "no_match"]}, "headline": {"type": "string"},
+        "shopper_checks": {"type": "array", "items": check}, "store_checks": {"type": "array", "items": check}, "guardpooch": guard,
+        "trust": {"type": "object", "properties": {"score": {"type": "integer"}}}, "store_trust": store_trust,
+        "receipt": {"type": "object", "description": "Signed with Ed25519 (kid, alg, signature); also written to the audit log."},
+        "order": {"type": ["object", "null"], "description": "PayPal sandbox payout (paypal_order_id is the payout batch id) or a labeled simulation."},
+        "approval_id": {"type": ["string", "null"]}, "at": {"type": "string"}}}
+    store_q = {"name": "store_id", "in": "query", "schema": {"type": "string"}}
+    agent_q = {"name": "agent_id", "in": "query", "schema": {"type": "integer"}, "description": "Defaults to the demo shopper, Scout, or the first agent."}
+    sid = {"name": "store_id", "in": "path", "required": True, "schema": {"type": "string"}, "description": "harbor, pinepost, brightside, tidepool or fakeharbor."}
+    hid = {"name": "handshake_id", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Handshake id (hs_...)."}
+    tag = "Consent Shopping"
+    prefs = {"type": "object", "properties": {
+        "daily_cap": {"type": "number"}, "per_item_cap": {"type": "number"}, "ask_above": {"type": "number"},
+        "guard_strictness": {"type": "string", "enum": ["relaxed", "balanced", "strict"]}, "deal_mode": {"type": "integer", "minimum": 0, "maximum": 100},
+        "mode": {"type": "string", "enum": ["autopilot", "assist", "off"], "description": "autopilot buys greens alone; assist asks before any money moves; off buys nothing"},
+        "categories_allowed": {"type": "array", "items": {"type": "string"}}, "never_buy": {"type": "array", "items": {"type": "string"}}}}
+    return {
+        "/api/stores": {"get": _dash("listStores", "The demo stores with their signed Store Policy and GuardPooch verdict",
+                                     {"200": _json({"type": "object", "properties": {"stores": {"type": "array", "items": {"type": "object", "properties": {"store_trust": store_trust}}}}})},
+                                     tags=tag, params=[agent_q], codes=(401, 403, 404, 409))},
+        "/api/stores/{store_id}/policy": {"put": _dash(
+            "putStorePolicy", "Change a store's rules for AI shoppers (re-signed)", {"200": _json(obj)}, tags=tag, params=[sid],
+            body=_body({"type": "object", "properties": {
+                "max_order_no_human": {"type": "number"}, "categories": {"type": "array", "items": {"type": "string"}},
+                "min_trust": {"type": "integer"}, "require_evidence": {"type": "boolean"}, "blocked_agents": {"type": "array", "items": {"type": "string"}},
+                "mode": {"type": "string", "enum": ["auto", "review", "closed"], "description": "auto accepts in-policy orders; review needs a person for each; closed refuses all"}}},
+                {"max_order_no_human": 150}), codes=(400, 401, 403, 404))},
+        "/.well-known/lowtides-store-policy.json": {"get": {
+            "operationId": "getStorePolicyDocument", "tags": [tag], "security": [], "summary": "A store's signed Store Policy (public)",
+            "parameters": [dict(store_q, required=True)],
+            "responses": dict({"200": _json(obj)}, **_errors(404)),
+            "description": "Check the signature with the public keys at /.well-known/lowtides-pass-keys.json."}},
+        "/api/catalog": {"get": _dash(
+            "matchFinder", "Match Finder: every item with its Handshake signal for this shopper (green first)",
+            {"200": _json({"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {"store_trust": {
+                "type": "object", "properties": {"badge": {"type": "string", "enum": ["trusted", "careful", "danger"]}, "score": {"type": "integer"}}}}}}}})},
+            tags=tag, codes=(401, 403, 404, 409),
+            params=[{"name": "q", "in": "query", "schema": {"type": "string"}}, {"name": "max_price", "in": "query", "schema": {"type": "number"}}, agent_q, store_q])},
+        "/api/handshake": {"post": _dash(
+            "doHandshake", "Run a Handshake (Pass vs Store Policy vs GuardPooch); with execute:true a match pays", {"200": _json(handshake)},
+            tags=tag, codes=(400, 401, 403, 404, 409),
+            body=_body({"type": "object", "required": ["store_id"], "properties": {
+                "agent_id": {"type": "integer"}, "store_id": {"type": "string"}, "item_id": {"type": "string"}, "amount": {"type": "number"},
+                "category": {"type": "string"}, "title": {"type": "string"}, "execute": {"type": "boolean", "default": False}}},
+                {"store_id": "harbor", "item_id": "harbor-hammer", "execute": False}),
+            description="match: both sides said yes. needs_yes: a person must approve (a normal held approval). no_match: no money moved. "
+                        "execute:true pays through the normal spend path, with a PayPal sandbox payout when keys are set and a labeled simulation otherwise.")},
+        "/api/handshakes": {"get": _dash(
+            "listHandshakes", "Recent Handshakes, newest first", {"200": _json({"type": "object", "properties": {"handshakes": {"type": "array", "items": handshake}}})},
+            tags=tag, params=[{"name": "limit", "in": "query", "schema": {"type": "integer", "default": 50, "maximum": 500}}, agent_q, store_q])},
+        "/api/handshakes/{handshake_id}/proof": {"get": _dash(
+            "getHandshakeProof", "Proof pack: Pass, Store Policy, signed receipt, approval, PayPal ids, audit entry", {"200": _json(obj)},
+            tags=tag, params=[hid], codes=(401, 403, 404), description="Verifiable with public keys only.")},
+        "/api/agents/{agent_id}/trust": {"get": _dash(
+            "getTrust", "Agent trust score (0-100), a heuristic from its own history", {"200": _json({"type": "object", "properties": {
+                "score": {"type": "integer"}, "grade": {"type": "string"}, "factors": {"type": "array", "items": obj},
+                "history": {"type": "array", "items": obj}}})}, tags=tag, params=[AGENT_ID], codes=(401, 403, 404))},
+        "/api/merchant/kpis": {"get": _dash("merchantKpis", "Store KPIs computed from real Handshakes and payments", {"200": _json(obj)},
+                                            tags=tag, params=[store_q], codes=(401, 403, 404))},
+        "/api/merchant/opportunities": {"get": _dash(
+            "merchantOpportunities", "Rule-based suggestions from the store's own orders (what-if re-runs of the Handshake)",
+            {"200": _json({"type": "object", "properties": {"findings": {"type": "array", "items": {"type": "object", "properties": {
+                "id": {"type": "string"}, "kind": {"type": "string", "enum": ["grow", "protect"]}, "title": {"type": "string"},
+                "detail": {"type": "string"}, "impact_usd": {"type": "number", "nullable": True},
+                "action": {"type": "object", "nullable": True, "properties": {"label": {"type": "string"}, "policy_patch": obj}}}}},
+                "note": {"type": "string"}}})}, tags=tag, params=[dict(store_q, required=True)], codes=(400, 401, 403, 404),
+            description="Apply a suggestion by sending its policy_patch to PUT /api/stores/{store_id}/policy.")},
+        "/api/handshakes/{handshake_id}/rating": {"post": _dash(
+            "rateHandshake", "Was this what you wanted? Thumbs up or down for a paid purchase (changeable)",
+            {"200": _json({"type": "object", "properties": {"id": {"type": "string"}, "rating": {"type": "string", "enum": ["up", "down"]},
+                                                   "store_trust": store_trust, "agent_trust": {"type": "object", "properties": {"score": {"type": "integer"}, "grade": {"type": "string"}}}}})},
+            tags=tag, params=[hid], codes=(400, 401, 403, 404, 409),
+            body=_body({"type": "object", "required": ["rating"], "properties": {"rating": {"type": "string", "enum": ["up", "down"]}}}, {"rating": "up"}),
+            description="Thumbs down lowers the agent's trust score (see docs/TRUST-SCORE.md) and feeds satisfaction_rate in the store KPIs.")},
+        "/api/shopper/agents": {
+            "get": _dash("listShopperAgents", "The shopper's AI shoppers: mode, Pass state, trust, today's spend, PayPal on file",
+                         {"200": _json({"type": "object", "properties": {"agents": {"type": "array", "items": obj}}})}, tags=tag, codes=(401, 403)),
+            "post": _dash("addShopperAgent", "Add an AI shopper from a preset (everyday, bargain, restock); issues its Pass",
+                          {"200": _json({"type": "object", "properties": {"agent": obj}})}, tags=tag, codes=(400, 401, 403, 409),
+                          body=_body({"type": "object", "required": ["preset"], "properties": {
+                              "preset": {"type": "string", "enum": ["everyday", "bargain", "restock"]}, "name": {"type": "string"}}}, {"preset": "bargain"}))},
+        "/api/shopper/prefs": {
+            "get": _dash("getShopperPrefs", "A shopper's preferences in plain terms", {"200": _json(prefs)}, tags=tag, params=[agent_q], codes=(401, 403, 404, 409)),
+            "put": _dash("putShopperPrefs", "Change preferences: rewrites the agent's enforced rules and re-issues its Pass", {"200": _json(prefs)},
+                         tags=tag, params=[agent_q], codes=(400, 401, 403, 404, 409), body=_body(prefs, {"guard_strictness": "balanced"}))},
+    }
+
+
 def _webhooks():
     from .notify import EVENTS
     out = {}
@@ -387,7 +532,7 @@ def _webhooks():
 
 def build():
     paths = {}
-    for part in (_spend_paths(), _proxy_paths(), _dashboard_paths()):
+    for part in (_spend_paths(), _proxy_paths(), _dashboard_paths(), _shopping_paths()):
         paths.update(part)
     return {
         "openapi": "3.1.0",
@@ -396,7 +541,7 @@ def build():
             "summary": "One budget and a STOP button between AI agents and money.",
             "description": "Agents ask Lowtides before they buy (`POST /v1/spend`) and send model calls through it "
                            "(OpenAI- and Anthropic-compatible). Approved purchases are paid with PayPal Payouts. "
-                           "Plain-English rules, approvals and a kill switch are on the dashboard API. "
+                           "Plain-English rules, approvals and a stop switch are on the dashboard API. "
                            "The public demo at https://lowtides.ai needs no password: get an agent key from `GET /api/state`.",
             "license": {"name": "AGPL-3.0-only", "identifier": "AGPL-3.0-only"},
             "contact": {"name": "Lowtides", "url": "https://github.com/seniorhelper/lowtides"}},
@@ -406,9 +551,11 @@ def build():
                  {"name": "Agent: AI proxy", "description": "Drop-in OpenAI and Anthropic endpoints with budgets."},
                  {"name": "Dashboard: agents", "description": "Create agents and read their keys."},
                  {"name": "Dashboard: approvals", "description": "A person approves or denies held purchases."},
-                 {"name": "Dashboard: kill switch", "description": "KILL one agent or STOP ALL."},
+                 {"name": "Dashboard: stop switch", "description": "Shut off one agent or STOP ALL."},
                  {"name": "Dashboard: rules", "description": "Rules, merchants, forecast and audit."},
-                 {"name": "Dashboard: webhooks", "description": "Send events to Zapier, Make or any URL."}],
+                 {"name": "Dashboard: webhooks", "description": "Send events to Zapier, Make or any URL."},
+                 {"name": "Dashboard: assistant", "description": "Ask Lowtides: a guide that suggests, and a person confirms."},
+                 {"name": "Consent Shopping", "description": "Store Policies, the Handshake (both sides must say yes), GuardPooch, trust scores and shopper preferences."}],
         "paths": paths,
         "webhooks": _webhooks(),
         "components": {

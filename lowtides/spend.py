@@ -52,7 +52,11 @@ LIST_FIELDS = ("allowed_categories", "blocked_categories", "blocked_merchants")
 # Text in a purchase that reads like orders aimed at the agent itself. Agents that
 # read web pages or emails can be steered this way into paying the wrong party.
 INJECTION = re.compile(
-    r"ignore (all |any |the )?(previous|prior|above|earlier) (instructions|rules)|disregard (your|the|all) (rules|instructions)"
+    r"ignore (all |any |the |your |my |these |those )?((previous|prior|above|earlier|existing|current) )?(instructions|rules|limits|guardrails|polic(y|ies))"
+    r"|disregard (your|the|all|any|my) (rules|instructions|limits|guardrails|polic(y|ies))"
+    r"|(do not|don't|dont|never|no need to) (ask|tell|notify|alert|involve) (the |your |my )?(user|owner|human|shopper|person|customer)"
+    r"|without (asking|telling|notifying) (the |your |my )?(user|owner|human|shopper|person|customer)"
+    r"|(skip|bypass|circumvent|get around) (the |your |any )?(approval|rules|limits|guardrails|checks?|handshake)"
     r"|system prompt|you are now|new instructions|developer mode|jailbreak"
     r"|(send|wire|transfer) (the )?(money|funds|payment|it) to|pay (this|the following) (account|address|email) instead"
     r"|act as (an? |the )?(admin|administrator|owner)|override (the )?(budget|limit|rules)", re.I)
@@ -61,12 +65,27 @@ DUP_WINDOW = 600          # seconds: same agent, merchant and amount = possible 
 UNUSUAL_MULTIPLE = 3.0    # times the agent's typical purchase
 EXTERNAL = "paid_by_caller"  # flag: the requesting tool settles with PayPal itself, so no payout
 UNUSUAL_MIN_HISTORY = 5
+EMPTY_BALANCE = object()
+EMPTY_BALANCE_NOTE = "The PayPal sandbox balance was empty, so this payment is simulated: nothing was sent to PayPal."
+FORCE_SIM = "simulated_history"  # flag: demo seed purchases are always settled as labeled simulations
 
 
 class SpendError(Exception):
     def __init__(self, message, http=400):
         super().__init__(message)
         self.http = http
+
+
+def poss(name):
+    """Possessive of a name: "Scout's", but "Tidepool Pets'" (no second s)."""
+    name = str(name or "")
+    return name + ("'" if name.endswith(("s", "S")) else "'s")
+
+
+def tidy_join(parts):
+    """One style for several reasons: drop each one's closing period, join with "; ", end with one period."""
+    clean = [str(p).strip().rstrip(".;").strip() for p in (parts or []) if p and str(p).strip()]
+    return "; ".join(clean) + ("." if clean else "")
 
 
 def money(x):
@@ -178,39 +197,52 @@ def agent_rules(agent):
         return dict(DEFAULT_RULES)
 
 
-def describe_rules(r):
-    """The rules in plain English, for previews and the evidence pack."""
-    lines = ["Up to %s per purchase." % money(r["max_per_purchase"]),
-             "Up to %s of purchases per day." % money(r["daily_purchase_limit"]),
-             "Purchases over %s need a person to approve them." % money(r["approval_over"])]
+def _rule_lines(r):
+    """(rule key, plain-English line) pairs, so a preview can show only the rules that will change."""
+    out = [("max_per_purchase", "Up to %s per purchase." % money(r["max_per_purchase"])),
+           ("daily_purchase_limit", "Up to %s of purchases per day." % money(r["daily_purchase_limit"])),
+           ("approval_over", "Purchases over %s need a person to approve them." % money(r["approval_over"]))]
     if r["daily_total_limit"] is not None:
-        lines.append("AI usage and purchases together stop at %s per day." % money(r["daily_total_limit"]))
+        out.append(("daily_total_limit", "AI usage and purchases together stop at %s per day." % money(r["daily_total_limit"])))
     if r["allowed_categories"]:
-        lines.append("Only these categories: %s." % ", ".join(r["allowed_categories"]))
+        out.append(("allowed_categories", "Only these categories: %s." % ", ".join(r["allowed_categories"])))
     if r["blocked_categories"]:
-        lines.append("Never: %s." % ", ".join(r["blocked_categories"]))
+        out.append(("blocked_categories", "Never: %s." % ", ".join(r["blocked_categories"])))
     if r["blocked_merchants"]:
-        lines.append("Blocked merchants: %s." % ", ".join(r["blocked_merchants"]))
+        out.append(("blocked_merchants", "Blocked merchants: %s." % ", ".join(r["blocked_merchants"])))
     if r["new_merchant_needs_approval"]:
-        lines.append("A merchant not on your list needs approval.")
+        out.append(("new_merchant_needs_approval", "A merchant not on your list needs approval."))
     if r["hours"]:
-        lines.append("Only between %d:00 and %d:00." % (r["hours"]["start"], r["hours"]["end"]))
+        out.append(("hours", "Only between %d:00 and %d:00." % (r["hours"]["start"], r["hours"]["end"])))
     if r["max_purchases_per_hour"]:
-        lines.append("At most %d purchases an hour." % r["max_purchases_per_hour"])
+        out.append(("max_purchases_per_hour", "At most %d purchases an hour." % r["max_purchases_per_hour"]))
     # .get(): callers may hand in an older, partial rules dict.
     if r.get("max_reply_tokens"):
         n = r["max_reply_tokens"]
-        lines.append("Replies are capped at about {:,} tokens (~{:,} words).".format(n, int(round(n * 0.75))))
+        out.append(("max_reply_tokens", "Replies are capped at about {:,} tokens (~{:,} words).".format(n, int(round(n * 0.75)))))
     if r.get("max_input_tokens"):
         n = r["max_input_tokens"]
         pages = n / TOKENS_PER_PAGE
-        lines.append("Prompts over about {} page{} (~{:,} tokens) are blocked.".format(
-            _num(pages) if pages < 10 else "{:,}".format(int(round(pages))), "" if pages == 1 else "s", n))
+        out.append(("max_input_tokens", "Prompts over about {} page{} (~{:,} tokens) are blocked.".format(
+            _num(pages) if pages < 10 else "{:,}".format(int(round(pages))), "" if pages == 1 else "s", n)))
     if r.get("max_cost_per_call"):
-        lines.append("No single AI call over %s." % _cost(r["max_cost_per_call"]))
+        out.append(("max_cost_per_call", "No single AI call over %s." % _cost(r["max_cost_per_call"])))
     if r.get("dump_alert_multiple"):
-        lines.append("Calls %sx bigger than usual are flagged." % _num(r["dump_alert_multiple"]))
-    return lines
+        out.append(("dump_alert_multiple", "Calls %sx bigger than usual are flagged." % _num(r["dump_alert_multiple"])))
+    elif r.get("dump_alert_multiple") == 0 and "dump_alert_multiple" in r:
+        out.append(("dump_alert_multiple", "Big-call alerts are off."))
+    return out
+
+
+def describe_rules(r):
+    """The rules in plain English, for previews and the evidence pack."""
+    return [line for key, line in _rule_lines(r) if key != "dump_alert_multiple" or r.get("dump_alert_multiple")]
+
+
+def describe_changes(r, keys):
+    """Plain-English lines for ONLY the rules named in `keys` (what an Apply will change)."""
+    keys = set(keys)
+    return [line for key, line in _rule_lines(r) if key in keys]
 
 
 _NUM = r"\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)"
@@ -234,11 +266,43 @@ def _words(s):
     return [p.strip(" .;'\"").lower() for p in parts if p.strip(" .;'\"")]
 
 
+_VERBS = (r"ask|check with|never|don't|do not|only|max|maximum|no more than|no single|at most|up to|limit|keep|make|flag|"
+          r"stop|turn off|disable|require|approve|confirm|block|any|anything|between|from|\$?\d")
+
+
+def _clauses(text):
+    """One clause per rule: split on periods and semicolons, on commas that start a new rule, and on
+    'and' before a rule verb. 'gift cards, crypto' and 'hardware and pets' stay whole."""
+    t = (text or "").lower().replace("\n", ". ")
+    out = []
+    for sent in re.split(r"[.;!]+(?!\d)\s*", t):
+        for part in re.split(r",\s+(?=(?:" + _VERBS + r")\b)|\band\s+(?=(?:ask|never|only|max|maximum|no more than|don't|do not|"
+                             r"keep|flag|limit|at most|up to|check with|require|stop|turn off|disable|make)\b)", sent):
+            if part and part.strip(" ,"):
+                out.append(part.strip(" ,"))
+    return out
+
+
 def parse_rules_offline(text):
-    """A small, predictable parser for common phrasings. Used when no AI key is set,
-    and it says exactly what it understood."""
-    t = " " + (text or "").lower().replace("\n", ". ") + " "
+    """A small, predictable parser for common phrasings. Used when no AI key is set, and it says
+    exactly what it understood. Each clause is read on its own, and only rules the text actually
+    mentions are returned."""
     rules, notes = {}, []
+    lost = []
+    for clause in _clauses(text):
+        before = len(notes)
+        _parse_clause(" " + clause + " ", rules, notes)
+        if len(notes) == before and clause.strip():
+            lost.append(clause.strip().rstrip(".,;"))
+    if notes and lost:
+        notes.append("I didn't understand: " + "; ".join("“%s”" % c for c in lost) + ".")
+    if not notes:
+        notes.append("Nothing recognized. Try phrases like \"max $50 a day\", \"ask me over $20\", \"never buy gift cards\", "
+                     "\"keep replies short\", \"never send more than 50 pages\".")
+    return rules, notes
+
+
+def _parse_clause(t, rules, notes):
     m = re.search(r"(?:ask|check with|approval|approve|confirm)[^.]*?(?:over|above|more than|anything over)\s*" + _NUM, t)
     if m:
         rules["approval_over"] = _amount(m.group(1))
@@ -256,15 +320,22 @@ def parse_rules_offline(text):
     if m:
         rules["daily_total_limit"] = _amount(m.group(1))
         notes.append("Combined daily cap %s." % money(rules["daily_total_limit"]))
+    if "max_per_purchase" not in rules and not re.search(r"(?:a|per)\s*day|daily|total|combined", t):
+        m = re.search(r"(?:under|below|less than|at most|up to|no more than|max(?:imum)?(?:\s+of)?)\s*" + _NUM, t)
+        if m:        # "under $80", "up to $80": the most one item may cost
+            rules["max_per_purchase"] = _amount(m.group(1))
+            notes.append("Max per purchase %s." % money(rules["max_per_purchase"]))
     blocked = []
     for m in re.finditer(r"(?:never|don't|do not|no)\s+(?:buy|purchase|pay for|spend on)\s+([^.]+)", t):
         blocked += _words(m.group(1))
+    for m in re.finditer(r"(?:^|\s)no\s+(?!more\b|single\b|call\b|longer\b|buy\b|purchase\b|pay\b|spend\b)([a-z][a-z \-]*)", t):
+        blocked += _words(m.group(1))        # "no gift cards"
     if blocked:
-        rules["blocked_categories"] = sorted(set(blocked))
+        rules["blocked_categories"] = sorted(set(blocked) | set(rules.get("blocked_categories", [])))
         notes.append("Never buy: %s." % ", ".join(rules["blocked_categories"]))
     m = re.search(r"only\s+(?:buy|purchase|spend on|pay for)\s+([^.]+)", t)
     if m:
-        rules["allowed_categories"] = _words(m.group(1))
+        rules["allowed_categories"] = sorted(set(_words(m.group(1))) | set(rules.get("allowed_categories", [])), key=lambda w: w)
         notes.append("Only buy: %s." % ", ".join(rules["allowed_categories"]))
     m = re.search(r"(\d+)\s*(?:purchases|orders|buys|times)\s*(?:an|a|per)\s*hour", t)
     if m:
@@ -281,10 +352,6 @@ def parse_rules_offline(text):
         rules["new_merchant_needs_approval"] = True
         notes.append("New merchants need approval.")
     _parse_leash(t, rules, notes)
-    if not notes:
-        notes.append("Nothing recognized. Try phrases like \"max $50 a day\", \"ask me over $20\", \"never buy gift cards\", "
-                     "\"keep replies short\", \"never send more than 50 pages\".")
-    return rules, notes
 
 
 _TOK = r"(\d+(?:,\d{3})*(?:\.\d+)?)\s*(k\b)?\s*"
@@ -305,13 +372,14 @@ def _tokens(num, k, unit):
 
 def _parse_leash(t, rules, notes):
     """The Leash: reply size, prompt size, cost per call, dump alerts."""
+    before = rules.get("max_reply_tokens")
     m = re.search(r"(?:repl(?:y|ies)|answers?|responses?|outputs?)\b[^.\d$]*?" + _TOK + r"(tokens?|words?)\b", t)
     if m:
         rules["max_reply_tokens"] = _tokens(m.group(1), m.group(2), m.group(3))
     elif re.search(r"(?:keep|make)\s+(?:the\s+|its\s+|your\s+|all\s+)?(?:repl(?:y|ies)|answers?|responses?)\s+(?:short|brief|concise)"
                    r"|\b(?:short|brief|concise)\s+(?:repl(?:y|ies)|answers|responses)", t):
         rules["max_reply_tokens"] = SHORT_REPLY_TOKENS
-    if "max_reply_tokens" in rules:
+    if "max_reply_tokens" in rules and (before is None or m):
         notes.append("Replies capped at about {:,} tokens.".format(rules["max_reply_tokens"]))
     m = re.search(r"(?:send|prompts?|inputs?|uploads?|feed|paste)\b[^.\d$]*?" + _TOK + r"(tokens?|words?|pages?)\b", t)
     if m:
@@ -370,15 +438,15 @@ def compile_rules(text, api_key=None, model="claude-haiku-5-5", base_url="https:
             rules = validate_rules({k: v for k, v in data.items() if k in DEFAULT_RULES})
             given = {k for k in data if k in DEFAULT_RULES}
             return {"rules": rules, "set": sorted(given), "source": "claude", "model": model, "notes": notes,
-                    "plain": describe_rules(rules)}
+                    "plain": describe_rules(rules), "plain_set": describe_changes(rules, given)}
         except (urllib.error.URLError, ValueError, SpendError, KeyError, AttributeError) as e:
-            fallback_note = "Claude couldn't be used (%s), so the offline parser read your rules." % type(e).__name__
+            fallback_note = "Claude couldn't be used (%s), so the built-in rule reader read your rules." % type(e).__name__
     else:
-        fallback_note = "No ANTHROPIC_API_KEY set, so the offline parser read your rules."
+        fallback_note = "Read by the built-in rule reader."
     parsed, notes = parse_rules_offline(text)
     rules = validate_rules(parsed)
     return {"rules": rules, "set": sorted(parsed), "source": "offline", "notes": [fallback_note] + notes,
-            "plain": describe_rules(rules)}
+            "plain": describe_rules(rules), "plain_set": describe_changes(rules, parsed)}
 
 
 # ---- the governor for purchases ------------------------------------------------------------
@@ -391,7 +459,9 @@ class SpendGovernor:
         self._decide_lock = threading.Lock()
 
     # -- request ------------------------------------------------------------------------
-    def request(self, agent, d):
+    def request(self, agent, d, extra_ask=None, force_sim=False):
+        """`extra_ask` (Handshake only): plain-English reasons a person must decide, added to the
+        ones the rules find. `force_sim` (demo seed history only): settle as a labeled simulated payout."""
         try:
             amount = round(float(d.get("amount")), 2)
         except (TypeError, ValueError):
@@ -484,6 +554,7 @@ class SpendGovernor:
                     if typical > 0 and amount > typical * UNUSUAL_MULTIPLE:
                         ask.append("%s is more than %dx this agent's typical purchase (%s)." % (money(amount), int(UNUSUAL_MULTIPLE), money(typical)))
                         flags.append("unusual_amount")
+                ask.extend(str(x) for x in (extra_ask or []))
                 if not ask:
                     ok.append("Within the %s auto-approve limit and today's %s budget." % (money(rules["approval_over"]),
                                                                                          money(rules["daily_purchase_limit"])))
@@ -494,6 +565,8 @@ class SpendGovernor:
             if str(d.get("settle") or "").lower() == "external":
                 # The caller (e.g. PayPal's Agent Toolkit) moves the money itself; Lowtides only decides and records.
                 flags.append(EXTERNAL)
+            if force_sim:
+                flags.append(FORCE_SIM)
             sid = "sp_" + secrets.token_hex(8)
             row = self.store.add_spend(id=sid, agent_id=aid, task_id=task_id, amount=amount, merchant=merchant, item=item,
                                        category=category, reason=reason, decision=decision,
@@ -514,11 +587,13 @@ class SpendGovernor:
 
     # -- paying -------------------------------------------------------------------------
     # After creating a payout, poll its batch this long (seconds between tries) for the
-    # item ID and status. PayPal processes batches asynchronously; the kill switch needs
+    # item ID and status. PayPal processes batches asynchronously; the stop switch needs
     # the item ID to cancel an UNCLAIMED payout. Whatever is still PENDING after this is
     # followed up in a background thread (background_poll) and by refresh_payout().
     poll_delays = (0.25, 0.5, 0.75, 1.0, 1.25)
     background_poll = (2, 3, 5, 10, 20, 30)
+
+    demo_fallback = False       # the public demo turns this on (server.App)
 
     @staticmethod
     def _refusal(e):
@@ -541,7 +616,7 @@ class SpendGovernor:
         fields = {"decided_by": by, "decided_ts": time.time(), "payee": payee}
         if EXTERNAL in (row.get("flags") or []):
             fields.update(payout_batch_id=None, payout_item_id=None, payout_status="PAID_BY_CALLER", simulated=0)
-        elif self.paypal.configured:
+        elif self.paypal.configured and FORCE_SIM not in (row.get("flags") or []):
             fields["payout_env"] = getattr(self.paypal, "env", "")
             if not payee:
                 why = "Not paid: %s has no PayPal email on the Merchants list." % row["merchant"]
@@ -557,18 +632,27 @@ class SpendGovernor:
                     if e.retryable and attempt == 1:
                         time.sleep(1)
                         continue
+                    if self.demo_fallback and (e.name or e.issue) in ("INSUFFICIENT_FUNDS", "NEGATIVE_BALANCE"):
+                        # Public demo only: an empty sandbox balance must not break the demo for the next visitor.
+                        # The payment is settled as a simulation and labeled so. PayPal was asked and moved nothing.
+                        out = EMPTY_BALANCE
+                        break
                     why = self._refusal(e)
                     if e.retryable:
                         why += " PayPal didn't answer clearly, so check the PayPal activity before retrying."
                     return self._fail(sid, agent, row, why, fields, "ERROR", error=e)
-            header = out.get("batch_header") or {}
+            header = {} if out is EMPTY_BALANCE else (out.get("batch_header") or {})
             bid = header.get("payout_batch_id")
-            if not bid:
+            if out is EMPTY_BALANCE:
+                fields.update(payout_batch_id="SIM-" + sid[3:], payout_item_id="SIMITEM-" + sid[3:], payout_status="SIMULATED", simulated=1,
+                              payout_env="", note=EMPTY_BALANCE_NOTE)
+            elif not bid:
                 return self._fail(sid, agent, row, "PayPal accepted the request but returned no payout batch ID.", fields, "ERROR")
-            fields.update(payout_batch_id=bid, payout_item_id=None, payout_status=header.get("batch_status") or "PENDING", simulated=0)
-            fields.update(self._poll(bid, self.poll_delays))
-            if fields.pop("_failed", None):
-                return self._fail(sid, agent, row, fields.pop("note"), fields, fields.get("payout_status") or "FAILED")
+            if out is not EMPTY_BALANCE:
+                fields.update(payout_batch_id=bid, payout_item_id=None, payout_status=header.get("batch_status") or "PENDING", simulated=0)
+                fields.update(self._poll(bid, self.poll_delays))
+                if fields.pop("_failed", None):
+                    return self._fail(sid, agent, row, fields.pop("note"), fields, fields.get("payout_status") or "FAILED")
         else:
             fields.update(payout_batch_id="SIM-" + sid[3:], payout_item_id="SIMITEM-" + sid[3:], payout_status="SIMULATED", simulated=1)
         if agent["use_wallet"]:
@@ -690,7 +774,7 @@ class SpendGovernor:
         if agent["use_wallet"] and self.store.balance(agent["id"]) < row["amount"]:
             raise SpendError("The agent's wallet doesn't have enough for this. Top it up with PayPal first.", 409)
         if self.paypal.configured and not (row["payee"] or (self.store.merchant(row["merchant"]) or {}).get("paypal_email")):
-            raise SpendError("Add %s's PayPal email on the Merchants list first, so Lowtides knows who to pay." % row["merchant"], 409)
+            raise SpendError("Add %s PayPal email on the Merchants list first, so Lowtides knows who to pay." % poss(row["merchant"]), 409)
         self.store.audit("spend.approved", sid, {"by": by})
         self.store.update_spend(sid, status="approved")
         return self._pay(self.store.spend(sid), agent, by=by)
@@ -707,7 +791,7 @@ class SpendGovernor:
         notify.emit(self.store, "spend.denied", row)
         return row
 
-    # -- kill switch -----------------------------------------------------------------------
+    # -- stop switch -----------------------------------------------------------------------
     def kill(self, agent_id, by="owner"):
         """Stop the agent and pull back every dollar still in flight: deny pending
         purchases, void open PayPal holds, cancel payouts nobody has claimed yet, and
@@ -719,8 +803,8 @@ class SpendGovernor:
         out = {"stopped": True, "denied": 0, "holds_voided": 0, "payouts_cancelled": 0, "tokens_revoked": 0,
                "paypal_on_file": {"status": "none"}, "problems": []}
         for r in self.store.spends(status="pending", agent_id=agent_id, limit=1000):
-            self.store.update_spend(r["id"], status="denied", decided_by="kill switch", decided_ts=time.time(), note="Agent killed")
-            self.store.audit("spend.denied", r["id"], {"by": "kill switch"})
+            self.store.update_spend(r["id"], status="denied", decided_by="stop switch", decided_ts=time.time(), note="Agent stopped")
+            self.store.audit("spend.denied", r["id"], {"by": "stop switch"})
             out["denied"] += 1
         for t in self.store.q("SELECT id FROM tasks WHERE agent_id=? AND status='open' AND hold_auth_id IS NOT NULL "
                               "AND COALESCE(paypal_status,'') NOT IN ('VOIDED','CAPTURED')", (agent_id,)):
@@ -745,7 +829,7 @@ class SpendGovernor:
                     if r["status"] != "paid":
                         continue  # PayPal already sent it back; nothing to cancel
                     if not r["payout_item_id"] or r["payout_status"] not in PAYOUT_CANCELLABLE:
-                        out["problems"].append("Payout %s (batch %s) is %s at PayPal, so it can't be cancelled yet. "
+                        out["problems"].append("Payout %s (batch %s) is %s at PayPal, so it can't be canceled yet. "
                                                "PayPal only cancels UNCLAIMED payouts." % (
                                                    r["id"], r["payout_batch_id"], r["payout_status"] or "PENDING"))
                         continue
@@ -753,17 +837,17 @@ class SpendGovernor:
             except PayPalError as e:
                 why = ("PayPal had a server error, so it's still unclaimed; unclaimed payouts return by themselves after 30 days"
                        if e.retryable else "it may already be claimed")
-                out["problems"].append("Payout %s couldn't be cancelled (%s): %s" % (r["id"], why, e.summary()))
+                out["problems"].append("Payout %s couldn't be canceled (%s): %s" % (r["id"], why, e.summary()))
                 continue
             self.store.update_spend(r["id"], status="cancelled", payout_status="RETURNED" if not r["simulated"] else "SIMULATED-RETURNED",
-                                    note="Cancelled by the kill switch")
+                                    note="Canceled by the stop switch")
             if agent["use_wallet"]:
                 self.store.wallet_move(agent_id, r["amount"], "refund", ref="unbuy-" + r["id"])
-            self.store.audit("spend.cancelled", r["id"], {"by": "kill switch", "simulated": bool(r["simulated"])})
+            self.store.audit("spend.cancelled", r["id"], {"by": "stop switch", "simulated": bool(r["simulated"])})
             out["payouts_cancelled"] += 1
         # Cut off the money source itself: delete the saved PayPal payment token.
         try:
-            rv = self.vault.revoke(agent_id, by="kill switch" if by == "owner" else by)
+            rv = self.vault.revoke(agent_id, by="stop switch" if by == "owner" else by)
         except Exception as e:  # never let this stop the kill from being recorded
             rv = {"status": "revoke_failed", "error": str(e), "message": "Couldn't revoke the saved PayPal payment method: %s" % e}
         if rv:
@@ -776,7 +860,7 @@ class SpendGovernor:
             cur = self.vault.status(agent_id)
             out["paypal_on_file"] = {"status": cur["status"], "already": cur["status"] == "revoked"}
         self.store.audit("agent.killed", str(agent_id), dict(out, by=by))
-        self.store.event(agent_id, "kill", "KILL: %s stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts cancelled.%s"
+        self.store.event(agent_id, "kill", "Stop all: %s stopped. %d pending purchases denied, %d PayPal holds voided, %d payouts canceled.%s"
                          % (agent["name"], out["denied"], out["holds_voided"], out["payouts_cancelled"],
                             " Saved PayPal payment method revoked." if out["tokens_revoked"]
                             else " Revoking the saved PayPal payment method failed, so its purchases stay blocked." if rv else ""))

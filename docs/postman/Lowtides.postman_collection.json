@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6c1b8a51-9f0e-4c39-9a4e-1d0e7a5c2f10",
     "name": "Lowtides: AI spend governor",
-    "description": "One budget and a STOP button between AI agents and money.\n\nRun folders 1-4 in order with the Collection Runner against the public demo (https://lowtides.ai, PayPal sandbox, simulated models, no password) or your own copy. Each run makes its own agent.\n\n1. Setup: create an agent, add a merchant, write the rules in plain English.\n2. Agent: the agent checks its budget, makes a model call, and asks before buying. Tests assert each decision.\n3. Dashboard: a person approves, denies and KILLs.\n4. Webhooks: send events to a Zapier Catch Hook.\n5. STOP ALL (optional; stops every agent).\n\nOpenAPI: {{baseUrl}}/openapi.json. Docs: https://github.com/seniorhelper/lowtides",
+    "description": "One budget and a STOP button between AI agents and money.\n\nRun folders 1-5 in order with the Collection Runner against the public demo (https://lowtides.ai, PayPal sandbox, simulated models, no password) or your own copy. Each run makes its own agent.\n\n1. Setup: create an agent, add a merchant, write the rules in plain English.\n2. Agent: the agent checks its budget, makes a model call, and asks before buying. Tests assert each decision.\n3. Dashboard: a person approves, denies and KILLs.\n4. Webhooks: send events to a Zapier Catch Hook.\n5. Consent Shopping: stores, signed Store Policy, Match Finder, Handshake (green, yellow, red), proof pack, trust score, merchant KPIs, shopper preferences, Ask Lowtides.\n6. STOP ALL (optional; stops every agent, so every Pass is revoked).\n\nOpenAPI: {{baseUrl}}/openapi.json. Docs: https://github.com/seniorhelper/lowtides",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -553,7 +553,7 @@
       ]
     },
     {
-      "name": "3. Dashboard: approve, deny, KILL",
+      "name": "3. Dashboard: approve, deny, Stop all",
       "item": [
         {
           "name": "List purchases waiting for approval",
@@ -711,7 +711,7 @@
           ]
         },
         {
-          "name": "KILL the agent",
+          "name": "Stop all the agent",
           "request": {
             "method": "POST",
             "header": [
@@ -763,7 +763,7 @@
           ]
         },
         {
-          "name": "After KILL, the agent asks again -> denied",
+          "name": "After Stop all, the agent asks again -> denied",
           "request": {
             "method": "POST",
             "header": [
@@ -1047,7 +1047,756 @@
       ]
     },
     {
-      "name": "5. STOP ALL (optional)",
+      "name": "5. Consent Shopping (stores, Handshake, proof)",
+      "description": "Two-sided checks: the shopper's Pass against the store's signed Store Policy, with GuardPooch checking the store. Run in order, against the public demo (where the shopper Scout exists; on a private copy the colours depend on which agent you use). Demo stores are fictional; money moves only in the PayPal sandbox, or is a labelled simulation.",
+      "item": [
+        {
+          "name": "List the demo stores (signed policy + GuardPooch verdict)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stores",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stores"
+              ]
+            },
+            "description": "Five fictional demo stores. Each has a signed Store Policy and a GuardPooch verdict (safe, caution or danger). The lookalike store is the scam."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"five stores\", () => { pm.expect(j.stores).to.have.lengthOf(5); });",
+                  "pm.collectionVariables.set(\"storeId\", j.stores[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit a Store Policy (re-signed)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stores/{{storeId}}/policy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stores",
+                "{{storeId}}",
+                "policy"
+              ]
+            },
+            "description": "A store changes its rules for AI shoppers. The new policy is signed again. Send the full policy.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"max_order_no_human\": 150,\n  \"categories\": [\n    \"tools\",\n    \"hardware\"\n  ],\n  \"min_trust\": 60,\n  \"require_evidence\": true,\n  \"blocked_agents\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"policy is signed\", () => { pm.expect(j.policy.signature).to.be.a(\"string\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fetch the public signed policy (what a store publishes)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/lowtides-store-policy.json?store=harbor",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ".well-known",
+                "lowtides-store-policy.json"
+              ],
+              "query": [
+                {
+                  "key": "store",
+                  "value": "harbor"
+                }
+              ]
+            },
+            "description": "Public, no login. Anyone can check the Ed25519 signature with the keys at /.well-known/lowtides-pass-keys.json."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"it is a store policy\", () => { pm.expect(j.type).to.eql(\"lowtides-store-policy\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Match Finder: what can Scout buy (green first)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/catalog?max_price=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "catalog"
+              ],
+              "query": [
+                {
+                  "key": "max_price",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Every item in every demo store, ranked green (match), then yellow (needs_yes), then red (no_match), cheapest first inside each group. Saves the demo shopper's id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"has items\", () => { pm.expect(j.items.length).to.be.above(5); });",
+                  "pm.collectionVariables.set(\"scoutId\", j.agent.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Handshake preview: nothing moves",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handshake",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "handshake"
+              ]
+            },
+            "description": "Checks the shopper's Pass against the store's policy and GuardPooch, both directions. Without execute:true it only shows the result.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": \"{{scoutId}}\",\n  \"store_id\": \"harbor\",\n  \"item_id\": \"harbor-hammer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"both said yes\", () => { pm.expect(j.signal).to.equal(\"match\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Handshake execute: both say yes, payment settles",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handshake",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "handshake"
+              ]
+            },
+            "description": "execute:true on a green match pays through the normal spend path: a PayPal sandbox payout when the server has sandbox keys, a labelled simulation otherwise (see order.simulated).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": \"{{scoutId}}\",\n  \"store_id\": \"harbor\",\n  \"item_id\": \"harbor-hammer\",\n  \"execute\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"match\", () => { pm.expect(j.signal).to.equal(\"match\"); });",
+                  "pm.test(\"payout\", () => { pm.expect(j.order.kind).to.equal(\"payout\"); });",
+                  "pm.collectionVariables.set(\"handshakeId\", j.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Handshake: over the limit, needs your yes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handshake",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "handshake"
+              ]
+            },
+            "description": "$175 is over Scout's ask-me line and over the store's no-human limit, so a person has to say yes. A normal held approval is created.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": \"{{scoutId}}\",\n  \"store_id\": \"harbor\",\n  \"item_id\": \"harbor-miter\",\n  \"execute\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"yellow\", () => { pm.expect(j.signal).to.equal(\"needs_yes\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Handshake: lookalike scam store, no money moves",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handshake",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "handshake"
+              ]
+            },
+            "description": "GuardPooch says danger (misspelled lookalike, brand-new domain, no signed policy, prices too good). Red. Nothing moves.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": \"{{scoutId}}\",\n  \"store_id\": \"fakeharbor\",\n  \"item_id\": \"fake-hammer\",\n  \"execute\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"red\", () => { pm.expect(j.signal).to.eql(\"no_match\"); });",
+                  "pm.test(\"no order\", () => { pm.expect(j.order).to.eql(null); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recent handshakes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handshakes?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "handshakes"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Newest first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"has handshakes\", () => { pm.expect(j.handshakes.length).to.be.above(2); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proof pack for the paid handshake",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/handshakes/{{handshakeId}}/proof",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "handshakes",
+                "{{handshakeId}}",
+                "proof"
+              ]
+            },
+            "description": "The Pass, the Store Policy, the signed receipt, the approval, the PayPal ids and the audit-log entry. A store checks it with public keys only."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"every check passes\", () => { pm.expect(j.verification.ok).to.equal(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trust score (heuristic) and why",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agents/{{scoutId}}/trust",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agents",
+                "{{scoutId}}",
+                "trust"
+              ]
+            },
+            "description": "0 to 100 from this agent's own history on this server. A heuristic, not a network reputation."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"heuristic\", () => { pm.expect(j.kind).to.eql(\"heuristic\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Merchant KPIs for one store",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/merchant/kpis?store_id=harbor",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "merchant",
+                "kpis"
+              ],
+              "query": [
+                {
+                  "key": "store_id",
+                  "value": "harbor"
+                }
+              ]
+            },
+            "description": "Computed from real Handshakes and payments."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"for harbor\", () => { pm.expect(j.store_id).to.eql(\"harbor\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read the shopper's preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopper/prefs?agent_id={{scoutId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shopper",
+                "prefs"
+              ],
+              "query": [
+                {
+                  "key": "agent_id",
+                  "value": "{{scoutId}}"
+                }
+              ]
+            },
+            "description": "The plain-language controls behind Scout's Pass."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"has a strictness\", () => { pm.expect(j.guard_strictness).to.be.a(\"string\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change the shopper's preferences (Pass is re-issued)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shopper/prefs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shopper",
+                "prefs"
+              ]
+            },
+            "description": "Rewrites the agent's enforced rules and re-issues its Pass. strict turns a GuardPooch caution red.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": \"{{scoutId}}\",\n  \"daily_cap\": 400,\n  \"per_item_cap\": 200,\n  \"ask_above\": 100,\n  \"guard_strictness\": \"strict\",\n  \"deal_mode\": 50,\n  \"categories_allowed\": [],\n  \"never_buy\": [\n    \"crypto\",\n    \"gift cards\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"pass re-issued\", () => { pm.expect(j.pass_reissued).to.equal(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ask Lowtides: it proposes a STOP ALL, you confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ask"
+              ]
+            },
+            "description": "The guide never changes anything by itself. It returns a proposed action and a person confirms it. `source` says whether Claude or the scripted guide answered. This example proposes STOP ALL, so confirming it revokes every Pass, like Stop all.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"Stop everything\",\n  \"page\": \"/shop/\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"a proposal\", () => { pm.expect(j.actions.length).to.be.above(0); });",
+                  "pm.collectionVariables.set(\"actionId\", j.actions[0].id);",
+                  "// Same thing in dotted form, for the repo test runner (tests/test_openapi.py): pm.collectionVariables.set(\"actionId\", j.actions.0.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm the proposed action",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Token",
+                "value": "{{adminToken}}",
+                "description": "Dashboard password. Leave empty for the public demo."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ask/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ask",
+                "confirm"
+              ]
+            },
+            "description": "One tap runs the one proposed action, then it is gone. It is written to the audit log. Here it stops all agents.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action_id\": \"{{actionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => { pm.response.to.have.status(200); });",
+                  "const j = pm.response.json();",
+                  "pm.test(\"done\", () => { pm.expect(j.ok).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. STOP ALL (optional)",
       "item": [
         {
           "name": "STOP ALL",
@@ -1141,6 +1890,22 @@
     },
     {
       "key": "webhookId",
+      "value": ""
+    },
+    {
+      "key": "storeId",
+      "value": "harbor"
+    },
+    {
+      "key": "scoutId",
+      "value": ""
+    },
+    {
+      "key": "handshakeId",
+      "value": ""
+    },
+    {
+      "key": "actionId",
       "value": ""
     }
   ]

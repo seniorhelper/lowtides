@@ -1,35 +1,77 @@
 # Lowtides
 
-> Lowtides is the AI spend governor: one budget and one STOP button for AI agents. It caps what agents cost to run (model calls) and what they buy (purchases), and settles every approved purchase through PayPal. Open source (AGPL-3.0). Live demo: https://lowtides.ai/
+> Lowtides is Consent Shopping: let an AI shop for you and keep the keys. Your AI shopper carries a signed Pass (your rules). Every store publishes a signed Store Policy (its rules for AI shoppers). GuardPooch checks the store is real. Both say yes, or no money moves. Payments settle through PayPal (sandbox in the public demo, test money only). One press of Stop all revokes the Pass at every store at once. Open source (AGPL-3.0). Site: https://lowtides.ai/
 
-## What it does
+## Site map
+- [Home](https://lowtides.ai/): consumer front door (what it is, how it works, FAQ)
+- [For shoppers](https://lowtides.ai/shop/): shopper control center: set rules with sliders or plain words, let Scout (the demo AI shopper) find matches
+- [For stores](https://lowtides.ai/merchants/): store control center: a store's rules for AI shoppers, and checking an agent's Pass before a PayPal capture
+- [See both sides](https://lowtides.ai/handshake/): "See both sides": the shopper's and the store's view of the same Handshake, side by side
+- [Agent bills & controls](https://lowtides.ai/app/): advanced view, "Agent bills & controls": budgets for what agents cost to run and what they buy, approvals, STOP ALL
+- [Check a Pass](https://lowtides.ai/pass/): check a Lowtides Pass
+- [Why Lowtides](https://lowtides.ai/why/): overview and FAQ for the agent spend controls
+
+## Words we use
+- Pass: the shopper's signed permission (Ed25519). AP2-aligned (Intent Mandate style), not an official AP2 integration.
+- Store Policy: the store's signed rules for AI shoppers (max order without a person, allowed categories, minimum trust score, blocked agents).
+- Handshake: Pass vs Store Policy vs GuardPooch, checked in both directions. Signals: match (green, "Both said yes"), needs_yes (yellow, "Needs your yes"), no_match (red, "No match — no money moved").
+- GuardPooch: the watchdog that checks a store for the shopper (lookalike names, brand-new domains, unsigned policy, too-good prices).
+- Scout: the demo shopper agent.
+- Trust score: 0 to 100 per agent, a heuristic computed from that agent's own audit history in Lowtides. Not a network reputation.
+
+## Honesty notes
+- The public demo uses the PayPal sandbox and test money. Demo stores are fictional and labeled "demo store".
+- The assistant "Ask Lowtides" only proposes actions; a person confirms each one, and it can never move money itself.
+
+## Agent spend controls (the /app/ view)
 - One combined daily budget covering AI model costs and agent purchases.
-- Spending rules typed in plain English ("Max $100 a day. Ask me over $25. Never buy gift cards or crypto."). Claude turns them into strict, validated rules that a person reviews. The AI never decides a payment; code does.
+- Spending rules typed in plain English ("Max $100 a day. Ask me over $25. Never buy gift cards or crypto."). AI turns them into strict, validated rules that a person reviews. The AI never decides a payment; code does.
 - Purchases over the auto-approve line, new payees, possible prompt injection, duplicate charges and unusual amounts wait for a person (one-tap Approve/Deny).
-- STOP ALL / KILL: stops agents, denies pending purchases, voids open PayPal authorization holds, cancels unclaimed PayPal payouts and revokes the agent's saved PayPal payment method (Vault v3; simulated in the public demo).
-- Alerts: signed outbound webhooks (Zapier, Slack, phone) for approvals and stops. OpenAPI 3.1 spec at /openapi.json.
+- STOP ALL / Stop all: stops agents, denies pending purchases, voids open PayPal authorization holds, cancels unclaimed PayPal payouts, revokes every Pass and the agent's saved PayPal payment method (Vault v3; simulated in the public demo).
+- Alerts: signed outbound webhooks (Zapier, Slack, phone) for approvals and stops.
 - Runaway-loop detection, per-call cost caps, prompt-size limits and a per-agent reply cap.
-- Simultaneous purchase requests are decided one at a time, so a burst can't overspend a limit.
 - Hash-chained, tamper-evident audit log and a per-purchase dispute evidence pack.
-- Cheaper models for easy steps, free repeats from answer memory, context trimming, and a savings receipt in dollars.
 
 ## PayPal APIs used
 - Orders v2: prepaid wallet top-ups (capture) and quote-and-hold jobs (authorize, then capture the real cost or void).
-- Payouts: pay merchants for approved agent purchases; cancel unclaimed payouts from the kill switch.
+- Payouts: pay merchants for approved agent purchases; cancel unclaimed payouts from the stop switch.
 - Invoicing v2: bill clients for their agents' AI usage.
-- Vault v3 payment tokens: PayPal on file per agent; KILL and STOP ALL delete the token at PayPal.
+- Vault v3 payment tokens: PayPal on file per agent; Stop all delete the token at PayPal.
 - Webhooks with signature verification; PayPal-Request-Id on every write so retries never double-charge.
 - Works alongside the PayPal Agent Toolkit as a guard in front of its tools.
 
 ## For agents and developers
+- OpenAPI 3.1 spec: https://lowtides.ai/openapi.json
 - Ask before buying: POST /v1/spend with amount, merchant, item, category, reason (Bearer key). Returns approved, needs_approval or denied, with reasons.
+- Shopper modes apply here too: Autopilot (default) follows the rules, Assist holds every purchase for the owner's approval, Off refuses with a clear reason and records nothing.
 - Budget: GET /v1/budget. Status of a request: GET /v1/spend/{id}.
 - Drop-in proxy for the OpenAI and Anthropic APIs (including streaming).
-- MCP server: python -m lowtides.mcp (tools: request_spend, check_spend, get_budget).
+- Lowtides Pass: GET /v1/pass (agent key) returns the agent's pass. Anyone verifies it with POST /v1/pass/verify {pass, amount?, merchant?, category?} (no login) or the page /pass/. Public keys: /.well-known/lowtides-pass-keys.json.
+- Merchants: check the agent's pass for the PayPal order's real amount right before capture; capture on allowed, hold on needs_owner_approval, refuse (and void the authorization) otherwise. Code: integrations/merchant-check (lowtides-pass-check.js, paypal_capture_guard.py).
+- MCP server: python -m lowtides.mcp (tools: request_spend, check_spend, get_budget, get_pass).
 - Python standard library only; runs with ./run.sh or run.bat.
 
 ## Docs
-- [Live demo](https://lowtides.ai/): no login, PayPal sandbox, simulated AI models
-- [Why Lowtides](https://lowtides.ai/why/): overview and FAQ
-- [Source code](https://github.com/seniorhelper/lowtides): AGPL-3.0
+- [Lowtides Pass format](https://github.com/seniorhelper/lowtides/blob/main/docs/LOWTIDES-PASS.md): format, signing and verification
 - [Spend API](https://github.com/seniorhelper/lowtides/blob/main/docs/SPEND-API.md): ask-before-buying API for agents
+- [Source code](https://github.com/seniorhelper/lowtides): AGPL-3.0
+
+## Blog
+
+- [Is it safe to let AI shop for you?](https://lowtides.ai/blog/is-ai-shopping-safe/): AI shopping agents can find and buy things for you. Here are the real risks, and seven controls to insist on before an agent touches your money.
+- [Agentic commerce needs consent from both sides](https://lowtides.ai/blog/agentic-commerce-consent/): In agentic commerce, AI agents buy on a person's behalf. Here is why the shopper and the store should both say yes first, and what a consent handshake looks like.
+- [How the PayPal sandbox works](https://lowtides.ai/blog/paypal-sandbox-how-it-works/): The PayPal sandbox is a test copy of PayPal with pretend money. Here is how it works, what a sandbox payment proves, and how the Lowtides demo uses it.
+- [How to keep an AI agent from doing more than you asked](https://lowtides.ai/blog/ai-agent-do-only-what-you-asked/): An AI agent that books, calls and signs up for you should do one job and stop. Here are five simple rules that keep it inside the task you gave.
+- [Why every AI agent needs an off switch you can reach in one second](https://lowtides.ai/blog/ai-agent-off-switch-stop-word/): AI agents act faster than you can read. Learn why a one-second off switch matters, how a pause differs from a full stop, and what a good one does.
+- [How AI agents should handle deposits, fares and fees when booking](https://lowtides.ai/blog/ai-booking-deposits-payments/): Letting an AI agent book for you? Set a spending limit, an ask-me amount and a refundable-first rule so deposits, fares and fees never surprise you.
+- [Why AI shopping needs a yes from both sides](https://lowtides.ai/blog/why-ai-shopping-needs-consent-from-both-sides/): AI agents are starting to buy things, but nothing makes you, the AI and the store agree first. Here is the gap, who it hurts, and a two-sided fix.
+- [Spending limits are not enough: what makes Lowtides different](https://lowtides.ai/blog/ai-spending-limits-are-not-enough/): Card caps, budget settings and ask-me prompts only guard your side. See what a both-sides consent check adds when an AI agent shops or books for you.
+
+
+## Action Muzzle
+
+The same both-sides consent check for what an AI does besides buying: reserve, schedule, book travel, call, sign up, cancel, message, send a form, share details. The person gives a job and the AI may do only that. A deposit or fare is paid through PayPal sandbox only after both sides say yes. A stop word freezes every AI shopper until released. Demo businesses are fictional. Try it: https://lowtides.ai/shop/#muzzle
+
+## Free tools
+
+Three free tools that run in the browser and send nothing anywhere: an AI shopper rules builder, a store rules builder for AI shoppers, and a stop word picker with a job checker. https://lowtides.ai/tools/
