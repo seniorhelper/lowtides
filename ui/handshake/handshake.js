@@ -299,7 +299,8 @@
     if (!sound || !talking()) return Promise.resolve();
     var t = 0;
     return new Promise(function (res) {
-      (function f() { if (!talking() || t >= 9000 || T.rush) return res(); t += 100; setTimeout(f, 100); })();
+      // a short breath after a line ends, so the next one never lands on its last word
+      (function f() { if (T.rush) return res(); if (!talking() || t >= 9000) return setTimeout(res, 450); t += 100; setTimeout(f, 100); })();
     });
   }
   // A caption: a fixed line (spoken when sound is on) or the live answer (shown, not spoken).
