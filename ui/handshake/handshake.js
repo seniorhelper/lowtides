@@ -260,6 +260,9 @@
   // A wait that stops while paused, ends early when rushed, and is dropped on restart/exit (by generation).
   function wait(ms) {
     var g = T.gen;
+    // With the voice on, the narration paces the tour (each line finishes before the next starts),
+    // so the long silent reading pauses are cut to keep it moving.
+    if (sound && ms >= 2000) ms = Math.max(900, Math.round(ms * 0.4));
     return new Promise(function (res, rej) {
       var t = 0;
       (function tick() {
